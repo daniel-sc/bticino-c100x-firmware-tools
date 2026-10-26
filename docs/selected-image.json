@@ -1,0 +1,26 @@
+{
+  "sha256": "67848425d6ec5a251ff8362394dad052737f42eb8326cdc8333038d7ede22abc",
+  "model": "C100X",
+  "version": "1.5.8",
+  "object_model": "1.0.99",
+  "payloads": [
+    {
+      "name": "btweb_only_recovery.ext4.gz",
+      "size": 25160122,
+      "sha256": "00840dd0d6e326e8cc25033037a24889ef9cfad13795e83a495b355e1d69cce3",
+      "cksum": 83701493
+    },
+    {
+      "name": "uImage.zip",
+      "size": 3516352,
+      "sha256": "b06b75e3a956fb26578788293db449f5f188b0502a70cd24f91719ad1dffda3d",
+      "cksum": 3238374593
+    },
+    {
+      "name": "btweb_only.ext4.gz",
+      "size": 80181014,
+      "sha256": "ba32a09a47d55041607fbda9b2daad0c666f8e0323204eed7ee6263b004f0b0b",
+      "cksum": 2214277303
+    }
+  ]
+}

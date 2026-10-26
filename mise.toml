@@ -1,0 +1,26 @@
+[tools]
+python = "3.14.9"
+java = "temurin-25.0.5+8.0.LTS"
+"github:NationalSecurityAgency/ghidra" = "Ghidra_12.2_build"
+cmake = "4.3.3"
+7zip = "26.05"
+dotnet = "10.0.403"
+
+[tasks.research-setup]
+description = "Install offline firmware analysis Python dependencies"
+run = ["python -m venv .venv", ".venv/bin/python -m pip install -r requirements-research.txt"]
+
+[tasks.setup]
+description = "Install CLI runtime dependencies"
+run = ["python -m venv .venv", ".venv/bin/python -m pip install -r requirements.txt"]
+
+[tasks.transport-build]
+description = "Build the locally checked-out TetherKit CLI (requires Homebrew libusb)"
+run = [
+  "cmake -S research/TetherKit -B .local/tetherkit-build -DCMAKE_BUILD_TYPE=Release -DTETHERKIT_BUILD_TESTS=ON -DTETHERKIT_BUILD_BENCHMARKS=OFF",
+  "cmake --build .local/tetherkit-build --parallel 8",
+]
+
+[tasks.test]
+description = "Run offline tests"
+run = "python -m unittest discover -s tests -v"

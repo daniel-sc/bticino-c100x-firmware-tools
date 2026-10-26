@@ -1,0 +1,20 @@
+# Local research, vendor files, build output and Python environment.
+/research/
+/.local/
+/.venv/
+__pycache__/
+*.pyc
+
+# Firmware and extracted device files belong outside version control.
+*.fwz
+*.ext4
+*.ext4.gz
+*.zip
+*.exe
+*.dll
+
+# Machine-local settings and output.
+.DS_Store
+.env
+.env.*
+*.log

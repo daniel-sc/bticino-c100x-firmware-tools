@@ -4,9 +4,10 @@ Native Python CLI plus TetherKit USB/RNDIS transport for the researched Classe
 100X 1.5.8 update path. The stock-device workflow uses USB, OpenWebNet and FTP;
 it does not require SSH or Windows.
 
-**Status: implemented and simulated; native C100X USB and actual flashing still
-await hardware validation.** The read-only probe has worked on the existing
-device through a research SSH tunnel. That does not validate the USB transport.
+**Status: native C100X read-only preflight passed on 2026-10-27; actual flashing
+remains unverified.** USB probe, non-writing firmware plan, idle reconnect and
+supervisor cleanup passed. FTP transfer and recovery-mode networking still
+await hardware validation.
 
 Only the two archive hashes in [docs/SCOPE.md](docs/SCOPE.md) are accepted.
 Device checks require firmware `1.5.8`, hardware `02*06*0`, object model `1.0.99`
@@ -107,6 +108,11 @@ cleanup as described in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 For the agreed stock-to-modified acceptance run, first complete native preflight,
 then restore stock 1.5.8 with the previously successful Windows method. Reconnect
 to the Mac and repeat `probe` and `plan`. Keep the USB supervisor running.
+
+Re-flashing the selected modified image onto the currently modified 1.5.8 device
+uses the same sequence and is also a valid first hardware test. Restoring stock
+first is an acceptance-test choice, not a protocol prerequisite; a direct re-flash
+would leave stock-to-modified compatibility acceptance pending.
 
 **This command writes firmware and reboots the device three times:**
 

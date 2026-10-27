@@ -77,8 +77,9 @@ State 4 means normal operation requiring recovery for a main-firmware update.
 State 1 means recovery. An extra-status field other than zero is rejected.
 
 These queries, including uptime and normalized identity, have been exercised on
-the existing modified intercom through the research tunnel. Native USB remains
-unverified.
+the existing modified intercom through the research tunnel and directly over
+native USB. On 2026-10-27, both native `probe` and the non-writing `plan` passed;
+FTP transfer, recovery-mode networking and actual flashing remain unverified.
 
 ## Write sequence
 

@@ -50,7 +50,9 @@ there. Legacy C100X support does exist.
   `BTicino SHARK board (Dig-2/Car-6)`, CPU revision `0206`.
 - Installed firmware metadata: 1.5.8. Root filesystem mounted read-only.
 - SSH research uses a user-opened multiplexed connection; no password is stored.
-- USB has not yet been connected or tested in this workspace.
+- Native USB enumeration, routing, read-only probe and firmware plan passed on
+  2026-10-27, followed by idle reconnect and supervisor cleanup checks. FTP,
+  recovery-mode networking and flashing checks remain pending.
 
 ## Current validation status
 
@@ -60,12 +62,13 @@ The established BTESUXP sequence is recovery filesystem/kernel → reboot normal
 See [PROTOCOL.md](PROTOCOL.md) for evidence and completion limitations.
 
 The selected archive has been fully validated. The read-only identity probe,
-including uptime and normalized object model, has succeeded through the existing
-research SSH tunnel. All 36 Python tests pass, including simulated per-step
+including uptime and normalized object model, has succeeded both through the
+research SSH tunnel and directly over native USB. The non-writing firmware plan
+also passed over native USB. All 36 Python tests pass, including simulated per-step
 disconnects, lost commit ACK, FTP failures, reboot verification and USB helper
-cleanup. The pinned TetherKit build passed 23 CTest entries; privileged/C100X
-hardware coverage is still pending.
+cleanup. The pinned TetherKit build passed 23 CTest entries; native C100X
+networking has now been exercised with the privileged supervisor.
 
-No firmware-write commands have been sent to the real device. Native USB
-preflight, stock restoration and macOS stock-to-modified flashing still require
-physical access. Track these in [ACCEPTANCE.md](ACCEPTANCE.md).
+No firmware-write commands have been sent to the real device. Native read-only
+preflight is complete; stock restoration and macOS stock-to-modified flashing
+are still pending. Track these in [ACCEPTANCE.md](ACCEPTANCE.md).

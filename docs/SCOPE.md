@@ -20,6 +20,10 @@ USB access requires manual setup and is only occasionally available.
 5. Deliver a repeatable command, compatibility checks, useful errors/logging,
    and handling for expected disconnects and reboots.
 
+A direct modified-to-modified re-flash is also a valid first hardware test. Stock
+restoration is not a protocol prerequisite; it establishes the original
+stock-to-modified acceptance case. See [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
+
 Exercise failures in simulation; never intentionally interrupt a firmware write.
 Windows availability does not guarantee recovery from every failure.
 
@@ -49,7 +53,9 @@ there. Legacy C100X support does exist.
 - Device: Linux 4.9.11+imx+, armv7l; board string
   `BTicino SHARK board (Dig-2/Car-6)`, CPU revision `0206`.
 - Installed firmware metadata: 1.5.8. Root filesystem mounted read-only.
-- SSH research uses a user-opened multiplexed connection; no password is stored.
+- SSH research uses a user-opened multiplexed connection; its login password is
+  not saved by the automation. Explicitly requested private partition backups
+  contain device secrets and remain outside Git; see [OPERATIONS.md](OPERATIONS.md).
 - Native USB enumeration, routing, read-only probe and firmware plan passed on
   2026-10-27, followed by idle reconnect and supervisor cleanup checks. FTP,
   recovery-mode networking and flashing checks remain pending.

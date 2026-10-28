@@ -139,6 +139,12 @@ unverified.
 
 ## Implementation and evidence
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): process/module boundaries, domain
+  vocabulary, update state and testing boundaries.
+- [docs/DECISIONS.md](docs/DECISIONS.md): accepted ADRs and tradeoffs.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md): research SSH, backups, FWZ differences
+  and continuing work from a fresh session.
+- [docs/SCOPE.md](docs/SCOPE.md): project goal, compatibility and selected images.
 - `classe100x/protocol.py`: bounded framing and read-only query allowlist.
 - `classe100x/firmware.py`, `vendor.py`: package checks and in-memory settings.
 - `classe100x/updater.py`: FTP transfer and recovery-first state sequence.

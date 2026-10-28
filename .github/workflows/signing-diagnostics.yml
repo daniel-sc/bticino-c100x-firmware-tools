@@ -1,0 +1,43 @@
+name: Signing diagnostics
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Check imported signing identity
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          directory=$(mktemp -d "$RUNNER_TEMP/c100x-check.XXXXXX")
+          keychain="$directory/signing.keychain-db"
+          trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -rf "$directory"' EXIT
+          umask 077
+          password=$(openssl rand -hex 32)
+          echo "::add-mask::$password"
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$directory/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$directory/cert.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain"
+          security find-identity -p codesigning "$keychain"
+          security find-certificate -a -p "$keychain" | openssl x509 -noout -subject -issuer -dates
+          printf 'int main(void) { return 0; }\n' > "$directory/check.c"
+          clang "$directory/check.c" -o "$directory/check"
+          codesign --force --sign 'Developer ID Application:' --keychain "$keychain" --options runtime --timestamp "$directory/check" || true
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application:/ {print $2; exit}')
+          if [[ -z "$identity" ]]; then
+            curl --fail --silent --show-error https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$directory/intermediate.cer"
+            security import "$directory/intermediate.cer" -k "$keychain"
+            security find-identity -p codesigning "$keychain"
+            identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application:/ {print $2; exit}')
+          fi
+          test -n "$identity"
+          codesign --force --sign "$identity" --keychain "$keychain" --options runtime --timestamp "$directory/check"
+          codesign --verify --strict "$directory/check"

@@ -26,6 +26,9 @@ Exact hashes and scope are maintained in [SCOPE.md](SCOPE.md).
 
 ## ADR-002: Python orchestration and a separate native USB helper
 
+**Status update, 2026-10-28:** ADR-011 replaces the default two-terminal lifecycle
+with an automatically managed USB session. The native helper remains separate.
+
 **Context:** macOS needs an RNDIS transport, while protocol research and simulation
 benefit from a small CLI. The final stock-device workflow cannot depend on SSH.
 The user accepts terminal sudo and Homebrew system libraries, and requires mise
@@ -221,3 +224,26 @@ recovery-first update sequence still enforce the researched target. Changes to
 the supported device profile require new evidence and a code update. This does
 not establish hardware acceptance; user passwords, host private keys, firmware
 and backups remain private artifacts.
+
+## ADR-011: Distribute one self-contained CLI through alpha releases
+
+**Accepted 2026-10-28**, following the short release-design interview.
+
+**Decision:** Ship an Apple Silicon macOS DMG containing one CLI entry point and
+its support files. Build and Flash remain explicit independent commands. Bundle
+CPython, tools and payloads so end users install no prerequisites. Compile the
+bundled interpreter from source and preserve Python hook semantics; no automatic
+pip dependencies. Reject root execution for builds/hooks.
+
+`plan`/`flash` manage the USB worker, route checks, readiness and cleanup. Root is
+requested through ordinary terminal sudo. Keep the independent `usb` command and
+`--external-usb` for development. Preserve the evidenced update protocol and
+non-retry behavior; process cleanup must never become device cleanup.
+
+GitHub CI runs offline tests, builds the release, audits library relocation,
+exercises shipped tools and hooks, then signs/notarizes/staples tagged alpha DMGs.
+Publish dependency sources and build provenance with the binary. Existing Apple
+team credentials can sign this project but must be provided as this repository's
+secrets. Alpha publication precedes hardware validation; v1 requires successful
+native flashing and functional acceptance. Detailed design and credential setup
+are in [RELEASING.md](RELEASING.md).

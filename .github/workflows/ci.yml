@@ -1,0 +1,95 @@
+name: Test and package
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v0.*-alpha.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.2.4
+        with:
+          install: false
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install build dependencies
+        run: |
+          mise install python cmake
+          brew install e2fsprogs dropbear openssl@3 libusb sevenzip pkgconf xz zstd
+      - name: Offline suite
+        run: mise run test
+      - name: Build pinned USB helper
+        if: github.event_name != 'pull_request'
+        run: |
+          git clone https://github.com/XiaoMiku01/TetherKit.git research/TetherKit
+          git -C research/TetherKit checkout --detach 1ded051fd243c547fd6e250a898f0164cc30561d
+          mise exec -- cmake -S research/TetherKit -B .local/tetherkit-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DTETHERKIT_BUILD_TESTS=ON -DTETHERKIT_BUILD_BENCHMARKS=OFF -DTETHERKIT_BUILD_SHARED_LIB=OFF
+          mise exec -- cmake --build .local/tetherkit-build --parallel 3
+          mise exec -- ctest --test-dir .local/tetherkit-build --output-on-failure
+      - name: Select version
+        if: github.event_name != 'pull_request'
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_TYPE" == tag ]]; then
+            [[ "$REF_NAME" =~ ^v0\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]] || exit 1
+            echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.1.0-alpha.ci${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Assemble relocatable distribution and sources
+        if: github.event_name != 'pull_request'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: mise exec -- python packaging/build.py --version "$RELEASE_VERSION"
+      - name: Test the packaged CLI
+        if: github.event_name != 'pull_request'
+        run: mise exec -- python packaging/smoke.py .local/release/C100X
+      - name: Sign and notarize tagged release
+        if: github.ref_type == 'tag'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash packaging/notarize.sh
+      - name: Package CI-only candidate
+        if: github.event_name != 'pull_request' && github.ref_type != 'tag'
+        run: mise exec -- python packaging/dmg.py .local/release/C100X .local/release/c100x-ci-candidate.dmg
+      - name: Checksums
+        if: github.event_name != 'pull_request'
+        working-directory: .local/release
+        run: shasum -a 256 *.dmg *-dependency-sources.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v7.0.2
+        if: github.event_name != 'pull_request'
+        with:
+          name: c100x-macos-arm64
+          path: |
+            .local/release/*.dmg
+            .local/release/*-dependency-sources.tar.gz
+            .local/release/SHA256SUMS
+            .local/release/C100X/support/app/release.json
+          if-no-files-found: error
+      - name: Publish alpha
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$RELEASE_VERSION" --verify-tag --prerelease --title "C100X $RELEASE_VERSION" --notes-file packaging/ALPHA.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/C100X/support/app/release.json

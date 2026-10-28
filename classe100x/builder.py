@@ -95,7 +95,7 @@ def hook(directory: Path, name: str, *, required: bool = False) -> bool:
             raise FirmwareError(f"Payload {directory.name} requires {name}")
         return False
     runner = Path(__file__).with_name("payload_runner.py")
-    status, _, stderr = run_tool([sys.executable, str(runner), str(script), str(directory / "context.json")],
+    status, _, stderr = run_tool([sys.executable, "-I", "-B", str(runner), str(script), str(directory / "context.json")],
                             cwd=directory, timeout=120)
     if status:
         message = stderr.decode("utf-8", errors="replace").strip()
@@ -155,7 +155,7 @@ def builder_tools(overrides: dict | None = None) -> dict:
     overrides = overrides or {}
     return {"debugfs": find_tool("debugfs", overrides.get("debugfs")),
             "e2fsck": find_tool("e2fsck", overrides.get("e2fsck")),
-            "7zip": find_tool("7zz", overrides.get("7zip") or shutil.which("7z"))}
+            "7zip": find_tool("7zz", overrides.get("7zip"))}
 
 
 def build(source: Path, output: Path, *, payloads: list[Path] = (), inputs: dict | None = None,

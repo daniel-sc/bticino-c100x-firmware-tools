@@ -11,7 +11,7 @@ import time
 PAIR_READY = re.compile(r"virtual interface pair ready: system side (feth[0-9]+) <-> driver side feth[0-9]+")
 
 
-def run_usb(binary: Path) -> None:
+def run_usb(binary: Path, *, notify=None) -> None:
     if os.geteuid() != 0:
         raise PermissionError("USB networking needs root; run the usb command with sudo")
     binary = binary.resolve(strict=True)
@@ -27,22 +27,25 @@ def run_usb(binary: Path) -> None:
     try:
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             previous[sig] = signal.signal(sig, interrupt)
-        _supervise(binary)
+        _supervise(binary, notify=notify)
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
 
 
-def _supervise(binary: Path) -> None:
+def _supervise(binary: Path, *, notify=None) -> None:
     while True:
+        if notify:
+            notify(None)
         process = subprocess.Popen(
             [str(binary), "--vid", "1da4", "--pid", "0056", "--lang", "en", "--no-color", "--stats", "0"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            start_new_session=True,
+            start_new_session=notify is None,
         )
         try:
             for line in process.stdout:
-                print(line.rstrip(), flush=True)
+                if notify is None:
+                    print(line.rstrip(), flush=True)
                 match = PAIR_READY.search(line)
                 if match:
                     interface = match.group(1)
@@ -50,7 +53,10 @@ def _supervise(binary: Path) -> None:
                         ["/sbin/ifconfig", interface, "inet", "192.168.129.2", "netmask", "255.255.255.252", "up"],
                         check=True, capture_output=True, timeout=10,
                     )
-                    print(f"USB network ready on {interface}: 192.168.129.2/30", flush=True)
+                    if notify:
+                        notify(interface)
+                    else:
+                        print(f"USB network ready on {interface}: 192.168.129.2/30", flush=True)
             process.wait()
         finally:
             try:
@@ -64,5 +70,8 @@ def _supervise(binary: Path) -> None:
                         print("USB helper required forced termination; feth cleanup is unverified", file=sys.stderr)
             finally:
                 process.stdout.close()
-        print("Waiting for the intercom USB connection…", flush=True)
+        if notify:
+            notify(None)
+        else:
+            print("Waiting for the intercom USB connection…", flush=True)
         time.sleep(2)

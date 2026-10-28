@@ -1,4 +1,5 @@
 import argparse
+from contextlib import nullcontext
 import getpass
 import json
 import os
@@ -9,19 +10,30 @@ import sys
 from .firmware import PROFILE, FirmwareError, prepare_firmware, regular_file
 from .protocol import ProtocolError, ReadOnlyClient
 from .transport import run_usb
+from .resources import tetherkit, version
+from .usb_session import usb_session
 from .updater import NetworkDevice, UpdateError, check_identity, flash
 from .vendor import C100X_PROFILE
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "_usb-worker":
+        def notify(interface):
+            print(json.dumps({"interface": interface}), flush=True)
+        try:
+            run_usb(Path(sys.argv[2]), notify=notify)
+        except KeyboardInterrupt:
+            return 130
+        return 0
     parser = argparse.ArgumentParser(description="Classe 100X native macOS firmware CLI")
+    parser.add_argument("--version", action="version", version=f"c100x {version()}")
     commands = parser.add_subparsers(dest="command", required=True)
     probe = commands.add_parser("probe", help="Read-only device identification and update status")
     probe.add_argument("--host", default="192.168.129.1")
     probe.add_argument("--port", type=int, default=20000)
     probe.add_argument("--timeout", type=float, default=5.0)
     usb = commands.add_parser("usb", help="Maintain native USB networking across device reboots (root)")
-    usb.add_argument("--tetherkit", type=Path, default=Path(".local/tetherkit-build/bin/tetherkit-cli"))
+    usb.add_argument("--tetherkit", type=Path, default=tetherkit())
     fetch = commands.add_parser("fetch-fw", help="Download/cache the hash-pinned original stock image")
     fetch.add_argument("--stock", choices=[PROFILE], default=PROFILE)
     fetch.add_argument("--cache", type=Path, default=Path(".local/firmware-cache"))
@@ -48,6 +60,9 @@ def main() -> int:
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("firmware", type=Path)
+        if name in ("plan", "flash"):
+            command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the USB helper executable")
+            command.add_argument("--external-usb", action="store_true", help="Advanced: use an already running USB supervisor")
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -78,6 +93,8 @@ def main() -> int:
                     result["ssh_tools"][name] = {"available": False}
             print(json.dumps(result, indent=2))
         elif args.command == "build-fw":
+            if os.geteuid() == 0:
+                raise ValueError("Build firmware as your ordinary user, without sudo")
             from .builder import build, interrupted_build, resolve_payload
             from .download import fetch_stock
             if bool(args.firmware) == bool(args.stock):
@@ -118,25 +135,27 @@ def main() -> int:
             run_usb(args.tetherkit)
         else:
             print("Validating the complete firmware archive…", file=sys.stderr)
-            local = Path(".local")
-            local.mkdir(exist_ok=True)
-            with prepare_firmware(args.firmware, temporary_parent=local) as firmware:
+            with prepare_firmware(args.firmware) as firmware:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
-                elif args.command == "plan":
-                    with ReadOnlyClient("192.168.129.1") as client:
-                        info = client.inspect()
-                    check_identity(info, 4)
-                    print(json.dumps({
-                        "firmware": firmware.report(), "device": info,
-                        "sequence": ["recovery filesystem", "recovery kernel", "reboot to normal",
-                                     "clear main kernel", "reboot to recovery", "main filesystem",
-                                     "main kernel", "reboot to normal"],
-                        "device_writes": False,
-                    }, indent=2))
                 else:
-                    flash(firmware, NetworkDevice("192.168.129.1"), C100X_PROFILE,
-                          report=lambda text: print(text, flush=True))
+                    session = nullcontext(lambda: None) if args.external_usb else usb_session(args.tetherkit)
+                    with session as check_transport:
+                        check_transport()
+                        if args.command == "plan":
+                            with ReadOnlyClient("192.168.129.1") as client:
+                                info = client.inspect()
+                            check_identity(info, 4)
+                            print(json.dumps({
+                                "firmware": firmware.report(), "device": info,
+                                "sequence": ["recovery filesystem", "recovery kernel", "reboot to normal",
+                                             "clear main kernel", "reboot to recovery", "main filesystem",
+                                             "main kernel", "reboot to normal"],
+                                "device_writes": False,
+                            }, indent=2))
+                        else:
+                            flash(firmware, NetworkDevice("192.168.129.1", check_transport=check_transport),
+                                  C100X_PROFILE, report=lambda text: print(text, flush=True))
         return 0
     except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:
         print(f"{args.command} failed: {exc}", file=sys.stderr)

@@ -8,6 +8,11 @@ Windows support.
 
 ## Setup and commands
 
+The downloadable macOS release includes all tools and its own Python interpreter.
+Use `./c100x` in place of `mise exec -- python -m classe100x` in the commands below.
+Run builds as your ordinary user; the builder and payload hooks refuse root.
+The following dependency installation is only for running from source.
+
 Use the project's mise-managed Python and 7zip. On macOS:
 
 ```sh
@@ -24,6 +29,7 @@ public key. Homebrew's e2fsprogs is keg-only; discovery checks PATH and the
 standard Apple Silicon/Intel Homebrew locations. `--debugfs`, `--e2fsck` and
 `--sevenzip` override executable paths. SSH inputs can override `dropbearkey`
 and `openssl`. Nothing is silently installed by a CLI command.
+Bundled tools are preferred over PATH; explicit overrides still take precedence.
 
 The builder itself needs no compiler. Apple Silicon Homebrew bottles are prebuilt;
 installing formulae from source requires Xcode Command Line Tools. The native USB
@@ -147,6 +153,11 @@ workspace path, tool paths, input base and the selected payload's input object.
 `from classe100x.payload import Context` supplies small convenience methods.
 Relative input-file paths resolve relative to the inputs JSON file (or the CLI
 working directory without a JSON file).
+The release carries CPython's standard library, so existing hook scripts and
+imports from `classe100x.payload` continue to work. No pip environment or automatic
+third-party package installation is provided. Interpreter startup is isolated
+from user site packages and `PYTHONPATH`. Optional Tk GUI and GNU dbm extensions
+are not bundled; SQLite, ctypes, TLS and all standard compression codecs are.
 
 `--inputs .local/build.private.json` accepts an object keyed by payload ID:
 

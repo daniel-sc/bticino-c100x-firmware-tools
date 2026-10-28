@@ -34,6 +34,8 @@ class CliTests(unittest.TestCase):
         self.probe.return_value.__enter__.return_value.inspect.return_value = identity()
         self.device = SimulatedDevice()
         self.network = self.enterContext(patch.object(cli, "NetworkDevice", return_value=self.device))
+        self.usb = self.enterContext(patch.object(cli, "usb_session"))
+        self.check_transport = self.usb.return_value.__enter__.return_value
 
     def invoke(self, command):
         stdout, stderr = io.StringIO(), io.StringIO()
@@ -50,7 +52,10 @@ class CliTests(unittest.TestCase):
         status, output = self.invoke("plan")
         self.assertEqual(status, 0)
         self.assertFalse(json.loads(output)["device_writes"])
-        self.prepare.assert_called_once_with(Path("fixture.fwz"), temporary_parent=Path(".local"))
+        self.prepare.assert_called_once_with(Path("fixture.fwz"))
+        self.usb.assert_called_once()
+        self.usb.return_value.__exit__.assert_called_once()
+        self.check_transport.assert_called_once()
         self.network.assert_not_called()
         self.assertEqual(self.device.events, [])
 
@@ -83,3 +88,4 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(self.invoke(command)[0], 1)
         self.probe.assert_not_called()
         self.network.assert_not_called()
+        self.usb.assert_not_called()

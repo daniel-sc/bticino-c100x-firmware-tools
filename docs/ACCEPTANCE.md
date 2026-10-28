@@ -210,3 +210,19 @@ performed in this session.
   packages disabled); obsolete installer/key-source options are absent.
 - These checks used simulated device I/O only. Native transfer, recovery networking
   and hardware flashing/functional acceptance remain pending.
+
+## 2026-10-28: Bundled CLI preparation
+
+- **78 offline tests passed**, with no skips. Managed USB tests exercise bounded
+  readiness, malformed/dead workers, LAN-route rejection, route timeout and
+  cleanup on errors. They use subprocess fixtures and mocked routing, not USB.
+- The local arm64 bundle passed relocation smoke checks in a directory containing
+  spaces, with a fresh HOME and system-only PATH. Checks covered CLI help/doctor,
+  bundled debugfs/e2fsck, encrypted ZIP round-trip, ECDSA key generation,
+  SHA-512-crypt, and Python payload hooks importing TLS/SQLite/ctypes/compression.
+- CPython 3.14.9 links to OpenSSL 3 after the initial OpenSSL 4 `_ssl` import failed.
+  Native-library auditing found no external library references or rpaths. Local
+  Homebrew bottles raise this candidate's minimum to **macOS 27.0**; the CI
+  artifact's minimum will be determined separately from its shipped binaries.
+- Signing, notarization, GitHub publication and downloaded-artifact checks are
+  still pending at this point. No hardware operations were performed.

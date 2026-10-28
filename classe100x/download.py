@@ -3,6 +3,8 @@
 import hashlib
 import http.client
 import os
+import ssl
+import sys
 from pathlib import Path
 import tempfile
 import time
@@ -45,7 +47,11 @@ def fetch_stock(cache: Path, *, timeout: float = 300) -> Path:
         with os.fdopen(fd, "wb") as output:
             request = urllib.request.Request(STOCK_URL, headers={"User-Agent": "classe100x-firmware-builder"})
             try:
-                with urllib.request.urlopen(request, timeout=min(30, timeout)) as response:
+                context = ssl.create_default_context()
+                if sys.platform == "darwin":
+                    # Portable CPython must not depend on a build-machine CA path.
+                    context.load_verify_locations("/etc/ssl/cert.pem")
+                with urllib.request.urlopen(request, timeout=min(30, timeout), context=context) as response:
                     if response.geturl().split(":", 1)[0] != "https":
                         raise FirmwareError("Firmware download redirected away from HTTPS")
                     expected = response.headers.get("Content-Length")

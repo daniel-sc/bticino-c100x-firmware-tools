@@ -9,11 +9,14 @@ import subprocess
 import time
 
 from .firmware import FirmwareError
+from .resources import bundled_tool
 
 
 def find_tool(name: str, override: str | None = None) -> str:
     candidates = [override] if override else [
+        str(bundled_tool(name)),
         shutil.which(name),
+        shutil.which("7z") if name == "7zz" else None,
         f"/opt/homebrew/opt/e2fsprogs/sbin/{name}",
         f"/usr/local/opt/e2fsprogs/sbin/{name}",
         f"/opt/homebrew/bin/{name}",

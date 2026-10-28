@@ -94,13 +94,16 @@ class UpdateClient(ReadOnlyClient):
 
 class NetworkDevice:
     def __init__(self, host: str, port: int = 20000, *, timeout: float = 30,
-                 reboot_timeout: float = 240, write_timeout: float = 180):
+                 reboot_timeout: float = 240, write_timeout: float = 180,
+                 check_transport=lambda: None):
         self.host, self.port, self.timeout = host, port, timeout
         self.reboot_timeout, self.write_timeout = reboot_timeout, write_timeout
         self.client: UpdateClient | None = None
+        self.check_transport = check_transport
 
     def connect(self) -> dict:
         self.close()
+        self.check_transport()
         client = UpdateClient(self.host, self.port, self.timeout)
         self.client = client.__enter__()
         return self.client.inspect()
@@ -113,6 +116,7 @@ class NetworkDevice:
     def upload(self, path: Path, credentials: Credentials) -> None:
         # FTP starts only after the explicit begin command. Each worker consumes
         # and deletes its input, so exactly one file must be present at commit.
+        self.check_transport()
         try:
             with ftplib.FTP(timeout=30) as ftp:
                 ftp.connect(self.host, 21)
@@ -134,6 +138,7 @@ class NetworkDevice:
     def wait_idle(self) -> None:
         deadline = time.monotonic() + self.write_timeout
         while True:
+            self.check_transport()
             if self.client.idle():
                 return
             if time.monotonic() >= deadline:
@@ -141,6 +146,7 @@ class NetworkDevice:
             time.sleep(5)
 
     def reboot_and_wait(self, status: int) -> dict:
+        self.check_transport()
         before = uptime_seconds(self.client.query(19))
         started = time.monotonic()
         self.client.reboot()
@@ -149,6 +155,7 @@ class NetworkDevice:
         while time.monotonic() < deadline:
             time.sleep(1)
             try:
+                self.check_transport()
                 with ReadOnlyClient(self.host, self.port, timeout=2) as probe:
                     info = probe.inspect()
             except (ProtocolError, OSError):

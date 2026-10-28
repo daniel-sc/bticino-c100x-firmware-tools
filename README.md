@@ -20,7 +20,41 @@ The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or ready-made MQTT/Home Assistant integration.
 
-## Quick start: build an SSH-enabled image
+## Quick start: download and build
+
+Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
+Copy the `C100X` folder into a writable location and open a terminal there. Keep `c100x`
+and `support` together. The release includes Python and all required tools;
+**no Homebrew, mise, Xcode or MyHOME installation is needed**. The release's
+`release.json` records its minimum macOS version.
+
+```sh
+./c100x builder-doctor
+./c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password \
+  --output custom.fwz --report custom.build.json
+```
+
+Enter the new SSH password when prompted. The account will be `root2`. The tool
+downloads and verifies stock firmware, works on a private copy, and checks the
+finished image. Keep `custom.fwz` private: it contains SSH credentials and a host
+private key. `custom.build.json` is a redacted report of offline checks.
+
+Build as your ordinary user. To check and then explicitly flash a connected device:
+
+```sh
+sudo ./c100x plan custom.fwz
+sudo ./c100x flash custom.fwz
+```
+
+USB networking is started, maintained across reboots, and cleaned up automatically.
+`plan` performs read-only device checks; `flash` writes firmware. See the
+[flashing guide](docs/FLASHING.md) for device compatibility and acceptance details.
+
+**Building and flashing are separate operations.** Existing outputs are never
+overwritten. Alpha downloads precede full hardware acceptance; v1 will follow
+successful native flashing and functional validation.
+
+## Run from source
 
 You need [Homebrew](https://brew.sh) and at least
 **4 GiB of free disk space**. Clone or download this repository, then open a
@@ -29,8 +63,6 @@ terminal in its root directory—the folder containing `mise.toml`.
 Xcode Command Line Tools are needed when compiling the USB helper for flashing;
 the builder quick start uses prebuilt tools on Apple Silicon.
 
-### 1. Install the build tools
-
 ```sh
 brew install mise e2fsprogs dropbear openssl
 mise trust
@@ -38,25 +70,11 @@ mise install python 7zip
 mise exec -- python -m classe100x builder-doctor
 ```
 
-### 2. Build an image
-
 ```sh
 mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
   --payload ssh --ssh-password \
   --output .local/custom.fwz --report .local/custom.build.json
 ```
-
-Enter the new SSH password when prompted. The login account will be `root2`.
-The tool downloads and verifies the original firmware, builds a private working
-copy, and checks the finished image before publishing it.
-
-Your results are:
-- `.local/custom.fwz` — the firmware image; keep it private because it contains
-  SSH credentials and a host private key.
-- `.local/custom.build.json` — a redacted report of the offline checks.
-
-**Building is device-independent; flashing is a separate operation.** Existing
-output files are never overwritten—choose a new filename for another build.
 
 Prefer public-key login or an offline build? See the
 [builder guide](docs/BUILDER.md). Stock Dropbear supports ECDSA P-256 keys;
@@ -86,6 +104,7 @@ is required. Builder integration tests run when their tools are installed.
 For implementation details, see the [architecture](docs/ARCHITECTURE.md),
 [design decisions](docs/DECISIONS.md), and [protocol evidence](docs/PROTOCOL.md).
 Run `mise exec -- python -m classe100x --help` for the command list.
+Release packaging and signing are documented in [RELEASING.md](docs/RELEASING.md).
 
 ## License
 

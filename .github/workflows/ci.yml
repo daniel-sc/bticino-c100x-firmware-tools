@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  MISE_AUTO_INSTALL: 'false'
+  CLASSE100X_REQUIRE_BUILDER_TOOLS: '1'
+
 jobs:
   macos:
     runs-on: macos-15
@@ -75,7 +79,9 @@ jobs:
       - name: Checksums
         if: github.event_name != 'pull_request'
         working-directory: .local/release
-        run: shasum -a 256 *.dmg *-dependency-sources.tar.gz > SHA256SUMS
+        run: |
+          cp C100X/support/app/release.json release.json
+          shasum -a 256 *.dmg *-dependency-sources.tar.gz release.json > SHA256SUMS
       - uses: actions/upload-artifact@v7.0.2
         if: github.event_name != 'pull_request'
         with:
@@ -84,7 +90,7 @@ jobs:
             .local/release/*.dmg
             .local/release/*-dependency-sources.tar.gz
             .local/release/SHA256SUMS
-            .local/release/C100X/support/app/release.json
+            .local/release/release.json
           if-no-files-found: error
       - name: Publish alpha
         if: github.ref_type == 'tag'
@@ -92,4 +98,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$RELEASE_VERSION" --verify-tag --prerelease --title "C100X $RELEASE_VERSION" --notes-file packaging/ALPHA.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/C100X/support/app/release.json
+          gh release create "$RELEASE_VERSION" --verify-tag --prerelease --title "C100X $RELEASE_VERSION" --notes-file packaging/ALPHA.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/release.json

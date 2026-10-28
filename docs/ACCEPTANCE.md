@@ -236,3 +236,18 @@ performed in this session.
 - GitHub Actions run `40774118641` passed the Python suite, pinned helper build
   and CTest suite, complete package build, relocated smoke tests and candidate
   DMG creation. This run produced an ad-hoc CI artifact, not a signed release.
+
+### Downloaded GitHub candidate
+
+- Run `40774991941` passed on commit `8afb96c`. Downloaded its candidate DMG,
+  dependency sources and provenance; every published SHA-256 checksum matched.
+- Mounted the downloaded DMG read-only, copied its `C100X` folder locally, and
+  detached it. The copied bundle passed the same relocation smoke checks with
+  system-only PATH. Its audited minimum is **macOS 15.0**, arm64. Local execution
+  was on macOS 27.0.1; CI exercised it on macOS 15.
+- The downloaded CLI fetched stock firmware into a fresh cache over HTTPS and
+  verified the pinned size/hash without developer tools on PATH.
+- Tagged alpha run `40774991846` built successfully but stopped at signing:
+  the imported P12 did not contain a valid Developer ID Application identity.
+  No GitHub release was published. Credential correction, notarization and
+  signed-download validation remain pending.

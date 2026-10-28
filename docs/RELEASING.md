@@ -36,6 +36,8 @@ export. Do not retrieve secrets through a workflow or print them in logs.
 2. **File → Export Items**, choose `.p12`, and set a new export password. This
    does not require the password of a previous P12 export. Do not use Developer
    ID Installer; that certificate type is for installer PKGs, not this DMG.
+   Check the selected certificate's name before exporting: a `localhost`
+   development/TLS certificate is not a code-signing identity.
 3. At https://account.apple.com, select **Sign-In and Security → App-Specific
    Passwords** and generate one for this repository's notarization workflow.
 4. Set these repository secrets:

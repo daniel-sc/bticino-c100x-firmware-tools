@@ -28,18 +28,19 @@ These checks establish package compatibility, not bootability.
 
 ## 1. Set up the flasher
 
-Use an Apple Silicon Mac with Homebrew, mise and Xcode Command Line Tools.
+Use an Apple Silicon Mac with Homebrew and Xcode Command Line Tools. The latter
+provide the C++ compiler and macOS SDK for TetherKit; install them with
+`xcode-select --install` if needed. Full Xcode is not required.
 Run these commands from the repository root:
 
 ```sh
+brew install mise libusb pkgconf
 mise trust
 mise install python cmake
-brew install libusb pkgconf
-mise run setup
 ```
 
-`mise run setup` creates `.venv` with the dependency used to read the vendor
-installer. The image builder's additional tools are not needed for flashing.
+The Python CLI uses only the standard library. C100X settings and the firmware
+format password are bundled; no MyHOME installer or pip setup is needed.
 
 Clone the pinned TetherKit helper and build it:
 
@@ -56,25 +57,18 @@ mise run test
 mise exec -- ctest --test-dir .local/tetherkit-build --output-on-failure
 ```
 
-Obtain the **MyHOME Suite 3.5.38 installer** from the
-[manufacturer download](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=MyHOME_Suite_030538.exe&fileId=58107.23188.60514.44282)
-and save it as `research/MyHOME_Suite_030538.exe`. The CLI reads its C100X profile
-and FTP credentials in memory; it does not execute the installer.
-
 ## 2. Select and inspect the image
 
 In the terminal you will use for CLI commands, choose your image path:
 
 ```sh
 FW="$PWD/.local/custom.fwz"
-INSTALLER="$PWD/research/MyHOME_Suite_030538.exe"
-mise exec -- .venv/bin/python -m classe100x inspect-fw "$FW"
+mise exec -- python -m classe100x inspect-fw "$FW"
 ```
 
-The normal format password is built into the profile. The optional
-`--key-from-builder /path/to/legacy/main.py` reads a legacy literal without
-executing that script. User passwords and FTP credentials are never arguments
-or normal log output.
+The bundled profile comes from MyHOME Suite 3.5.38 and was checked against stock
+firmware. Its provenance is in [PROTOCOL.md](PROTOCOL.md). FTP credentials are
+omitted from normal log output.
 
 ## 3. Start USB networking
 
@@ -87,7 +81,7 @@ Connect the powered intercom by USB. List matching RNDIS devices without root:
 In a **second terminal**, also in the repository root, start the supervisor:
 
 ```sh
-sudo "$PWD/.venv/bin/python" -m classe100x usb
+sudo "$(mise which python)" -m classe100x usb
 ```
 
 Leave this terminal open. Root is needed for macOS feth/BPF networking. The
@@ -99,14 +93,14 @@ the intercom is `192.168.129.1`. Interface names can change after reconnecting.
 Back in the CLI terminal:
 
 ```sh
-mise exec -- .venv/bin/python -m classe100x probe
-mise exec -- .venv/bin/python -m classe100x plan "$FW" --myhome-installer "$INSTALLER"
+mise exec -- python -m classe100x probe
+mise exec -- python -m classe100x plan "$FW"
 /sbin/route -n get 192.168.129.1
 ```
 
 `probe` queries identity/status/uptime. `plan` also validates the archive and
-vendor profile; neither begins a transfer or sends update commands. Confirm
-the route uses the feth interface reported by the supervisor, not ordinary LAN.
+checks device compatibility; neither begins a transfer or sends update commands.
+Confirm the route uses the feth interface reported by the supervisor, not ordinary LAN.
 
 Complete the idle reconnect and supervisor-cleanup checks in
 [ACCEPTANCE.md](ACCEPTANCE.md#native-read-only-preflight--passed) before flashing.
@@ -119,7 +113,7 @@ Restart the supervisor and repeat preflight after those checks.
 **This command writes firmware and reboots the device three times:**
 
 ```sh
-mise exec -- .venv/bin/python -m classe100x flash "$FW" --myhome-installer "$INSTALLER"
+mise exec -- python -m classe100x flash "$FW"
 ```
 
 Keep the Mac awake, the intercom powered and the USB supervisor running. Never

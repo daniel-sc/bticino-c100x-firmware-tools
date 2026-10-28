@@ -1,2 +1,0 @@
-# Reading the vendor's FTP settings directly from the user's MyHOME installer.
-bitrock-unpacker==0.1.2

@@ -22,9 +22,12 @@ There is no GUI or ready-made MQTT/Home Assistant integration.
 
 ## Quick start: build an SSH-enabled image
 
-You need [Homebrew](https://brew.sh), Xcode Command Line Tools, and at least
+You need [Homebrew](https://brew.sh) and at least
 **4 GiB of free disk space**. Clone or download this repository, then open a
 terminal in its root directory—the folder containing `mise.toml`.
+
+Xcode Command Line Tools are needed when compiling the USB helper for flashing;
+the builder quick start uses prebuilt tools on Apple Silicon.
 
 ### 1. Install the build tools
 

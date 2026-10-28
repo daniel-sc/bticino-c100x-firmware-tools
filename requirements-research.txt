@@ -1,5 +1,5 @@
-# Additional offline firmware inspection dependencies.
--r requirements.txt
+# Offline firmware and vendor-installer research only; not CLI dependencies.
+bitrock-unpacker==0.1.2
 capstone==5.0.9
 dissect.cstruct==4.7
 dissect.extfs==3.15

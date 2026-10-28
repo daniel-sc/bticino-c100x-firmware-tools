@@ -156,7 +156,7 @@ performed in this session.
   authentication still requires the legacy OpenSSH signature exception with
   stock Dropbear; the host-key choice does not remove that separate limitation.
 - Both builds have private mode-0600 artifacts and optional redacted `.build.json`
-  reports. Credentials and host private keys are not included in tracked files.
+  reports. User SSH credentials and host private keys are not included in tracked files.
 - A third real stock build with a disposable **ECDSA P-256 login key plus
   password** passed the final pipeline, including layout checks and repeated
   verification on the reopened filesystem:
@@ -195,3 +195,18 @@ performed in this session.
       doorbell behavior and the existing intercom functions.
 - [ ] Validate a real supplied MQTT/service binary and configuration on hardware;
       the binary-service example's offline readback is not integration acceptance.
+
+## 2026-10-28: Installer-free CLI validation
+
+- Extracted the C100X profile from the existing MyHOME Suite 3.5.38 installer
+  locally, validating provider, object model and recovery-selection fields.
+  Recorded the source installer SHA-256 in [PROTOCOL.md](PROTOCOL.md).
+- Compared both bundled FTP credential pairs with the validated extraction;
+  they match exactly. Shared vendor settings are now bundled under ADR-010.
+- **72 offline tests passed**, with no skips. New CLI simulations exercise
+  `plan` and `flash` with just a firmware path, credential selection for all four
+  transfers, redacted output, and rejection of invalid images/incompatible devices.
+- `plan`, `flash`, `inspect-fw` and `usb` help all ran with Python `-S` (site
+  packages disabled); obsolete installer/key-source options are absent.
+- These checks used simulated device I/O only. Native transfer, recovery networking
+  and hardware flashing/functional acceptance remain pending.

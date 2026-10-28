@@ -6,11 +6,11 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .firmware import ARCHIVE_KEY, PROFILE, FirmwareError, prepare_firmware, regular_file
+from .firmware import PROFILE, FirmwareError, prepare_firmware, regular_file
 from .protocol import ProtocolError, ReadOnlyClient
 from .transport import run_usb
 from .updater import NetworkDevice, UpdateError, check_identity, flash
-from .vendor import key_from_builder, load_profile
+from .vendor import C100X_PROFILE
 
 
 def main() -> int:
@@ -43,14 +43,11 @@ def main() -> int:
         command.add_argument("--sevenzip", help="Explicit 7zz/7z executable")
     for name, help_text in (
         ("inspect-fw", "Validate firmware and calculate payload checksums offline"),
-        ("plan", "Validate firmware, vendor settings and device identity without device writes"),
+        ("plan", "Validate firmware and device identity without device writes"),
         ("flash", "Write recovery and main firmware, including recovery-mode transition and reboots"),
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("firmware", type=Path)
-        command.add_argument("--key-from-builder", type=Path, help="Optional legacy archive-key source; defaults to the profile's published format key")
-        if name != "inspect-fw":
-            command.add_argument("--myhome-installer", type=Path, required=True)
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -120,22 +117,10 @@ def main() -> int:
         elif args.command == "usb":
             run_usb(args.tetherkit)
         else:
-            profile = None
-            if args.command != "inspect-fw":
-                try:
-                    profile = load_profile(args.myhome_installer)
-                except ImportError:
-                    raise ValueError("Run mise run setup, then use .venv/bin/python for this command") from None
-                except Exception:
-                    raise ValueError("Unable to read the researched C100X settings from the MyHOME installer") from None
-            if args.key_from_builder:
-                key = key_from_builder(args.key_from_builder)
-            else:
-                key = ARCHIVE_KEY
             print("Validating the complete firmware archive…", file=sys.stderr)
             local = Path(".local")
             local.mkdir(exist_ok=True)
-            with prepare_firmware(args.firmware, key, temporary_parent=local) as firmware:
+            with prepare_firmware(args.firmware, temporary_parent=local) as firmware:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
                 elif args.command == "plan":
@@ -150,7 +135,7 @@ def main() -> int:
                         "device_writes": False,
                     }, indent=2))
                 else:
-                    flash(firmware, NetworkDevice("192.168.129.1"), profile,
+                    flash(firmware, NetworkDevice("192.168.129.1"), C100X_PROFILE,
                           report=lambda text: print(text, flush=True))
         return 0
     except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:

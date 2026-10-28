@@ -23,14 +23,16 @@
 - Keep read-only preflight separate from explicit flashing. Inject failures only
   in simulation, never by deliberately interrupting an actual write.
 - Do not print credentials or commit vendor/research files, firmware or private
-  backups. Authorized plain backups contain secrets and remain Git-ignored.
+  backups. The fixed, publicly distributed C100X FTP settings and FWZ format key
+  are bundled profile data (ADR-010); user credentials and generated host keys
+  remain private. Authorized plain backups contain secrets and remain Git-ignored.
 - A worker ACK, a completed sequence and functional acceptance are distinct
   evidence levels. Update the acceptance record only with observed results.
 
 ## Development
 
 Use mise-managed tools. `mise run test` runs the offline Python suite without a
-device or root. USB helper build/setup commands are in the README. Keep tests
+device or root. USB helper build/setup commands are in `docs/FLASHING.md`. Keep tests
 offline unless a hardware step is explicitly being undertaken.
 
 `research/TetherKit` is a separate upstream checkout with its own instructions;

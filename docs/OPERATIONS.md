@@ -13,7 +13,6 @@ The original selected-image research used these workspace-specific locations:
 
 ```sh
 FW="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/custom_firmware/NEW_c100x_1.5.8_MQTT_20251106_205901.fwz"
-BUILDER="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/main.py"
 ```
 
 These are maintainer reference paths, not setup requirements for other users.
@@ -47,7 +46,7 @@ Use an existing session without prompting or recording a password:
 
 ```sh
 ssh -S ~/.ssh/bticino-research.sock -o BatchMode=yes -o ConnectTimeout=5 klingel 'uptime'
-mise exec -- .venv/bin/python -m classe100x probe --host 127.0.0.1 --port 22000
+mise exec -- python -m classe100x probe --host 127.0.0.1 --port 22000
 ```
 
 The forwarded probe reaches the device's loopback OpenWebNet endpoint over LAN
@@ -131,7 +130,9 @@ on-device changes but is a different artifact.
 
 Git contains source, tests, docs, mise configuration and a Ghidra decompilation
 helper. It excludes vendor binaries, decompiled output, device images and tool
-builds. `mise run research-setup` installs the additional Python analysis packages;
+builds. `mise run research-setup` creates `.venv` with Python analysis packages,
+including `bitrock-unpacker` for installer research; normal CLI use needs none of
+these packages. The fixed C100X FTP profile is bundled in `classe100x/vendor.py`.
 Ghidra/Java and .NET/ILSpy were used for device/vendor decompilation respectively.
 ILSpy was installed locally at `.local/dotnet-tools/ilspycmd` (11.1.0.9782), and
 Ghidra's macOS arm64 decompiler needed a local build during research. These steps
@@ -142,5 +143,5 @@ The researched MyHOME installer came from the vendor's
 Its profile member and decompiled reference locations are listed in
 [PROTOCOL.md](PROTOCOL.md). The TetherKit clone/revision is in
 [FLASHING.md](FLASHING.md); historical firmware paths are recorded above.
-A fresh clone requires the relevant external inputs; the
+A research rebuild requires the relevant external inputs; the
 research files cited by path are not promised to exist there automatically.

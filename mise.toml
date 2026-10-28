@@ -10,10 +10,6 @@ dotnet = "10.0.403"
 description = "Install offline firmware analysis Python dependencies"
 run = ["python -m venv .venv", ".venv/bin/python -m pip install -r requirements-research.txt"]
 
-[tasks.setup]
-description = "Install CLI runtime dependencies"
-run = ["python -m venv .venv", ".venv/bin/python -m pip install -r requirements.txt"]
-
 [tasks.test-builder]
 description = "Run offline builder integration tests with locally installed e2fsprogs"
 run = "CLASSE100X_REQUIRE_BUILDER_TOOLS=1 python -m unittest discover -s tests -p 'test_builder*.py' -v"

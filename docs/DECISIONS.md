@@ -81,8 +81,9 @@ allowlisting excludes query 44 because it schedules a reboot. See
 
 ## ADR-005: Keep vendor secrets and private artifacts out of source control
 
-**Status update, 2026-10-28:** ADR-007 distinguishes the public FWZ format password
-from private device/user credentials. All private-artifact constraints still apply.
+**Status update, 2026-10-28:** ADR-007 bundles the public FWZ format password;
+ADR-010 supersedes runtime FTP-profile extraction with bundled public vendor
+settings. Private device/user credentials and artifacts remain excluded.
 
 **Context:** The workflow needs vendor FTP settings and an FWZ archive key. Research
 artifacts and raw backups can contain credentials and private configuration.
@@ -193,3 +194,30 @@ ECDSA algorithm identifiers, but vendor-build ECDSA login needs hardware proof.
 identity. Password mode retains other vendor accounts and their existing records.
 The generated FWZ contains credentials/private host identity and stays private.
 SSH is selected explicitly, so a no-payload build remains a useful no-op test.
+
+## ADR-010: Bundle the public C100X settings and simplify setup
+
+**Accepted 2026-10-28**, at the user's request.
+
+**Decision:** Bundle the fixed normal/recovery FTP settings from the publicly
+distributed MyHOME Suite 3.5.38 C100X profile, with installer hash and member-path
+provenance. These are shared vendor profile data, like the FWZ format password,
+not personal credentials. Keep credential representations and FTP errors redacted.
+
+Remove runtime installer extraction, its required CLI argument and its pip
+dependency. Remove the obsolete legacy-builder archive-key override as the format
+key is already fixed by the supported profile. The CLI now uses Python's standard
+library; delete the runtime requirements file and setup task. Keep installer
+unpacking dependencies only in the separate research environment.
+
+Xcode Command Line Tools belong in USB-helper setup because TetherKit needs a
+C++ compiler and macOS SDK. The Apple Silicon builder quick start uses prebuilt
+tools. Homebrew may still require developer tools for source installations;
+see its [installation requirements](https://docs.brew.sh/Installation).
+
+**Consequences:** Users can plan/flash with the firmware path alone, without
+downloading MyHOME or providing a legacy builder. Package/device checks and the
+recovery-first update sequence still enforce the researched target. Changes to
+the supported device profile require new evidence and a code update. This does
+not establish hardware acceptance; user passwords, host private keys, firmware
+and backups remain private artifacts.

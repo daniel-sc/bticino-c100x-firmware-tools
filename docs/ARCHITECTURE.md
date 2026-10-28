@@ -35,22 +35,23 @@ host/port overrides, including the research tunnel.
 
 | Module | Responsibility and boundary |
 | --- | --- |
-| `__main__.py` | Command selection, private user-password input, installer loading, staging lifetime and user-facing errors |
+| `__main__.py` | Command selection, private user-password input, staging lifetime and user-facing errors |
 | `firmware.py` | Fixed package profile, preserved component hashes, bounded archive validation/staging; expose `PreparedFirmware` and transfer payload metadata |
 | `download.py` | Fetch and cache the pinned original, verify size/hash, no-clobber publication |
 | `builder.py` | Private working copy, ordered trusted image payloads, repacking, final checks and publication |
 | `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback, bounded/redacted subprocess boundary |
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
 | `payloads/ssh/` | Stock-specific SSH account/config/key preparation, raw image commands and verification |
-| `vendor.py` | Parse the installer profile in memory into normal/recovery credentials; read a literal archive key from the legacy builder without executing it |
+| `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
 
 The CLI composes these modules. The updater depends on protocol, firmware metadata
 and vendor credentials; those modules do not depend on the updater. Transport is
-independent of the update state machine. Research tools are not flasher runtime
-dependencies; installer extraction is the runtime use of `bitrock-unpacker`.
+independent of the update state machine. The Python CLI uses only the standard
+library. `bitrock-unpacker` is a research-only dependency, used to establish the
+bundled profile from the public installer.
 Builder modules are imported only for builder commands. They do not add e2fsprogs,
 7zip, Dropbear keygen or OpenSSL dependencies to inspection/planning/flashing.
 No native macOS frameworks are imported by the Python CLI; the USB supervisor's
@@ -62,7 +63,7 @@ feth/helper execution remains macOS-specific.
 | --- | --- |
 | FWZ | Encrypted ZIP update package containing a manifest and firmware payloads; not a whole-device image |
 | Manifest | XML 3.0 model/action description; its `btesuv3` label does not select the actual Windows protocol implementation |
-| Vendor profile | Installer's per-product settings; this C100X profile selects BTESUXP and `watershedVer=always` |
+| Vendor profile | Fixed settings derived from the public installer; this C100X profile selects BTESUXP and `watershedVer=always` |
 | Payload | Exact compressed file sent over FTP, with byte length, SHA-256 and POSIX checksum |
 | Image payload | Trusted directory of optional preparation/verification hooks, raw debugfs commands and ordinary assets; distinct from the transfer `Payload` class |
 | Prepared firmware | Fully validated payloads in a private temporary directory, valid for the surrounding context-manager lifetime |

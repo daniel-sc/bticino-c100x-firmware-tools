@@ -25,6 +25,10 @@ standard Apple Silicon/Intel Homebrew locations. `--debugfs`, `--e2fsck` and
 `--sevenzip` override executable paths. SSH inputs can override `dropbearkey`
 and `openssl`. Nothing is silently installed by a CLI command.
 
+The builder itself needs no compiler. Apple Silicon Homebrew bottles are prebuilt;
+installing formulae from source requires Xcode Command Line Tools. The native USB
+helper has separate compiler/SDK requirements in [FLASHING.md](FLASHING.md).
+
 Fetch the pinned original ahead of time, or let `--stock` fetch on cache miss:
 
 ```sh
@@ -78,7 +82,7 @@ mise exec -- python -m classe100x inspect-fw .local/custom.fwz
 ```
 
 Building never invokes flashing. Use the separate [flashing guide](FLASHING.md),
-including the real-device checks and vendor installer credentials.
+including the real-device compatibility checks.
 Neither a build report nor a successful offline inspection proves bootability.
 
 ## Downloads and package policy

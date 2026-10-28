@@ -9,7 +9,10 @@ below refer to local research artifacts, not distributed vendor source.
 1. Installer member
    `default/resTargetDir4/devices/2266_1.5_BT/xml/Protocol/protocol.xml` identifies
    device `344682`, model `1.0.99`, provider `BTESUProtocolXPProvider` and
-   `watershedVer=always`. `classe100x/vendor.py` reads this member in memory.
+   `watershedVer=always`. `classe100x/vendor.py` bundles the normal/recovery FTP
+   settings from this member. The source installer SHA-256 is
+   `707d8a43a5296a1ea87c33f111e9269c8bbd0fe524ac5efe87bdede8b6eb311b`;
+   the manufacturer download is linked in [OPERATIONS.md](OPERATIONS.md).
 2. `research/myhome-BTicino.Core.v3.dll-VersionsHelper.cs`, lines 30–32:
    `always` evaluates to `CheckResult.lt`.
 3. `research/myhome-btesuxp-provider/BTicino.Protocol.ProtocolManager.Providers.BTESUXP/BTESUProtocolXPProvider.cs`,
@@ -58,7 +61,9 @@ connection.
 Stock `/etc/vsftpd.conf` uses control port 21 and passive port 11111, with local
 users chrooted. The firmware accounts' home is `/var/tmp/ftp`. Vendor normal
 and recovery credentials were verified offline against the corresponding
-stock password hashes. Values are not included in source, documents or logs.
+stock password hashes. The fixed settings are bundled as public profile data;
+normal log output and credential representations remain redacted. Personal SSH
+credentials, generated host keys and private device configuration are not bundled.
 
 ## Read-only identity
 

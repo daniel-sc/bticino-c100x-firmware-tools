@@ -117,8 +117,10 @@ on-device changes but is a different artifact.
   recovery-mode networking and actual flashing remained unverified.
 - Either direct re-flash or the stock-to-modified acceptance path is possible;
   understand the distinction in [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
-- Before another native check, reconnect USB as needed and restart the supervisor
-  in the user's sudo terminal, then inspect the route and run `probe`/`plan`.
+- Before another native check, reconnect USB as needed and run the managed
+  `sudo ./c100x plan ...` workflow in [FLASHING.md](FLASHING.md). It starts its
+  helper and checks the route. The earlier standalone-supervisor workflow remains
+  available for development through `--external-usb`.
 - After actual flashing, record the three reboot boundaries and verify calls,
   both audio directions, video, door release and SSH. Report the actual evidence,
   not simply “flash successful” because the worker became idle.

@@ -110,7 +110,7 @@ directory `research/backups/20261027T201641Z/`:
 - [ ] Check baseline calling, audio/video and door release.
 - [ ] Reconnect to macOS; run native `probe` and `plan` again.
 - [ ] Run the explicit `flash` command without SSH. Keep the Mac awake, device
-      powered and transport terminal open throughout.
+      powered and the command's terminal open throughout.
 - [ ] Record all four payload stages and all three verified reboot boundaries.
 - [ ] Confirm final normal state 4*0 and firmware 1.5.8.
 - [ ] Verify incoming call/ring and answering.
@@ -118,7 +118,7 @@ directory `research/backups/20261027T201641Z/`:
 - [ ] Verify door release.
 - [ ] Verify SSH access supplied by the selected modified image, using the
       existing credentials interactively without recording them.
-- [ ] Stop the transport after completion; confirm interface cleanup.
+- [ ] Confirm the managed transport exits and removes its interfaces afterward.
 
 Never deliberately interrupt an actual write to test failure handling. On an
 unexpected stop, record the last stage and error, keep power stable and assess
@@ -226,3 +226,13 @@ performed in this session.
   artifact's minimum will be determined separately from its shipped binaries.
 - Signing, notarization, GitHub publication and downloaded-artifact checks are
   still pending at this point. No hardware operations were performed.
+- The complete local package build then passed, including hashed dependency
+  source archives and license collection. Source notices supplement bottles
+  that omit them (notably 7zip); pip bootstrap wheels/development scripts are
+  excluded from the runtime bundle.
+- A real no-payload firmware build using the bundled CLI and system-only PATH
+  passed all offline checks. Its main filesystem retained the stock hash
+  `80f04c61a9a34032e397d1dc6a1209ad029162a59d08981d7fd9f81348264354`.
+- GitHub Actions run `40774118641` passed the Python suite, pinned helper build
+  and CTest suite, complete package build, relocated smoke tests and candidate
+  DMG creation. This run produced an ad-hoc CI artifact, not a signed release.

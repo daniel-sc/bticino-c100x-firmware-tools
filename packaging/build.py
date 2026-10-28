@@ -48,6 +48,20 @@ def macho(path):
         return stream.read(4) in MAGICS
 
 
+def archive_notices(source, destination):
+    """Preserve notices that binary bottles may omit, including nested licenses."""
+    with tarfile.open(source) as archive:
+        for member in archive.getmembers():
+            path = Path(member.name)
+            if member.isfile() and re.search(r"(?i)license|^(copying|notice|copyright)(\.|$)", path.name):
+                relative = Path(*path.parts[1:])
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise RuntimeError("Invalid source notice path")
+                target = destination / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.extractfile(member).read())
+
+
 def linked(path):
     return [line.strip().split(" (", 1)[0] for line in text("otool", "-L", path).splitlines()[1:] if " (" in line]
 
@@ -102,7 +116,7 @@ def relocate(bundle, origins):
 def audit(bundle):
     minimum = (15, 0)
     for path in bundle.rglob("*"):
-        if path.is_symlink() and not path.resolve().is_relative_to(bundle.resolve()):
+        if path.is_symlink() and not path.resolve(strict=True).is_relative_to(bundle.resolve()):
             raise RuntimeError(f"External symlink: {path}")
         if not macho(path):
             continue
@@ -192,6 +206,14 @@ def main():
             shutil.copy2(notice, destination)
     shutil.rmtree(runtime / "include")
     shutil.rmtree(runtime / "share", ignore_errors=True)
+    shutil.rmtree(runtime / "lib/pkgconfig")
+    stdlib = runtime / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"
+    shutil.rmtree(stdlib / "ensurepip", ignore_errors=True)
+    for directory in stdlib.glob("config-*"):
+        shutil.rmtree(directory)
+    for path in (runtime / "bin").iterdir():
+        if path.name not in ("python3", f"python{sys.version_info.major}.{sys.version_info.minor}"):
+            path.unlink()
     for path in runtime.rglob("__pycache__"):
         shutil.rmtree(path)
     for path in runtime.rglob("*.a"):
@@ -248,6 +270,9 @@ def main():
                 target = notice_dir / notice.relative_to(prefix)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(notice, target)
+        archive_notices(filename, notice_dir / "source")
+        if not any(p.is_file() for p in notice_dir.rglob("*")):
+            raise RuntimeError(f"No license notices found for {formula}")
         (directory / "homebrew.json").write_text(json.dumps(info, indent=2) + "\n")
         source_metadata.append({"name": formula, "version": installed_version, "license": info["license"],
                                 "url": source["url"], "sha256": digest(filename)})
@@ -255,22 +280,15 @@ def main():
     # Include upstream helper source and its MIT notice independently of checkout.
     helper_source = sources / "TetherKit.tar.gz"
     download(f"https://github.com/XiaoMiku01/TetherKit/archive/{TETHERKIT_REVISION}.tar.gz", helper_source)
-    with tarfile.open(helper_source) as archive:
-        for member in archive.getmembers():
-            path = Path(member.name)
-            if member.isfile() and re.match(r"(?i)^(license|copying|notice|copyright)(\.|$)", path.name):
-                relative = Path(*path.parts[1:])
-                if relative.is_absolute() or ".." in relative.parts:
-                    raise RuntimeError("Invalid source notice path")
-                destination = licenses / "TetherKit" / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(archive.extractfile(member).read())
+    archive_notices(helper_source, licenses / "TetherKit")
     source_metadata.append({"name": "TetherKit", "version": TETHERKIT_REVISION,
                             "sha256": digest(helper_source)})
     minimum = audit(bundle)
     manifest = {"version": args.version, "architecture": "arm64", "minimum_macos": minimum,
                 "commit": text("git", "-C", ROOT, "rev-parse", "HEAD"),
                 "tetherkit_revision": TETHERKIT_REVISION, "sources": source_metadata,
+                "compiler": text("clang", "--version").splitlines()[0],
+                "sdk": text("xcrun", "--show-sdk-version"),
                 "hardware_acceptance": "not performed"}
     (app / "release.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (sources / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

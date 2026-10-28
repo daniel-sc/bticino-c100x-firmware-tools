@@ -1,10 +1,26 @@
 # Research access, backups and continuation
 
-The native user workflow is in [../README.md](../README.md). This file records
+Start with [../README.md](../README.md); the detailed USB workflow is in
+[FLASHING.md](FLASHING.md). This file records
 local operational knowledge that was previously scattered through the discussion.
 Paths and SSH aliases below describe this workspace; they are not portable defaults.
 
 ## Research SSH and probe tunnel
+
+### Local image reference paths
+
+The original selected-image research used these workspace-specific locations:
+
+```sh
+FW="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/custom_firmware/NEW_c100x_1.5.8_MQTT_20251106_205901.fwz"
+BUILDER="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/main.py"
+```
+
+These are maintainer reference paths, not setup requirements for other users.
+New builds use the pinned original download or a supplied stock image as described
+in [BUILDER.md](BUILDER.md).
+
+### SSH access
 
 The existing modified device can be reached with the user's `klingel` SSH alias
 (`root2`, observed LAN address `192.168.0.241`). The alias and authentication
@@ -84,12 +100,13 @@ The main partition image would supply the main filesystem payload after gzip
 compression. A package would also need a matching recovery filesystem, kernel/DTB
 ZIP, correct manifest and archive encryption. Existing preserved package components
 could be reused only after establishing that they are the intended matching set.
-Then validate the entire new archive and explicitly review its new allowlisted
-hash. This does not establish that the newly packaged image can be restored.
+Then validate the entire new archive against the fixed package profile. This
+does not establish that the newly packaged image can be restored.
 
 The separate data partition is not a substitute for the recovery payload and
-does not belong in the researched four-member FWZ layout. Creating firmware or
-an automated restore workflow remains outside the implemented CLI's scope.
+does not belong in the researched four-member FWZ layout. An automated
+backup-to-FWZ restore workflow remains outside the implemented CLI's
+scope. The builder added on 2026-10-28 starts only from pinned stock, not backups.
 For reinstalling the previously flashed modified build, the preserved original
 modified FWZ is already the known package; a live backup captures possible later
 on-device changes but is a different artifact.
@@ -123,6 +140,7 @@ are not yet an end-to-end automated research rebuild.
 The researched MyHOME installer came from the vendor's
 [download endpoint](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=MyHOME_Suite_030538.exe&fileId=58107.23188.60514.44282).
 Its profile member and decompiled reference locations are listed in
-[PROTOCOL.md](PROTOCOL.md). The TetherKit clone/revision and original firmware
-locations are in the README. A fresh clone requires those external inputs; the
+[PROTOCOL.md](PROTOCOL.md). The TetherKit clone/revision is in
+[FLASHING.md](FLASHING.md); historical firmware paths are recorded above.
+A fresh clone requires the relevant external inputs; the
 research files cited by path are not promised to exist there automatically.

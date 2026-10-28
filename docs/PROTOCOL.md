@@ -137,3 +137,62 @@ The selected recovery and kernel files are byte-identical to stock. See
   and SSH acceptance checks. No installed-filesystem readback is available here.
 
 Deliberate fault injection is restricted to simulation.
+
+## 2026-10-28: Builder package and SSH evidence (offline)
+
+The downloaded manufacturer `C100X_010508.fwz` was 106240356 bytes and matched
+the existing stock SHA-256 pin. The local original was inspected without mounting
+its filesystem. Its four entries use traditional encryption and DEFLATE; flags
+are 1, extraction-version low byte 20 and upper byte 3. The selected legacy
+modified image uses flags 3 and version upper byte 0. New 7zip output uses flags
+1 and upper byte 0. All accepted variants require matching local/central header
+fields and intact CRCs. Output verification rejects Zip64, AES and descriptors.
+
+Stock preserved-component hashes:
+
+| Decoded archive member | SHA-256 |
+| --- | --- |
+| `fwz.xml` | `f2f78c7a45546800f1d1148e3229b39365c417b9a758b80c57dfa807697e8fb5` |
+| `btweb_only_recovery.ext4.gz` | `00840dd0d6e326e8cc25033037a24889ef9cfad13795e83a495b355e1d69cce3` |
+| `uImage.zip` | `b06b75e3a956fb26578788293db449f5f188b0502a70cd24f91719ad1dffda3d` |
+
+The stock main filesystem expands to 1073741824 bytes. Its superblock has
+262144 blocks of 4096 bytes, 262144 inodes, inode size 256, and feature masks
+compat=60, incompat=578, read-only-compat=123. `e2fsck 1.47.4 -f -n` returned 0.
+The main rootfs SHA-256 is
+`80f04c61a9a34032e397d1dc6a1209ad029162a59d08981d7fd9f81348264354`.
+The initial no-op round trip preserved those complete decompressed bytes.
+
+Read-only stock-file inspection confirmed:
+
+- `/etc/inittab` selects runlevel 5. `/etc/rc5.d/S98dropbear` is initially absent.
+- `/usr/sbin/dropbear` is a symlink to `./dropbearmulti`. The binary contains
+  `ecdsa-sha2-nistp256`; this is capability evidence, not a successful login test.
+- `/etc/init.d/dropbear` sources `/etc/default/dropbear`, passes `DROPBEAR_RSAKEY`
+  to generic `-r`, and only generates an RSA key when that configured file does
+  not exist. The default read-only-rootfs key path is volatile. The factory-key
+  copy is conditional on runlevel 4, not the normal runlevel 5.
+- `/etc/default/dropbear` initially sets `DROPBEAR_EXTRA_ARGS="-B"`.
+- `/home/root` is root-owned 0700; `.ssh` is absent. `/etc/dropbear` initially has
+  UID/GID 1000:1000 and mode 0775. The SSH payload intentionally changes that
+  directory to root-owned 0700 and shadow to 0600.
+- Stock shadow hashes use SHA-512 crypt (`$6$`). Values were not logged or tracked.
+
+The payload's guarded input hashes are in `payloads/ssh/common.py`; proprietary
+file contents remain local. Original account entries are preserved, including
+vendor-specific duplicate passwd entries. The bundled payload appends `root2`
+and enables the existing init script, rather than replacing the daemon.
+
+Upstream references used as supporting evidence:
+
+- `jorgeavlobo/intercom-firmware-tool` revision
+  `97ce7e9b95acc3a337a3d6657b023314e15882db`, `FirmwareRegistry.cs`,
+  `Ext4Probe.cs` and the C100X 1.5.8 verification record.
+- Dropbear tag `DROPBEAR_2017.75`, `svr-runopts.c` (`-s` disables password login;
+  `-B` permits blank passwords), `svr-auth.c`, `svr-authpubkey.c` and `signkey.c`.
+- Its 2020.79 changelog introduces Ed25519 and RSA-SHA2 support; do not attribute
+  those capabilities to the stock 2017.75 daemon.
+
+None of this changes the device update command sequence or establishes a hardware
+flash, SSH-authentication or MyHOME-import result. See ACCEPTANCE.md for observed
+local builds and pending hardware checks.

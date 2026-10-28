@@ -5,7 +5,10 @@
 Flash an existing, previously Windows-tested modified C100X 1.5.8 `.fwz`
 from an Apple Silicon Mac onto stock firmware, without SSH. A CLI and
 Homebrew system libraries are acceptable. Manage project tools with mise.
-Firmware creation and Home Assistant design are outside this project.
+The scope was expanded on 2026-10-28 to build modified C100X 1.5.8 images from
+the pinned stock original, with trusted local payloads and optional verified
+stock download. Home Assistant design remains outside the project. See ADR-007
+and [BUILDER.md](BUILDER.md).
 
 SSH on the currently modified intercom is available for read-only research.
 USB access requires manual setup and is only occasionally available.
@@ -28,6 +31,13 @@ Exercise failures in simulation; never intentionally interrupt a firmware write.
 Windows availability does not guarantee recovery from every failure.
 
 ## Selected image
+
+These two archive identities remain provenance/acceptance references. The builder
+requires the exact stock hash. The flasher also accepts new profile-conforming
+archives without adding each whole-archive hash: unchanged stock manifest,
+recovery and kernel; fixed main-filesystem size/geometry/features; exact archive
+membership and supported encrypted ZIP format. This is package validation,
+not a claim that arbitrary filesystem modifications will boot.
 
 User confirmed `NEW_c100x_1.5.8_MQTT_20251106_205901.fwz`.
 
@@ -62,7 +72,8 @@ there. Legacy C100X support does exist.
 
 ## Current validation status
 
-Implemented the `usb`, `probe`, `inspect-fw`, `plan` and `flash` CLI commands.
+Implemented `usb`, `probe`, `inspect-fw`, `plan`, `flash`, `fetch-fw`,
+`builder-doctor` and `build-fw`. Build and Flash are separate operations.
 The established BTESUXP sequence is recovery filesystem/kernel → reboot normal
 → clear main kernel → reboot recovery → main filesystem/kernel → reboot normal.
 See [PROTOCOL.md](PROTOCOL.md) for evidence and completion limitations.
@@ -70,9 +81,11 @@ See [PROTOCOL.md](PROTOCOL.md) for evidence and completion limitations.
 The selected archive has been fully validated. The read-only identity probe,
 including uptime and normalized object model, has succeeded both through the
 research SSH tunnel and directly over native USB. The non-writing firmware plan
-also passed over native USB. All 36 Python tests pass, including simulated per-step
-disconnects, lost commit ACK, FTP failures, reboot verification and USB helper
-cleanup. The pinned TetherKit build passed 23 CTest entries; native C100X
+also passed over native USB. The initial 36 Python tests passed on 2026-10-27,
+including simulated per-step disconnects, lost commit ACK, FTP failures, reboot
+verification and USB helper cleanup. The expanded 68-test offline suite passed
+on 2026-10-28, including synthetic builder/download coverage. Real no-op and SSH
+builds also passed offline validation. The pinned TetherKit build passed 23 CTest entries; native C100X
 networking has now been exercised with the privileged supervisor.
 
 No firmware-write commands have been sent to the real device. Native read-only

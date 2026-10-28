@@ -17,7 +17,7 @@
 
 ## Native read-only preflight — passed
 
-Use the commands in [../README.md](../README.md), before restoring stock:
+Use the commands in [FLASHING.md](FLASHING.md), before restoring stock:
 
 - [x] Record Mac OS version, TetherKit revision and device USB enumeration.
 - [x] Start `usb` with terminal sudo; record the system-side feth interface.
@@ -127,3 +127,71 @@ of recoverability from every interrupted state.
 
 Record outcomes and timestamps here after the hardware run. Until then there is
 no claim of a successful native USB flash or completed functional acceptance.
+
+## 2026-10-28: Local builder validation
+
+Authorized scope: code/dependency changes, offline tests, verified stock download
+and local image builds. No device connection, transfer, reboot or flash was
+performed in this session.
+
+- Manufacturer download completed and matched the stock size **106240356** and
+  SHA-256 `bca0dd7e407c2406d6f8c696f0a9e50bc1e795c8e4700c89e83f09ff96c3efb2`.
+  Subsequent named-stock builds reused and rehashed the local cache.
+- Host tools: mise Python 3.14.9, 7zip 26.05, Homebrew e2fsprogs 1.47.4,
+  Dropbear keygen package 2026.94, OpenSSL 4.1.0. No filesystem was mounted.
+- Stock main-rootfs baseline passed `e2fsck -f -n` with exit 0. No repairs or
+  vendor-inconsistency exceptions were necessary.
+- A synthetic debugfs batch with a missing source file returned **0**, emitted
+  errors on stderr, and executed the following mkdir. The wrapper rejects that
+  observed failure even when process status is 0.
+- Real no-op round trip passed filesystem checks, pinned-component checks,
+  complete main-filesystem hash comparison and final archive reopening:
+  `.local/noop-c100x-1.5.8.fwz`, SHA-256
+  `d9a5948b5483c3a6e87f05a726ea01896ee84eb500d4fc931b20084ca430c92e`.
+- Real SSH build with the user's supplied default **RSA public key** passed
+  critical-result checks and final archive readback:
+  `.local/ssh-c100x-1.5.8.fwz`, SHA-256
+  `ccbc10ae001999acc3fb27faab67ff7f65f6d3d877e66d3901d9c0ad5b97213c`.
+  This image uses key-only login and a fresh ECDSA host key. RSA **user**
+  authentication still requires the legacy OpenSSH signature exception with
+  stock Dropbear; the host-key choice does not remove that separate limitation.
+- Both builds have private mode-0600 artifacts and optional redacted `.build.json`
+  reports. Credentials and host private keys are not included in tracked files.
+- A third real stock build with a disposable **ECDSA P-256 login key plus
+  password** passed the final pipeline, including layout checks and repeated
+  verification on the reopened filesystem:
+  `.local/ssh-ecdsa-test-c100x-1.5.8.fwz`, SHA-256
+  `7b5f9cea1c17670792a8b506d11958d1b713b39558d754f60999ac6594aaee62`.
+  Its test credentials are private under `.local/ssh-ecdsa-validation/`; neither
+  successful login nor boot behavior has been tested. Artifact mode is 0600.
+- **68 offline tests passed** with no skips on this Mac. Coverage includes all
+  three SSH preparation modes, binary/config/service packaging, readback of
+  bytes/metadata/symlinks, xattr/hardlink replacement rejection, failed batch/full
+  image, baseline filesystem errors without repair, malformed ZIPs, legacy/vendor
+  ZIP variants, conflicts, duplicate payloads, input preservation, publication
+  failures, download corruption/cancellation, bounded subprocesses, and actual
+  SIGTERM/SIGHUP cleanup in synthetic builds.
+- Final reread of the user's original stock archive retained its original
+  SHA-256. All three published FWZ hashes were reread locally and matched their
+  reports. No unpublished builder workspace remained.
+- The new SSH FWZ passed the flasher's `inspect-fw` path with PATH restricted to
+  `/usr/bin:/bin`. A synthetic regression test also blocks imports of builder,
+  ext4 and host-tool modules while inspecting a valid FWZ.
+- The previously selected modified FWZ still passes full inspection with its
+  original SHA-256 and payload hashes/checksums. This checks the old-image
+  regression as admission moves from archive hashes to a fixed profile.
+
+### Remaining acceptance
+
+- [ ] Run the same synthetic matrix on Linux before claiming parity; test WSL
+      separately before documenting it as supported.
+- [ ] Import generated output with the existing Windows/MyHOME application.
+- [ ] Separately authorize native flashing; complete the existing transfer,
+      recovery networking, reboot and functional checks above.
+- [ ] Verify SSH with a clean modern client configuration: ECDSA host negotiation,
+      ECDSA user-key-only authentication and password-only authentication tested
+      independently. Force the intended method so fallback cannot hide failure.
+- [ ] Confirm host identity survives a normal reboot, then check door release,
+      doorbell behavior and the existing intercom functions.
+- [ ] Validate a real supplied MQTT/service binary and configuration on hardware;
+      the binary-service example's offline readback is not integration acceptance.

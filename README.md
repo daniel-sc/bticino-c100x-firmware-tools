@@ -1,156 +1,90 @@
-# Classe 100X firmware flashing from macOS
+# BTicino Classe 100X firmware tools
 
-Native Python CLI plus TetherKit USB/RNDIS transport for the researched Classe
-100X 1.5.8 update path. The stock-device workflow uses USB, OpenWebNet and FTP;
-it does not require SSH or Windows.
+A command-line tool for building custom firmware images and flashing a
+**BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS.
 
-**Status: native C100X read-only preflight passed on 2026-10-27; actual flashing
-remains unverified.** USB probe, non-writing firmware plan, idle reconnect and
-supervisor cleanup passed. FTP transfer and recovery-mode networking still
-await hardware validation.
+**Experimental:** image building and read-only USB preflight have passed local
+validation. Full native flashing and the generated images' boot/SSH behavior
+still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
 
-Only the two archive hashes in [docs/SCOPE.md](docs/SCOPE.md) are accepted.
-Device checks require firmware `1.5.8`, hardware `02*06*0`, object model `1.0.99`
-and initial status `4*0`. Firmware is staged unchanged in a private temporary
-directory, fully checked before connecting for an update, and removed on exit.
+## What's included?
 
-## Setup
+- **Image builder:** download the verified original firmware or use your own
+  copy, apply selected payloads, and produce a new `.fwz` file.
+- **Bundled SSH payload:** configure administrative access with your public key,
+  a password, or both. A binary/config/service example helps you add other payloads.
+- **Device flasher:** inspect an image, check the connected device, and explicitly
+  start an update over USB. The stock-device flashing workflow does not require SSH.
 
-Run from the project directory on an Apple Silicon Mac with Xcode command-line
-tools and mise installed:
+The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
+firmware are unsupported. Linux/WSL support is planned but not yet validated.
+There is no GUI or ready-made MQTT/Home Assistant integration.
+
+## Quick start: build an SSH-enabled image
+
+You need [Homebrew](https://brew.sh), Xcode Command Line Tools, and at least
+**4 GiB of free disk space**. Clone or download this repository, then open a
+terminal in its root directory—the folder containing `mise.toml`.
+
+### 1. Install the build tools
 
 ```sh
+brew install mise e2fsprogs dropbear openssl
 mise trust
-mise install python cmake
-brew install libusb pkgconf
-mise run setup
+mise install python 7zip
+mise exec -- python -m classe100x builder-doctor
 ```
 
-The CLI uses the mise-managed Python 3.14.9 virtual environment. The remaining
-tools in `mise.toml` are for offline reverse engineering.
-
-The local TetherKit checkout is pinned to
-`1ded051fd243c547fd6e250a898f0164cc30561d`. For a fresh workspace:
+### 2. Build an image
 
 ```sh
-git clone https://github.com/XiaoMiku01/TetherKit.git research/TetherKit
-git -C research/TetherKit checkout --detach 1ded051fd243c547fd6e250a898f0164cc30561d
+mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
+  --payload ssh --ssh-password \
+  --output .local/custom.fwz --report .local/custom.build.json
 ```
 
-Build and run offline checks:
+Enter the new SSH password when prompted. The login account will be `root2`.
+The tool downloads and verifies the original firmware, builds a private working
+copy, and checks the finished image before publishing it.
+
+Your results are:
+- `.local/custom.fwz` — the firmware image; keep it private because it contains
+  SSH credentials and a host private key.
+- `.local/custom.build.json` — a redacted report of the offline checks.
+
+**Building is device-independent; flashing is a separate operation.** Existing
+output files are never overwritten—choose a new filename for another build.
+
+Prefer public-key login or an offline build? See the
+[builder guide](docs/BUILDER.md). Stock Dropbear supports ECDSA P-256 keys;
+RSA keys need a legacy client option, and Ed25519 keys are unsupported.
+
+## What next?
+
+| Goal | Guide |
+| --- | --- |
+| Use your own firmware file, choose SSH authentication, or inspect a build | [Builder usage](docs/BUILDER.md) |
+| Add scripts, binaries or configuration through a local payload | [Payload authoring](docs/BUILDER.md#authoring-trusted-payloads) |
+| Set up USB, run read-only checks, or flash an image | [Flashing guide](docs/FLASHING.md) |
+| Check what has actually been tested | [Validation and remaining hardware work](docs/ACCEPTANCE.md) |
+
+Only use payloads you trust: their commands and Python scripts run with your
+host-user permissions.
+
+## Development
 
 ```sh
-mise run transport-build
 mise run test
-mise exec -- ctest --test-dir .local/tetherkit-build --output-on-failure
 ```
 
-Obtain the user's MyHOME Suite 3.5.38 installer as
-`research/MyHOME_Suite_030538.exe`. The CLI reads the C100X profile and FTP
-credentials into memory without executing the installer or exporting credentials.
+Tests use simulated devices and synthetic filesystems; no intercom or root access
+is required. Builder integration tests run when their tools are installed.
 
-## Offline firmware inspection
+For implementation details, see the [architecture](docs/ARCHITECTURE.md),
+[design decisions](docs/DECISIONS.md), and [protocol evidence](docs/PROTOCOL.md).
+Run `mise exec -- python -m classe100x --help` for the command list.
 
-For this workspace, set these paths in the terminal used for the CLI:
+## License
 
-```sh
-FW="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/custom_firmware/NEW_c100x_1.5.8_MQTT_20251106_205901.fwz"
-BUILDER="/Users/daniel/backup-2026-04-08/dev/bticinoClasse300x/main.py"
-INSTALLER="$PWD/research/MyHOME_Suite_030538.exe"
-mise exec -- .venv/bin/python -m classe100x inspect-fw "$FW" --key-from-builder "$BUILDER"
-```
-
-`--key-from-builder` statically reads the existing legacy builder's C100X archive
-key; it does not execute the builder. Omit this option for a hidden terminal
-prompt. The key and FTP credentials are never command-line arguments or output.
-Payload hashes and POSIX checksums are recorded in
-[docs/selected-image.json](docs/selected-image.json).
-
-## Native USB preflight — no firmware writes
-
-Connect the powered intercom by USB using the established physical setup. List
-matching RNDIS devices without root:
-
-```sh
-.local/tetherkit-build/bin/tetherkit-cli --lang en --vid 1da4 --pid 0056 --list
-```
-
-In a separate, real terminal, from this project directory:
-
-```sh
-sudo "$PWD/.venv/bin/python" -m classe100x usb
-```
-
-Leave this terminal open. The supervisor configures each detected **system-side**
-feth interface as `192.168.129.2/30`; the intercom is `192.168.129.1`. It handles
-new interface names and restarts the helper if it exits. Root is needed for
-feth/BPF. Use terminal `sudo`, following TetherKit's documented signal-handling
-constraints.
-
-In the CLI terminal:
-
-```sh
-mise exec -- .venv/bin/python -m classe100x probe
-mise exec -- .venv/bin/python -m classe100x plan "$FW" \
-  --key-from-builder "$BUILDER" --myhome-installer "$INSTALLER"
-```
-
-`probe` sends only allowlisted identity/status/uptime queries. `plan` also checks
-the complete archive and vendor profile; it does not start FTP or send update
-commands. Check that the route to `192.168.129.1` uses the reported feth interface
-with `/sbin/route -n get 192.168.129.1`.
-
-Before any flashing, verify idle USB disconnect/reconnect and supervisor Ctrl-C
-cleanup as described in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
-
-## Flash
-
-For the agreed stock-to-modified acceptance run, first complete native preflight,
-then restore stock 1.5.8 with the previously successful Windows method. Reconnect
-to the Mac and repeat `probe` and `plan`. Keep the USB supervisor running.
-
-Re-flashing the selected modified image onto the currently modified 1.5.8 device
-uses the same sequence and is also a valid first hardware test. Restoring stock
-first is an acceptance-test choice, not a protocol prerequisite; a direct re-flash
-would leave stock-to-modified compatibility acceptance pending.
-
-**This command writes firmware and reboots the device three times:**
-
-```sh
-mise exec -- .venv/bin/python -m classe100x flash "$FW" \
-  --key-from-builder "$BUILDER" --myhome-installer "$INSTALLER"
-```
-
-Sequence: recovery filesystem/kernel → reboot normal → clear main kernel →
-reboot recovery → main filesystem/kernel → reboot normal. Each payload is
-uploaded and committed separately. Reboot verification requires reset uptime
-and the expected identity/status.
-
-On an error, retain the reported stage and keep the intercom powered. The CLI
-does not retry uncertain writes, resume a partial update, or reboot as cleanup.
-Never deliberately disconnect or terminate either process during a real write.
-After completion, verify calls, two-way audio, video, door release and SSH;
-protocol completion alone does not prove those functions or the installed bytes.
-
-Stop the USB supervisor with Ctrl-C after the update and checks are finished.
-SIGINT, SIGTERM and SIGHUP request helper cleanup. If the helper cannot stop
-within ten seconds it is forcibly terminated and feth cleanup is reported as
-unverified.
-
-## Implementation and evidence
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): process/module boundaries, domain
-  vocabulary, update state and testing boundaries.
-- [docs/DECISIONS.md](docs/DECISIONS.md): accepted ADRs and tradeoffs.
-- [docs/OPERATIONS.md](docs/OPERATIONS.md): research SSH, backups, FWZ differences
-  and continuing work from a fresh session.
-- [docs/SCOPE.md](docs/SCOPE.md): project goal, compatibility and selected images.
-- `classe100x/protocol.py`: bounded framing and read-only query allowlist.
-- `classe100x/firmware.py`, `vendor.py`: package checks and in-memory settings.
-- `classe100x/updater.py`: FTP transfer and recovery-first state sequence.
-- `classe100x/transport.py`: pinned TetherKit CLI supervision.
-- [docs/PROTOCOL.md](docs/PROTOCOL.md): command evidence and protocol limitations.
-- [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md): hardware validation record.
-
-The tests use local sockets and simulated devices/processes. They require
-neither an intercom nor root and never contact a real device.
+Project code is [MIT-licensed](LICENSE). Manufacturer firmware and external
+dependencies retain their own licenses; firmware is not included in this repository.

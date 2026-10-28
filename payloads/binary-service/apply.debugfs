@@ -1,0 +1,15 @@
+write generated/binary /usr/bin/image-service
+set_inode_field /usr/bin/image-service uid 0
+set_inode_field /usr/bin/image-service gid 0
+set_inode_field /usr/bin/image-service mode 0100755
+write generated/configuration /etc/image-service.conf
+set_inode_field /etc/image-service.conf uid 0
+set_inode_field /etc/image-service.conf gid 0
+set_inode_field /etc/image-service.conf mode 0100600
+write generated/service /etc/init.d/image-service
+set_inode_field /etc/init.d/image-service uid 0
+set_inode_field /etc/init.d/image-service gid 0
+set_inode_field /etc/init.d/image-service mode 0100755
+symlink /etc/rc5.d/S99image-service ../init.d/image-service
+set_inode_field /etc/rc5.d/S99image-service uid 0
+set_inode_field /etc/rc5.d/S99image-service gid 0

@@ -18,3 +18,9 @@ __pycache__/
 .env
 .env.*
 *.log
+
+# Interrupted builder/download workspaces may contain credentials and vendor files.
+.classe100x-build-*/
+.download-*
+.build-report-*
+*.private.json

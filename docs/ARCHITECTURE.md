@@ -35,8 +35,13 @@ host/port overrides, including the research tunnel.
 
 | Module | Responsibility and boundary |
 | --- | --- |
-| `__main__.py` | Command selection, hidden key prompt, installer loading, staging lifetime and user-facing errors |
-| `firmware.py` | Accept only researched archive hashes; validate manifest and all payloads; expose `PreparedFirmware` and payload metadata |
+| `__main__.py` | Command selection, private user-password input, installer loading, staging lifetime and user-facing errors |
+| `firmware.py` | Fixed package profile, preserved component hashes, bounded archive validation/staging; expose `PreparedFirmware` and transfer payload metadata |
+| `download.py` | Fetch and cache the pinned original, verify size/hash, no-clobber publication |
+| `builder.py` | Private working copy, ordered trusted image payloads, repacking, final checks and publication |
+| `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback, bounded/redacted subprocess boundary |
+| `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
+| `payloads/ssh/` | Stock-specific SSH account/config/key preparation, raw image commands and verification |
 | `vendor.py` | Parse the installer profile in memory into normal/recovery credentials; read a literal archive key from the legacy builder without executing it |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
@@ -46,6 +51,10 @@ The CLI composes these modules. The updater depends on protocol, firmware metada
 and vendor credentials; those modules do not depend on the updater. Transport is
 independent of the update state machine. Research tools are not flasher runtime
 dependencies; installer extraction is the runtime use of `bitrock-unpacker`.
+Builder modules are imported only for builder commands. They do not add e2fsprogs,
+7zip, Dropbear keygen or OpenSSL dependencies to inspection/planning/flashing.
+No native macOS frameworks are imported by the Python CLI; the USB supervisor's
+feth/helper execution remains macOS-specific.
 
 ## Domain vocabulary
 
@@ -55,6 +64,7 @@ dependencies; installer extraction is the runtime use of `bitrock-unpacker`.
 | Manifest | XML 3.0 model/action description; its `btesuv3` label does not select the actual Windows protocol implementation |
 | Vendor profile | Installer's per-product settings; this C100X profile selects BTESUXP and `watershedVer=always` |
 | Payload | Exact compressed file sent over FTP, with byte length, SHA-256 and POSIX checksum |
+| Image payload | Trusted directory of optional preparation/verification hooks, raw debugfs commands and ordinary assets; distinct from the transfer `Payload` class |
 | Prepared firmware | Fully validated payloads in a private temporary directory, valid for the surrounding context-manager lifetime |
 | Object model | Compatibility identity `brand.line.code` (`1.0.99`); not a unique device serial number |
 | Normal state 4 | Running main firmware, but main update requires recovery mode; this is an expected initial state |
@@ -103,6 +113,19 @@ interrupted firmware update.
 
 ## Test boundaries and extension points
 
+The builder's lifecycle and trust contract are detailed in [BUILDER.md](BUILDER.md).
+It starts from pinned stock, edits only a private main-filesystem copy, checks
+the baseline/output read-only with e2fsck, preserves archive components, and
+reopens the final FWZ before no-clobber publication. No filesystem is mounted.
+Raw payloads have host permissions; their commands are not inferred into a change
+plan. Declared readback checks catch some composition conflicts, not all of them.
+
+Stock-image no-op and SSH builds have passed offline checks on macOS. Synthetic
+fixtures exercise failure, metadata and composition behavior without firmware or
+a device. Linux parity, MyHOME import and generated-image hardware acceptance
+remain pending. Fresh host keys and archive randomness rule out bit-identical
+reproducibility; semantic checks are the contract.
+
 The sequence is tested with a simulated device implementing the operations
 `flash()` uses; no formal backend interface or plugin framework exists. Framing
 and lost-ACK tests use local sockets. FTP and supervisor tests simulate external
@@ -113,6 +136,8 @@ firmware update. Successful idle reconnect does not establish recovery-mode USB
 behavior. Likewise, a prepared archive or idle worker does not prove installed
 bytes. The remaining hardware checks are recorded in [ACCEPTANCE.md](ACCEPTANCE.md).
 
-Support for a new model, image or release requires new protocol/profile evidence,
+Support for a new model or release requires new protocol/profile evidence,
 payload validation and identity criteria, then simulations and hardware acceptance.
+New images within this fixed profile do not require adding an archive hash;
+they still require independent package/device checks and functional acceptance.
 The current CLI is intentionally not a general manifest execution engine.

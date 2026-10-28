@@ -11,8 +11,12 @@
 
 ## Constraints
 
-- Preserve the selected firmware; firmware creation and Home Assistant design
-  are outside this project. The stock-device flash workflow must not require SSH.
+- Preserve supplied firmware. The builder may modify a private copy of the pinned
+  C100X 1.5.8 stock image; Home Assistant design is outside this project. The
+  stock-device flash workflow must not require SSH.
+- Builder payloads (raw debugfs commands and Python hooks) are trusted host code,
+  not sandboxed. Keep builder dependencies out of the flasher runtime. Build and
+  flash are separate commands; a build report never authorizes a device write.
 - Establish device-changing commands from evidence. Do not guess parameters,
   replace the vendor flow with raw partition writes, retry uncertain writes or
   reboot as error cleanup.

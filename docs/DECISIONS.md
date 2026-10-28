@@ -7,6 +7,9 @@ superseding decision if the approach changes.
 
 ## ADR-001: Preserve the existing image and restrict compatibility
 
+**Status update, 2026-10-28:** firmware-creation scope and whole-archive admission
+are superseded by ADR-007. Original preservation and device checks still apply.
+
 **Context:** The goal is native macOS installation of an existing Windows-tested
 modified C100X image. Firmware modification and Home Assistant design are outside
 this project. Matching a firmware version alone does not identify compatible
@@ -35,7 +38,7 @@ match the stock gadget/trusted-source configuration. Manage tools with mise.
 
 **Consequences:** There are two terminal lifecycles, and the helper output format
 is an integration dependency. Changing TetherKit needs revalidation of interface
-detection, reconnect and cleanup. Pin details are in [../README.md](../README.md).
+detection, reconnect and cleanup. Pin details are in [FLASHING.md](FLASHING.md).
 Python 3.14.9 was selected after the research dependency `dissect.cstruct` failed
 under 3.15; this was an observed dependency issue, not proof the CLI cannot ever
 support newer Python. A VM/Windows runtime and SSH-based flashing are not part of
@@ -78,6 +81,9 @@ allowlisting excludes query 44 because it schedules a reboot. See
 
 ## ADR-005: Keep vendor secrets and private artifacts out of source control
 
+**Status update, 2026-10-28:** ADR-007 distinguishes the public FWZ format password
+from private device/user credentials. All private-artifact constraints still apply.
+
 **Context:** The workflow needs vendor FTP settings and an FWZ archive key. Research
 artifacts and raw backups can contain credentials and private configuration.
 
@@ -109,3 +115,81 @@ prerequisite. The original stock-to-modified, no-SSH acceptance goal remains.
 but modified services/configuration are not proof of identical runtime behavior.
 A successful direct re-flash would not close the stock-to-modified acceptance
 item. At the time of recording, neither flash path has been performed by this CLI.
+
+## ADR-007: Integrate a fixed-profile builder and verified stock acquisition
+
+**Accepted 2026-10-28**, following the image-builder design review and explicit
+authorization for implementation, dependency setup, downloads and local builds.
+No device access or flashing was authorized in that implementation session.
+
+**Decision:** Keep one Python CLI with separate builder/flasher modules. Build
+only from the stock C100X Door Entry 1.5.8 SHA-256 pin. A named stock selection may
+download the exact manufacturer artifact on verified-cache miss. Local files
+remain supported offline. Never modify originals or overwrite an existing output.
+
+Flashing admits a fixed package profile rather than two complete archive hashes:
+the manifest, recovery gzip and kernel ZIP must remain byte-identical to stock,
+and the main filesystem must have the expected expanded size, geometry and
+features. Require exact members and evidenced classic ZipCrypto ZIP properties.
+The published format password is profile data; it is not a private credential.
+No build report, payload metadata or e2fsprogs installation is required by the
+flasher. Actual-device checks and the recovery-first sequence remain independent.
+
+**Consequences:** Newly built/external matching images can be inspected and
+flashed, but passing format checks does not prove filesystem health, bootability
+or integration behavior. New releases/models need new evidence. Mac support is
+observed locally; Linux parity and Windows/MyHOME import remain acceptance work.
+Windows-native support is not promised. No-op and SSH image checks are recorded
+separately from hardware results.
+
+## ADR-008: Trusted raw payloads and a small e2fsprogs process boundary
+
+**Accepted 2026-10-28.**
+
+**Decision:** Use raw `apply.debugfs` command files and optional `prepare.py` and
+`verify.py` hooks, in explicit CLI order. Payloads are trusted host programs;
+the workspace is not a sandbox. Reject duplicate identities; do not invent a
+filesystem DSL, dependency solver or complete conflict detector. Bundled payloads
+require critical-result checks; other payloads may omit them.
+
+Use `debugfs` against regular image files without mounting. Reject diagnostics
+other than the expected banner because observed failing writes returned exit 0
+and the batch continued. Bound tool output/time, suppress raw logs, and check
+actual bytes/types/owners/modes/links. Run read-only e2fsck before/after changes;
+no vendor-error exceptions or automatic repair are currently enabled. Reopen the
+finished archive and repeat payload checks before publishing.
+
+Use mise's 7zip for traditional encrypted DEFLATE output. Stock and SSH round trips
+passed; unsupported output variants fail profile validation. Small incompressible
+fixtures demonstrated 7zip's automatic STORE behavior, so compression-method checks
+are required even with `-mm=Deflate`. A pyminizip 0.2.6 installation experiment
+failed against the current Apple SDK's stdio headers; it was not added as a
+dependency. No custom ZIP crypto implementation or language change was introduced.
+
+**Consequences:** Some raw operations remain semantically unchecked without a
+payload verifier. Python hooks can perform guarded edits and credential/key
+preparation without embedding SSH/MQTT concepts in the engine. Hook/tool versions
+and diagnostics are maintenance boundaries. Report/image publication is not a
+two-file transaction: an optional report failure may leave a valid published FWZ.
+
+## ADR-009: Ship explicitly selected stock-Dropbear SSH access
+
+**Accepted 2026-10-28.**
+
+**Decision:** Track SSH preparation/commands/checks, never user credentials or
+host private keys. Reuse the stock Dropbear and init script. Add the evidenced
+`root2` administrative account while preserving vendor accounts. Accept a supplied
+public key, password or both; key-only mode disables password authentication
+daemon-wide. Use the observed stock SHA-512-crypt password format with fresh salts.
+Generate a fresh ECDSA P-256 host key on every build and point init's generic `-r`
+argument at its persistent image path, avoiding volatile host-key generation.
+
+Prefer ECDSA P-256 user keys for modern OpenSSH. RSA keys are supported for the
+user's existing default key, with the explicit legacy user-signature limitation.
+No Ed25519 support or upgraded target daemon is claimed. The stock binary contains
+ECDSA algorithm identifiers, but vendor-build ECDSA login needs hardware proof.
+
+**Consequences:** Reboot identity should be stable; a newly built image has a new
+identity. Password mode retains other vendor accounts and their existing records.
+The generated FWZ contains credentials/private host identity and stays private.
+SSH is selected explicitly, so a no-payload build remains a useful no-op test.

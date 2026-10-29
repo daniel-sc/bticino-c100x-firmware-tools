@@ -1,5 +1,32 @@
 # Hardware acceptance record
 
+## 2026-10-29: Published alpha and signed-download validation
+
+- Published [v0.1.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.1)
+  from commit `8afb96c4631bbbcb825bd5780841c25c13abc2aa`. Release workflow
+  `40774991846` completed successfully after Apple membership renewal and a
+  retry of a transient network failure during stapling. The earlier signing and
+  notarization blockers recorded below are resolved.
+- Downloaded the published DMG, dependency sources, provenance and checksums;
+  all SHA-256 checks passed. DMG SHA-256:
+  `9cdfe8314c5324d6c1c970ec0c89c5ae21d720af3e87f2d756d5a44602e2fced`.
+  Gatekeeper accepted it with `source=Notarized Developer ID`.
+- Mounted the DMG read-only, copied out `C100X`, and detached it. All 84 native
+  files passed strict signature verification with team `D8635J9XS3`. The copied
+  bundle passed relocation smoke tests, including shipped tools and Python hooks.
+  The audited minimum is **macOS 15.0, arm64**; local execution was on macOS 27.0.1.
+- The downloaded signed CLI built a real SSH-enabled image with a disposable
+  ECDSA P-256 login key plus password, running as an ordinary user with system-only
+  PATH. Filesystem checks, payload verification, packaging and reopened-image
+  verification passed. Output `.local/alpha1-downloaded-ssh.fwz` has SHA-256
+  `a04a0a835a9e95c1218b6f232a4b3eec44544aee152b811ae94aef6d79aa2068`.
+- Independent rereads matched the output report and unchanged pinned stock hash;
+  output permissions are 0600. Firmware, credentials and generated keys remain
+  private. The build took 3543.34 seconds elapsed, 138.70 user CPU seconds and
+  1.46 system CPU seconds; the wall-clock gap was not diagnosed.
+- No device operations were performed for release validation. Native flashing,
+  generated-image boot/SSH behavior and functional acceptance remain pending.
+
 ## Completed without firmware writes
 
 - [x] Preserve and hash the original stock and selected modified 1.5.8 archives.

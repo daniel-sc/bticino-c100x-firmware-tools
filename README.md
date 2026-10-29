@@ -25,8 +25,10 @@ There is no GUI or ready-made MQTT/Home Assistant integration.
 Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
 Copy the `C100X` folder into a writable location and open a terminal there. Keep `c100x`
 and `support` together. The release includes Python and all required tools;
-**no Homebrew, mise, Xcode or MyHOME installation is needed**. The release's
-`release.json` records its minimum macOS version.
+**no Homebrew, mise, Xcode or MyHOME installation is needed**.
+[v0.1.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.1)
+is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
+Each release's `release.json` records its minimum macOS version.
 
 ```sh
 ./c100x builder-doctor

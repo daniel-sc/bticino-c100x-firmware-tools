@@ -33,6 +33,10 @@ export. Do not retrieve secrets through a workflow or print them in logs.
 
 1. Open **Keychain Access**, select **login → My Certificates**, and locate the
    existing **Developer ID Application** certificate with its private key.
+   If the certificate is instead under **System → Certificates** while its key
+   is in login, export the public certificate as `.cer`, then select login and
+   import it using **File → Import Items**. The paired identity should then
+   appear under **login → My Certificates**. Keep the System copy in place.
 2. **File → Export Items**, choose `.p12`, and set a new export password. This
    does not require the password of a previous P12 export. Do not use Developer
    ID Installer; that certificate type is for installer PKGs, not this DMG.

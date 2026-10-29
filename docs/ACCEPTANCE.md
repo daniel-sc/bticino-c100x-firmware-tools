@@ -267,3 +267,13 @@ performed in this session.
   completed: 5613.42 seconds elapsed, 169.53 user CPU seconds and 1.59 system CPU
   seconds. The long wall-clock gap was not diagnosed; this is not a build-speed
   benchmark. No device operations or hardware acceptance occurred.
+
+### 2026-10-29: Signing passed; Apple agreement blocks notarization
+
+- After correcting the uploaded P12, the CI signing check found the expected
+  Developer ID Application identity and signed/verified a test executable.
+- Alpha run `40774991846`, rerun with the corrected credentials, signed all
+  shipped native code and passed the signed-bundle relocation smoke tests.
+- Apple rejected the notarization submission with HTTP 403: a required team
+  agreement was missing or expired. Account-holder action is required before
+  retrying. No signed alpha release has been published yet.

@@ -251,3 +251,19 @@ performed in this session.
   the imported P12 did not contain a valid Developer ID Application identity.
   No GitHub release was published. Credential correction, notarization and
   signed-download validation remain pending.
+
+### 2026-10-29: Real build with the downloaded CI executable
+
+- The downloaded CLI built an SSH-enabled image using a disposable ECDSA P-256
+  login key plus password, with PATH restricted to system tools. Bundled Python
+  hooks, e2fsprogs, key generation, password hashing, packing and final reopened
+  image verification all passed.
+- Output `.local/ci-downloaded-ssh.fwz` has SHA-256
+  `f1600cb6b7b61aca20dee34237dbb1889d7ecde7c9fdf273ee0c900d28fcd626`.
+  Independent rereads verified both this hash and the unchanged stock input hash;
+  output permissions are 0600. Credentials and firmware remain private.
+- The first attempt reached compression but exceeded the harness's 20-minute
+  execution limit without publishing an output. A rerun without that limit
+  completed: 5613.42 seconds elapsed, 169.53 user CPU seconds and 1.59 system CPU
+  seconds. The long wall-clock gap was not diagnosed; this is not a build-speed
+  benchmark. No device operations or hardware acceptance occurred.

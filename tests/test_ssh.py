@@ -78,7 +78,8 @@ class SSHTests(unittest.TestCase):
             self.assertEqual(args[-4:], ["-l", "root2", "192.168.129.1", "id -u"])
             for option in ("BatchMode=yes", "ProxyCommand=none", "ProxyJump=none",
                            "ControlPath=none", "ForwardAgent=no", "ClearAllForwardings=yes",
-                           "PubkeyAcceptedAlgorithms=+ssh-rsa", "IdentitiesOnly=yes", "Port=22"):
+                            "PubkeyAcceptedAlgorithms=+ssh-rsa", "HostKeyAlgorithms=+ssh-rsa",
+                            "IdentitiesOnly=yes", "Port=22"):
                 self.assertIn(option, args)
             self.assertIn(str(key), args)
             self.assertTrue(kwargs["start_new_session"])
@@ -105,8 +106,8 @@ class SSHTests(unittest.TestCase):
                                                        base64.b64encode(KEY + b"changed").decode()), KEY_LINE):
                 with self.fake_ssh(body, key_line):
                     self.assertEqual(connection.run("id -u"), (secret + "\n").encode())
-            self.assertEqual([item["status"] for item in connection.host_keys], ["first_seen", "changed"])
-            self.assertEqual(len(warnings), 2)
+            self.assertEqual([item["status"] for item in connection.host_keys], ["first_seen", "changed", "changed"])
+            self.assertEqual(len(warnings), 3)
             self.assertEqual((connection._directory / "p").stat().st_mode & 0o777, 0o600)
             for args, kwargs in self.calls:
                 self.assertNotIn(secret, repr(args) + repr(kwargs["env"]) + repr(warnings))
@@ -233,6 +234,11 @@ class SSHTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertIn(b"hostname 192.168.129.1\n", result.stdout)
             self.assertIn(b"port 22\n", result.stdout)
+            settings = dict(line.split(b" ", 1) for line in result.stdout.splitlines())
+            # Host authentication and login-key authentication are separate
+            # negotiation lists; both need the stock Dropbear RSA exception.
+            self.assertIn(b"ssh-rsa", settings[b"hostkeyalgorithms"].split(b","))
+            self.assertIn(b"ssh-rsa", settings[b"pubkeyacceptedalgorithms"].split(b","))
             self.assertIn(f"userknownhostsfile {connection._directory}/known_hosts\n".encode(), result.stdout)
 
 

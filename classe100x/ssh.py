@@ -166,6 +166,7 @@ class SSHConnection:
             f"ConnectTimeout={max(1, math.ceil(timeout))}", "NumberOfPasswordPrompts=1",
             "KbdInteractiveAuthentication=no", "GSSAPIAuthentication=no",
             "HostbasedAuthentication=no", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+            "HostKeyAlgorithms=+ssh-rsa",
         ]
         if self._password is None:
             options += ["BatchMode=yes", "PreferredAuthentications=publickey", "PasswordAuthentication=no"]
@@ -200,7 +201,7 @@ class SSHConnection:
                 raise SSHError("Invalid SSH host-key evidence")
             fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
             found = True
-            if any(item["fingerprint"] == fingerprint for item in self.host_keys):
+            if self.host_keys and self.host_keys[-1]["fingerprint"] == fingerprint:
                 continue
             status = "changed" if self.host_keys else "first_seen"
             self.host_keys.append({"algorithm": fields[1].decode(), "fingerprint": fingerprint, "status": status})

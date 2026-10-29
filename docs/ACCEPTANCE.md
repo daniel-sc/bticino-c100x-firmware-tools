@@ -406,6 +406,10 @@ performed in this session.
   All source artifacts were read-only; no device connection was involved.
 - The tests exposed a trailing blank line in real `debugfs ls -p /` output; the
   parser was corrected before the successful runs above.
+- Independent standards/spec/correctness reviews found two issues: returning to
+  a previously observed host key did not warn, and legacy RSA host-key negotiation
+  lacked its separate OpenSSH exception. Both were corrected with regression
+  coverage, including inspection of actual system OpenSSH's resolved configuration.
 - USB SSH authentication, sudo-to-user execution on a live connection, the
   post-reboot SSH gate and fresh device-write equality remain hardware-unvalidated.
   No firmware writes, device reboots or hardware fault injection were performed

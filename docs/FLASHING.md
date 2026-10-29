@@ -99,7 +99,7 @@ functions. USB/SSH hardware validation of this new feature remains pending.
 - For keys, omit `--ssh-password`; optionally supply `--ssh-key /path/to/key`.
   Encrypted keys must already be unlocked in your agent. If sudo removes the agent
   socket, use `sudo --preserve-env=SSH_AUTH_SOCK ...`. ECDSA P-256 is recommended;
-  legacy RSA authentication is enabled only for this connection. Ed25519 is not
+  legacy RSA host/login signatures are enabled only for this connection. Ed25519 is not
   supported by stock Dropbear.
 - SSH host keys may change on older installations. First-seen/changed fingerprints
   produce warnings and are recorded, without changing your `known_hosts` file.

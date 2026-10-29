@@ -417,3 +417,30 @@ performed in this session.
   post-reboot SSH gate and fresh device-write equality remain hardware-unvalidated.
   No firmware writes, device reboots or hardware fault injection were performed
   for this implementation. Alpha publication does not close those acceptance items.
+
+## 2026-10-29: Alpha.2 publication
+
+- Pushed implementation/review fixes at `8966d6be78789ab3afa8702ff0833bdeb5ed5526`
+  and tag **v0.1.0-alpha.2**. Four fresh reviewers covered standards, spec and
+  correctness; reported defects were fixed and re-reviewed before publication.
+- Main CI run `40963527559` and tagged release run `40963527650` both passed.
+  Release CI completed offline tests, native helper build/tests, relocated bundle
+  smoke checks (including the shipped askpass helper), Developer ID signing,
+  notarization, stapling and prerelease publication.
+- [Alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.2)
+  was published at **22:15:17 UTC** with the signed arm64 DMG, dependency sources,
+  provenance manifest and checksums. It includes optional SSH recovery verification
+  and the Applications drag-and-drop shortcut. Hardware acceptance remains pending.
+- Downloaded all published assets; SHA-256 checks, release version and source
+  commit matched. DMG SHA-256:
+  `43568dd80e3ea4c1812a1367b2b39dcdeb6ff1c8eba3de6fa336b56cafe53bee`.
+  Stapler validation passed and Gatekeeper accepted the DMG as Notarized Developer
+  ID. Read-only mounting confirmed the Applications shortcut.
+- All **84 native files** in the copied bundle passed strict signature verification
+  with the expected Developer ID team. Relocated packaged smoke checks passed,
+  including the shipped password helper/IPC tests. Minimum OS is **macOS 15.0**.
+  An additional `spctl --type execute` assessment of the bare CLI returned
+  "the code is valid but does not seem to be an app"; the notarized DMG assessment,
+  native signature checks and actual CLI/tool execution above passed.
+- Private downloaded artifacts are in `.local/downloaded-alpha2/`. No intercom
+  connection, write or reboot occurred during release validation.

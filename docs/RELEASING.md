@@ -105,7 +105,10 @@ gh release download v0.1.0-alpha.1 --dir .local/downloaded-alpha
 (cd .local/downloaded-alpha && shasum -a 256 -c SHA256SUMS)
 ```
 
-Mount the downloaded DMG read-only, copy out `C100X`, check its Developer ID
-signatures and Gatekeeper assessment, and repeat `packaging/smoke.py` against the
-copy. Exercise real local firmware builds separately; firmware stays outside
+Assess the downloaded DMG with `spctl --assess --type open --context
+context:primary-signature --verbose=2 <file.dmg>` and validate its stapled ticket.
+Mount it read-only, copy out `C100X`, check its native Developer ID signatures,
+and repeat `packaging/smoke.py` against the copy. Gatekeeper's app-execution
+assessment can reject a bare CLI as "not an app" even with valid code signatures.
+Exercise real local firmware builds separately; firmware stays outside
 GitHub CI. Record observed results in ACCEPTANCE.md before claiming validation.

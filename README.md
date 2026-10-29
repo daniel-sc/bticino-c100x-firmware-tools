@@ -23,16 +23,21 @@ There is no GUI or ready-made MQTT/Home Assistant integration.
 ## Quick start: download and build
 
 Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
-Copy the `C100X` folder into a writable location and open a terminal there. Keep `c100x`
-and `support` together. The release includes Python and all required tools;
+Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
+per-user installation). Upcoming DMGs include an Applications shortcut for
+drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
+together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.
 [v0.1.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.1)
 is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
 Each release's `release.json` records its minimum macOS version.
 
+Open a terminal in a writable working folder for your firmware. Adjust the
+executable path if you chose a different installation folder:
+
 ```sh
-./c100x builder-doctor
-./c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password \
+/Applications/C100X/c100x builder-doctor
+/Applications/C100X/c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password \
   --output custom.fwz --report custom.build.json
 ```
 
@@ -44,8 +49,8 @@ private key. `custom.build.json` is a redacted report of offline checks.
 Build as your ordinary user. To check and then explicitly flash a connected device:
 
 ```sh
-sudo ./c100x plan custom.fwz
-sudo ./c100x flash custom.fwz
+sudo /Applications/C100X/c100x plan custom.fwz
+sudo /Applications/C100X/c100x flash custom.fwz
 ```
 
 USB networking is started, maintained across reboots, and cleaned up automatically.

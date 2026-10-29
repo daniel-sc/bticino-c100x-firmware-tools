@@ -1,16 +1,21 @@
 BTicino Classe 100X Firmware Tools — alpha
 
-Copy the entire C100X folder to a writable location. Keep c100x and support
-together. No Homebrew, Python, Xcode or MyHOME installation is required.
+Drag the entire C100X folder onto the Applications shortcut in this disk image,
+then eject the disk image. Keep c100x and support together. You can also copy
+the folder to ~/Applications for a per-user installation.
+No Homebrew, Python, Xcode or MyHOME installation is required.
 
-From a terminal in that folder:
+Open a terminal in a writable working folder for your firmware, then run:
 
-  ./c100x --version
-  ./c100x builder-doctor
-  ./c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password --output custom.fwz
-  ./c100x inspect-fw custom.fwz
-  sudo ./c100x plan custom.fwz
-  sudo ./c100x flash custom.fwz
+  /Applications/C100X/c100x --version
+  /Applications/C100X/c100x builder-doctor
+  /Applications/C100X/c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password --output custom.fwz
+  /Applications/C100X/c100x inspect-fw custom.fwz
+  sudo /Applications/C100X/c100x plan custom.fwz
+  sudo /Applications/C100X/c100x flash custom.fwz
+
+Adjust the executable path if you chose a different installation folder.
+Keep generated firmware in your working folder, outside the installation.
 
 Build as your normal user. Plan and flash manage USB networking automatically;
 flash explicitly writes firmware and reboots the device. Keep stable power/USB.

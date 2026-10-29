@@ -15,9 +15,18 @@ Plan/flash manage USB networking automatically. Keep stable device power and USB
 throughout flashing. An error stops subsequent commands; uncertain writes are
 never retried, and cleanup does not reboot the device.
 
+**New in alpha.2:** optional recovery readback before clearing the normal kernel,
+for devices with SSH already enabled. Add
+`--verify-recovery-ssh --ssh-user root2 --ssh-password` to `plan`/`flash`;
+the password is prompted once per command and kept in memory. See the included
+flashing guide for key authentication and verification limits. The standard
+stock-device workflow still needs no SSH. This release also adds the DMG's
+drag-and-drop Applications shortcut.
+
 **Experimental alpha:** offline tests and packaged smoke checks have passed.
 Full native flashing, recovery-mode networking and functional acceptance remain
-unverified. Version 1 waits for successful hardware validation.
+unverified, including the new USB/SSH verification path. Version 1 waits for
+successful hardware validation.
 
 The DMG is Developer ID signed, notarized and stapled. Dependency sources and
 build recipes are supplied alongside it; firmware and user credentials are not

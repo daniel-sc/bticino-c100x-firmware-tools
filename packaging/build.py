@@ -169,6 +169,7 @@ def main():
     shutil.copytree(ROOT / "payloads", app / "payloads", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     shutil.copytree(ROOT / "docs", bundle / "docs")
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE")
+    shutil.copy2(ROOT / "GLOSSARY.md", bundle / "GLOSSARY.md")
     shutil.copy2(ROOT / "packaging/README.txt", bundle / "README.txt")
     source_metadata = []
 

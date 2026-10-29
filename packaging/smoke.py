@@ -40,6 +40,15 @@ def main():
         tools = bundle / "support/app/tools"
         run(tools / "tetherkit-cli", "--help")  # Never enumerate/connect hardware.
 
+        # Exercise the shipped askpass helper/IPC and OpenSSH argument handling
+        # with local fake SSH processes, using the relocated isolated interpreter.
+        run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
+            "import sys, unittest; sys.path.insert(0, sys.argv[1]); "
+            "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern='test_ssh.py'); "
+            "result = unittest.TextTestRunner().run(suite); "
+            "raise SystemExit(not result.wasSuccessful())",
+            bundle / "support/app", Path(__file__).resolve().parent.parent / "tests")
+
         # Fixture creation is a host build-time operation; all tested operations
         # below use only shipped tools. mke2fs is not an end-user dependency.
         mkfs = Path(subprocess.check_output(["brew", "--prefix", "e2fsprogs"], text=True).strip()) / "sbin/mke2fs"

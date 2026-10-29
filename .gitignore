@@ -24,3 +24,6 @@ __pycache__/
 .download-*
 .build-report-*
 *.private.json
+
+# Optional recovery-verification evidence and interrupted private readbacks.
+c100x-verification-*/

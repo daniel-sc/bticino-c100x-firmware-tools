@@ -15,7 +15,8 @@
   C100X 1.5.8 stock image; Home Assistant design is outside this project. The
   stock-device flash workflow must not require SSH.
 - Builder payloads (raw debugfs commands and Python hooks) are trusted host code,
-  not sandboxed. Keep builder dependencies out of the flasher runtime. Build and
+  not sandboxed. Keep builder dependencies out of ordinary flashing; the explicitly
+  selected SSH recovery verifier may use e2fsprogs (ADR-012). Build and
   flash are separate commands; a build report never authorizes a device write.
 - Establish device-changing commands from evidence. Do not guess parameters,
   replace the vendor flow with raw partition writes, retry uncertain writes or

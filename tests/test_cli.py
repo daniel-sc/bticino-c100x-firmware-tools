@@ -1,6 +1,7 @@
 """Installer-free plan/flash integration with synthetic firmware and device I/O."""
 
 import contextlib
+import builtins
 import io
 import json
 import os
@@ -37,12 +38,13 @@ class CliTests(unittest.TestCase):
         self.usb = self.enterContext(patch.object(cli, "usb_session"))
         self.check_transport = self.usb.return_value.__enter__.return_value
 
-    def invoke(self, command):
+    def invoke(self, command, *options):
         stdout, stderr = io.StringIO(), io.StringIO()
-        with patch.object(sys, "argv", ["classe100x", command, "fixture.fwz"]), \
+        with patch.object(sys, "argv", ["classe100x", command, "fixture.fwz", *options]), \
                 contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             status = cli.main()
         output = stdout.getvalue() + stderr.getvalue()
+        self.last_output = output
         for credentials in (C100X_PROFILE.normal, C100X_PROFILE.recovery):
             self.assertNotIn(credentials.username, output)
             self.assertNotIn(credentials.password, output)
@@ -89,3 +91,110 @@ class CliTests(unittest.TestCase):
         self.probe.assert_not_called()
         self.network.assert_not_called()
         self.usb.assert_not_called()
+
+    def test_ssh_options_require_explicit_mode_account_and_managed_usb(self):
+        invalid = [
+            ("--verify-recovery-ssh",),
+            ("--ssh-user", "admin"),
+            ("--ssh-key", "fixture-key"),
+            ("--ssh-password",),
+            ("--verify-recovery-ssh", "--ssh-user", "admin", "--external-usb"),
+        ]
+        for command in ("plan", "flash"):
+            for options in invalid:
+                with self.subTest(command=command, options=options):
+                    self.assertEqual(self.invoke(command, *options)[0], 1)
+        self.prepare.assert_not_called()
+        self.usb.assert_not_called()
+        self.network.assert_not_called()
+
+    def test_ssh_key_and_password_are_mutually_exclusive(self):
+        with self.assertRaises(SystemExit) as caught:
+            self.invoke("flash", "--verify-recovery-ssh", "--ssh-user", "admin",
+                        "--ssh-key", "fixture-key", "--ssh-password")
+        self.assertEqual(caught.exception.code, 2)
+        self.prepare.assert_not_called()
+        self.usb.assert_not_called()
+
+    def optional_verifier(self):
+        connection = self.enterContext(patch("classe100x.ssh.SSHConnection"))
+        factory = self.enterContext(patch("classe100x.recovery.RecoveryVerifier"))
+        gate = factory.return_value.__enter__.return_value
+        gate.directory = Path("private-evidence")
+        return connection, factory, gate
+
+    def test_optional_plan_checks_prerequisites_without_readback_or_writes(self):
+        connection, factory, gate = self.optional_verifier()
+        status, output = self.invoke("plan", "--verify-recovery-ssh", "--ssh-user", "admin")
+        self.assertEqual(status, 0)
+        result = json.loads(output)
+        self.assertFalse(result["device_writes"])
+        self.assertEqual(result["verification_report"], "private-evidence/report.json")
+        self.assertEqual(result["sequence"][3], "SSH recovery integrity verification")
+        gate.preflight.assert_called_once_with()
+        gate.verify.assert_not_called()
+        self.network.assert_not_called()
+        self.assertEqual(self.device.events, [])
+        self.assertIs(connection.call_args.kwargs["check_transport"], self.check_transport)
+        self.assertIs(factory.call_args.args[0], self.prepared)
+
+    def test_optional_plan_failure_never_starts_update(self):
+        from classe100x.updater import UpdateError
+        _, _, gate = self.optional_verifier()
+        gate.preflight.side_effect = UpdateError("SSH prerequisites failed")
+        self.assertEqual(self.invoke("plan", "--verify-recovery-ssh", "--ssh-user", "admin")[0], 1)
+        gate.verify.assert_not_called()
+        self.network.assert_not_called()
+        self.assertEqual(self.device.events, [])
+
+    def test_password_is_prompted_once_passed_in_memory_and_not_printed(self):
+        secret = "synthetic-password-never-log-23"
+        connection, _, gate = self.optional_verifier()
+        with patch.object(sys.stdin, "isatty", return_value=True), \
+                patch.object(cli.getpass, "getpass", return_value=secret) as prompt:
+            status, _ = self.invoke("flash", "--verify-recovery-ssh", "--ssh-user", "admin",
+                                    "--ssh-password")
+        self.assertEqual(status, 0)
+        prompt.assert_called_once()
+        connection.assert_called_once()
+        self.assertEqual(connection.call_args.kwargs["password"], secret)
+        self.assertEqual(connection.call_args.args, ("admin",))
+        self.assertNotIn(secret, self.last_output)
+        self.assertNotIn(secret, repr(dict(os.environ)))
+        gate.preflight.assert_called_once()
+        gate.verify.assert_called_once()
+
+    def test_password_requires_terminal_before_any_update(self):
+        connection, _, gate = self.optional_verifier()
+        with patch.object(sys.stdin, "isatty", return_value=False), \
+                patch.object(cli.getpass, "getpass") as prompt:
+            status, _ = self.invoke("flash", "--verify-recovery-ssh", "--ssh-user", "admin",
+                                    "--ssh-password")
+        self.assertEqual(status, 1)
+        prompt.assert_not_called()
+        connection.assert_not_called()
+        gate.preflight.assert_not_called()
+        self.assertEqual(self.device.events, [])
+
+    def test_key_path_is_passed_without_password_prompt(self):
+        connection, _, _ = self.optional_verifier()
+        with patch.object(cli.getpass, "getpass") as prompt:
+            status, _ = self.invoke("plan", "--verify-recovery-ssh", "--ssh-user", "admin",
+                                    "--ssh-key", "fixture-key")
+        self.assertEqual(status, 0)
+        self.assertEqual(connection.call_args.kwargs["key"], Path("fixture-key"))
+        self.assertIsNone(connection.call_args.kwargs["password"])
+        prompt.assert_not_called()
+
+    def test_ordinary_plan_and_flash_do_not_import_optional_or_builder_modules(self):
+        real_import = builtins.__import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name.split(".")[-1] in {"builder", "ext4", "host", "ssh", "recovery"}:
+                raise AssertionError(f"Ordinary flashing imported optional module {name}")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=guarded_import):
+            for command in ("plan", "flash"):
+                with self.subTest(command=command):
+                    self.assertEqual(self.invoke(command)[0], 0)

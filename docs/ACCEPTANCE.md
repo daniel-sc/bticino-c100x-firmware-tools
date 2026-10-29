@@ -304,3 +304,109 @@ performed in this session.
 - Apple rejected the notarization submission with HTTP 403: a required team
   agreement was missing or expired. Account-holder action is required before
   retrying. No signed alpha release has been published yet.
+
+## 2026-10-29: Read-only bootloader and rescue investigation
+
+- User reopened the research SSH session. Read the existing modified device's
+  environment, storage layout, CPU/device-tree identity and boot messages.
+- Independently read the 4 KiB environment: CRC32 passed and its entries matched
+  `fw_printenv`. The installed script tries recovery after normal kernel/image
+  checks or DTB loading fail; it does not test later rootfs/application health.
+- Acquired both 4 MiB eMMC boot regions and the first 1 MiB of the user area into
+  private mode-0600 files. Local reread hashes and independent device-side
+  read/hashes matched for all four regions, including the environment.
+- Boot0 contains vendor U-Boot 2015.04; boot1 is all zero bytes. The saved
+  recovery test loads kernel and DTB from the recovery kernel partition; embedded
+  default-environment text instead loads the recovery DTB from the main kernel
+  partition. Resetting defaults is not a validated repair.
+- Public C100X 1.5.8/MyHOME 3.5.38 driver-recovery reports were reviewed. One
+  reports a completed update after RNDIS driver correction; another remains
+  unresolved. Neither establishes recovery when both Linux environments fail.
+- Targeted offline bootloader decompilation subsequently completed. It supports
+  explicit kernel header/data checks, keyed serial interruption, a shell/parser
+  path after autoboot returns, and serial binary-loading commands. The running
+  device tree identifies UART3 and its SoC pin mux; physical PCB access, voltage,
+  console interruption and RAM-boot rescue remain untested.
+- No firmware/environment writes, reboot, serial-console test, ROM download or
+  rescue test was performed. Full native flash and functional acceptance remain
+  pending. Evidence and remaining hardware prerequisites are in
+  [RECOVERY.md](RECOVERY.md).
+
+## 2026-10-29: Installed kernel and recovery integrity — read-only
+
+- At the user's request, acquired `/dev/mmcblk2p2` (recovery kernel/DTBs,
+  52428800 bytes), `p3` (recovery filesystem, 157286400 bytes) and `p5` (normal
+  kernel/DTBs, 52428800 bytes) over the existing research SSH session between
+  **20:43:58 and 20:48:18 UTC**. All three were unmounted; mount checks included
+  kernel major/minor numbers to account for device aliases. Local image hashes
+  matched independent device-side partition read/hashes.
+- Rehashed the original cached stock FWZ against its existing SHA-256 pin, then
+  extracted and verified the pinned recovery gzip and shared kernel ZIP.
+- Both installed kernel partitions contain exactly the stock set of **21 files**.
+  Every file's length and SHA-256 matches stock: `uImage` and all 20 DTBs,
+  including `shark_dig2_car6.dtb` for the observed hardware.
+- Read-only `e2fsck 1.47.4 -f -n` returned **0** for all three acquired partition
+  images and the extracted stock recovery filesystem. Image hashes before/after
+  checking and kernel extraction were unchanged. No filesystem was mounted or
+  repaired on the host or device.
+- The stock recovery filesystem occupies **153600000 bytes** (150000 blocks of
+  1024 bytes); the partition has a further **3686400 bytes** outside that extent.
+  Comparison used the filesystem extent rather than treating the larger partition
+  as an equal-length stock image.
+- The recovery filesystem is **not byte-identical** to stock: 18384 byte
+  positions differ across 103 filesystem blocks. Every changed block was
+  classified: 1 superblock, 1 group-descriptor block, 2 inode bitmaps, 44 inode
+  table blocks, 2 directory blocks and 53 journal blocks. Existing inode changes
+  are limited to timestamps and directory versions; no existing regular-file
+  content changes were found.
+- Two newly allocated symlinks are present:
+  `/var/lib/dhcp/dhcp` -> `/var/volatile/tmp/dhcp` and
+  `/var/lib/opkg/opkg` -> `/var/volatile/tmp/opkg`. These are consistent with
+  the unchanged stock `/etc/volatile.cache` link-creation commands acting on
+  existing directories. No inodes were deallocated. The observed differences
+  support prior startup activity, not a claim of an exact stock filesystem copy.
+- Private mode-0600 acquisitions, checksums, tool output and difference reports
+  are in `.local/recovery-integrity-20261029T204358Z/`. No device writes, reboot,
+  recovery-mode boot or recovery-networking test occurred. This establishes an
+  integrity baseline for the **currently installed** components; the native flash
+  sequence will rewrite recovery, so its later boot/write outcome remains untested.
+
+## 2026-10-29: Stock USB verification search — offline
+
+- Decompiled stock-matching `bt_daemon` and `libcommon.so.0.0` locally. Reconfirmed
+  the analyzed daemon and `bt_device` are byte-identical to files in stock main
+  firmware. Traced startup recovery-kernel checks through query-40 status handling.
+- Found installed recovery `uImage` magic/header/data CRC checks on normal non-NFS
+  startup. The existing flasher's state-4 requirement after its first verified
+  reboot indirectly gates the main-kernel clear on this check. Rootfs and DTBs
+  are outside its coverage; this is not stock-hash readback or filesystem checking.
+- Inspected configuration/extra export paths, checksum queries, stock FTP/startup
+  configuration and public discussions. No suitable full recovery readback over
+  stock USB services was established. Query 44 remains rebooting and unsuitable
+  for read-only preflight.
+- All work in this search was offline/public-source research. No device commands,
+  reboots, firmware writes or flasher implementation changes occurred. The
+  checksum behavior has not been exercised by deliberately corrupting hardware.
+  Detailed evidence is recorded in [PROTOCOL.md](PROTOCOL.md).
+
+## 2026-10-29: Optional SSH verification — implementation checks
+
+- Implemented an opt-in recovery-integrity gate after the first verified normal
+  reboot and before clearing the main kernel. Preflight, deadlines, independent
+  read/hashes, exact reference comparisons, read-only fsck and evidence publication
+  fail closed. Ordinary flashing remains independent of SSH/e2fsprogs.
+- `mise run test`: **128 offline tests passed**, including synthetic ext4
+  corruption/content/metadata differences, mount aliases, acquisition failures,
+  deadline/cancellation behavior, report-save failures, gate ordering, later
+  update failure, CLI isolation, private cleanup and memory-only askpass IPC.
+- A separate offline exercise used the actual pinned stock recovery filesystem
+  expanded into a synthetic partition and the previously acquired stock-matching
+  recovery kernel partition. Verification passed. Substituting the previously
+  acquired recovery rootfs with known metadata differences was correctly rejected.
+  All source artifacts were read-only; no device connection was involved.
+- The tests exposed a trailing blank line in real `debugfs ls -p /` output; the
+  parser was corrected before the successful runs above.
+- USB SSH authentication, sudo-to-user execution on a live connection, the
+  post-reboot SSH gate and fresh device-write equality remain hardware-unvalidated.
+  No firmware writes, device reboots or hardware fault injection were performed
+  for this implementation. Alpha publication does not close those acceptance items.

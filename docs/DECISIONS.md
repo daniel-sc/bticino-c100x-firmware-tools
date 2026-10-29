@@ -247,3 +247,36 @@ team credentials can sign this project but must be provided as this repository's
 secrets. Alpha publication precedes hardware validation; v1 requires successful
 native flashing and functional acceptance. Detailed design and credential setup
 are in [RELEASING.md](RELEASING.md).
+
+## ADR-012: Optional SSH recovery integrity gate
+
+**Accepted 2026-10-29**, after the documented design interview. This scopes the
+flasher dependency exception in ADR-002/007; ordinary stock-device flashing
+continues to require neither SSH nor e2fsprogs.
+
+**Context:** Stock query 40 reflects a recovery `uImage` CRC check, but not recovery
+rootfs/DTB integrity. Worker completion also does not establish installed bytes.
+The user wants additional protection before clearing a working main kernel on
+devices that already have administrative SSH access.
+
+**Decision:** Make verification explicitly opt-in. Check prerequisites before
+writes, then gate main-kernel invalidation on recovery readback after the existing
+normal reboot. Require exact reference-defined rootfs bytes, expected kernel/DTB
+file contents, offline filesystem consistency, independent acquisition hashes,
+and persisted evidence. Stop on failure or uncertainty, without write retries,
+repairs, fallback to unchecked flashing or automatic resume.
+
+Reuse system OpenSSH and bundled e2fsprogs. Use the managed USB route and the
+invoking user's SSH identity; cache passwords only in memory through a private
+askpass broker. Encrypted keys use an existing unlocked agent. Allow first-seen
+and changed host keys with recorded warnings because prior installations can
+regenerate volatile keys on reboot. This deliberately does not promise
+cryptographic identity continuity; it is for trusted connected devices.
+
+**Consequences:** Verification adds time, temporary storage and optional tool
+dependencies. It can reject harmless-looking differences rather than risk a
+false pass. It cannot prove recovery bootability, networking, physical-media
+durability or household functional acceptance. Private reports survive; raw
+images are removed during normal cleanup. Implementation and publication do not
+authorize hardware writes. Detailed decisions are in
+[SSH-VERIFICATION-DESIGN.md](SSH-VERIFICATION-DESIGN.md).

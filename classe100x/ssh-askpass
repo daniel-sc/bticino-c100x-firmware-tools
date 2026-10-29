@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$C100X_ASKPASS_PYTHON" -I -B "$C100X_ASKPASS_HELPER"

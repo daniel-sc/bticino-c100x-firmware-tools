@@ -142,6 +142,96 @@ class UpdaterTests(unittest.TestCase):
         self.assertIsNone(client.stream)
 
 
+class SimulatedVerification:
+    """A gate with observable outcomes, sharing the device's sequence log."""
+
+    def __init__(self, device, *, preflight_error=None, verify_error=None):
+        self.device = device
+        self.preflight_error = preflight_error
+        self.verify_error = verify_error
+        self.verification = "not_started"
+        self.outcomes = []
+
+    def preflight(self):
+        self.device.events.append("ssh-preflight")
+        if self.preflight_error:
+            raise self.preflight_error
+
+    def verify(self):
+        self.device.events.append("ssh-verify")
+        if self.verify_error:
+            raise self.verify_error
+        self.verification = "passed"
+
+    def update_result(self, status, stage):
+        self.outcomes.append((status, stage))
+
+
+class RecoveryGateTests(unittest.TestCase):
+    setUp = UpdaterTests.setUp
+
+    def run_update(self, device, verification):
+        return flash(self.firmware, device, self.profile, report=lambda _: None,
+                     verification=verification)
+
+    def test_gate_is_after_first_normal_reboot_and_before_invalidation(self):
+        device = SimulatedDevice()
+        gate = SimulatedVerification(device)
+        self.run_update(device, gate)
+        self.assertEqual(device.events[:3], ["connect", "ssh-preflight", "idle"])
+        index = device.events.index("ssh-verify")
+        self.assertEqual(device.events[index - 1:index + 2],
+                         ["reboot-4", "ssh-verify", "invalidate-main-kernel"])
+        self.assertEqual(device.events.count("ssh-verify"), 1)
+        self.assertEqual(gate.outcomes[-1][0], "completed")
+
+    def test_preflight_failure_permits_no_device_writes(self):
+        for error in (UpdateError("SSH unavailable"), OSError("evidence unwritable"), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__):
+                device = SimulatedDevice()
+                gate = SimulatedVerification(device, preflight_error=error)
+                with self.assertRaises(UpdateError):
+                    self.run_update(device, gate)
+                self.assertEqual(device.events, ["connect", "ssh-preflight", "close"])
+                self.assertEqual(gate.outcomes[-1], ("stopped", "preflight"))
+
+    def test_gate_failure_and_cancellation_never_invalidate_or_retry(self):
+        for error in (UpdateError("verification failed"), OSError("report publication failed"),
+                      KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__):
+                device = SimulatedDevice()
+                gate = SimulatedVerification(device, verify_error=error)
+                with self.assertRaisesRegex(UpdateError, "verifying installed contents"):
+                    self.run_update(device, gate)
+                self.assertEqual(device.events[-3:], ["reboot-4", "ssh-verify", "close"])
+                self.assertNotIn("invalidate-main-kernel", device.events)
+                self.assertNotIn("begin-main", device.events)
+                self.assertEqual(gate.outcomes[-1][0], "stopped")
+
+    def test_unverified_normal_reboot_never_reaches_gate(self):
+        device = SimulatedDevice(fail="reboot-4")
+        gate = SimulatedVerification(device)
+        with self.assertRaises(UpdateError):
+            self.run_update(device, gate)
+        self.assertNotIn("ssh-verify", device.events)
+        self.assertNotIn("invalidate-main-kernel", device.events)
+
+    def test_later_failure_preserves_passed_gate_but_stops_update(self):
+        device = SimulatedDevice(fail="commit-btweb_only.ext4.gz")
+        gate = SimulatedVerification(device)
+        with self.assertRaises(UpdateError):
+            self.run_update(device, gate)
+        self.assertEqual(gate.verification, "passed")
+        self.assertEqual(gate.outcomes[-1], ("stopped", "main: writing btweb_only.ext4.gz"))
+        self.assertEqual(device.events[-2:], ["commit-btweb_only.ext4.gz", "close"])
+
+    def test_disabled_gate_keeps_original_device_sequence(self):
+        baseline, explicit = SimulatedDevice(), SimulatedDevice()
+        flash(self.firmware, baseline, self.profile, report=lambda _: None)
+        self.run_update(explicit, None)
+        self.assertEqual(explicit.events, baseline.events)
+
+
 class NetworkWaitTests(unittest.TestCase):
     def setUp(self):
         self.clock = 0

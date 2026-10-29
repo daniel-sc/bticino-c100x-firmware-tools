@@ -59,12 +59,59 @@ and committed separately. On error, keep the device powered and record the stage
 The CLI stops subsequent actions; it does not retry uncertain writes, resume a
 partial update or reboot as cleanup. Cleanup only closes local resources.
 
+Before clearing the main kernel, the normal-reboot status check reflects stock
+firmware's installed recovery `uImage` CRC check on ordinary non-NFS boots. It
+does **not** verify the installed recovery filesystem or device-tree files. Full
+readback is available through the optional SSH check below; stock USB update
+services alone do not provide it. Details are in [PROTOCOL.md](PROTOCOL.md).
+
 After protocol completion, test calls, audio/video, door release and payload
 behavior. For SSH, test each configured authentication method and host identity
 across a normal reboot. An ACK or completed sequence is not functional acceptance.
 
 Stock restoration through Windows first is an acceptance-test choice, not a
 protocol prerequisite. See [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
+
+## Optional recovery verification (existing SSH)
+
+If the **currently installed firmware** already has SSH enabled, add the same
+options to `plan` and `flash`. For the usual administrative `root2` account:
+
+```sh
+sudo ./c100x plan custom.fwz --verify-recovery-ssh --ssh-user root2 --ssh-password
+sudo ./c100x flash custom.fwz --verify-recovery-ssh --ssh-user root2 --ssh-password
+```
+
+Each command prompts once. The password stays in memory and is reused after the
+normal reboot. SSH uses the managed USB connection, not a LAN alias. Incoming
+firmware that enables SSH cannot provide this access yet.
+
+`plan` checks prerequisites without firmware writes. During `flash`, the extra
+check runs **after writing recovery and rebooting normally, before clearing the
+main kernel**. It compares the recovery filesystem and kernel/DTB contents with
+stock and checks the copied filesystems offline. Failure or uncertainty stops
+the update. This verifies integrity, not recovery bootability or household
+functions. USB/SSH hardware validation of this new feature remains pending.
+
+- Allow several extra minutes and **512 MiB** of free space. SSH readiness is
+  limited to two minutes; readback/analysis to fifteen minutes. Failed acquisitions
+  are not retried.
+- For keys, omit `--ssh-password`; optionally supply `--ssh-key /path/to/key`.
+  Encrypted keys must already be unlocked in your agent. If sudo removes the agent
+  socket, use `sudo --preserve-env=SSH_AUTH_SOCK ...`. ECDSA P-256 is recommended;
+  legacy RSA authentication is enabled only for this connection. Ed25519 is not
+  supported by stock Dropbear.
+- SSH host keys may change on older installations. First-seen/changed fingerprints
+  produce warnings and are recorded, without changing your `known_hosts` file.
+  This policy does not prove cryptographic identity continuity.
+- A private `c100x-verification-<timestamp>-.../report.json` is saved in the working
+  directory, owned by your ordinary user. Raw copies are removed on normal exit.
+  After an abrupt kill/power loss, remove any leftover `raw/` directory explicitly;
+  it can contain private firmware. Reports never authorize resuming a flash.
+
+Use `sudo` from your ordinary account and an administrative device account (UID
+0). This mode requires managed USB, so it cannot be combined with `--external-usb`.
+Release bundles include the filesystem tools; source users need e2fsprogs.
 
 ## Development from source
 
@@ -95,5 +142,7 @@ uses an existing network connection and supports the research SSH tunnel.
 
 - [Protocol](PROTOCOL.md): exact commands and evidence.
 - [Acceptance](ACCEPTANCE.md): observed results and pending hardware work.
+- [Boot fallback and rescue evidence](RECOVERY.md): what recovery covers and the
+  remaining serial/ROM rescue gaps.
 - [Operations](OPERATIONS.md): maintainer research and private backups.
 - [Releasing](RELEASING.md): CI packaging, signing and dependency sources.

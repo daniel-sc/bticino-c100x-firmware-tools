@@ -16,6 +16,22 @@ from .updater import NetworkDevice, UpdateError, check_identity, flash
 from .vendor import C100X_PROFILE
 
 
+def recovery_verification(args, firmware, check_transport):
+    if not args.verify_recovery_ssh:
+        return nullcontext(None)
+    from .recovery import RecoveryVerifier
+    from .ssh import SSHConnection
+    password = None
+    if args.ssh_password:
+        if not sys.stdin.isatty():
+            raise ValueError("SSH password verification needs an interactive terminal")
+        password = getpass.getpass("Existing device SSH password (used again after reboot): ")
+    connection = SSHConnection(args.ssh_user, key=args.ssh_key, password=password,
+                               check_transport=check_transport,
+                               warn=lambda text: print(text, file=sys.stderr))
+    return RecoveryVerifier(firmware, connection, progress=lambda text: print(text, file=sys.stderr))
+
+
 def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "_usb-worker":
         def notify(interface):
@@ -63,9 +79,22 @@ def main() -> int:
         if name in ("plan", "flash"):
             command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the USB helper executable")
             command.add_argument("--external-usb", action="store_true", help="Advanced: use an already running USB supervisor")
+            command.add_argument("--verify-recovery-ssh", action="store_true", help="Optional: require installed recovery readback before clearing the main kernel (existing SSH required)")
+            command.add_argument("--ssh-user", help="Existing administrative SSH account for recovery verification")
+            auth = command.add_mutually_exclusive_group()
+            auth.add_argument("--ssh-password", action="store_true", help="Prompt once for the existing SSH password; keep it only in memory")
+            auth.add_argument("--ssh-key", type=Path, help="SSH identity file (encrypted keys must already be unlocked in your agent)")
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.command in ("plan", "flash"):
+            if args.verify_recovery_ssh:
+                if not args.ssh_user:
+                    raise ValueError("--verify-recovery-ssh requires --ssh-user")
+                if args.external_usb:
+                    raise ValueError("SSH verification requires managed USB networking; omit --external-usb")
+            elif args.ssh_user or args.ssh_password or args.ssh_key:
+                raise ValueError("SSH authentication options require --verify-recovery-ssh")
         if args.command == "fetch-fw":
             from .download import fetch_stock
             from .builder import interrupted_build
@@ -140,22 +169,28 @@ def main() -> int:
                     print(json.dumps(firmware.report(), indent=2))
                 else:
                     session = nullcontext(lambda: None) if args.external_usb else usb_session(args.tetherkit)
-                    with session as check_transport:
+                    with session as check_transport, recovery_verification(args, firmware, check_transport) as verification:
                         check_transport()
                         if args.command == "plan":
                             with ReadOnlyClient("192.168.129.1") as client:
                                 info = client.inspect()
                             check_identity(info, 4)
-                            print(json.dumps({
+                            if verification is not None:
+                                verification.preflight()
+                            result = {
                                 "firmware": firmware.report(), "device": info,
                                 "sequence": ["recovery filesystem", "recovery kernel", "reboot to normal",
                                              "clear main kernel", "reboot to recovery", "main filesystem",
                                              "main kernel", "reboot to normal"],
                                 "device_writes": False,
-                            }, indent=2))
+                            }
+                            if verification is not None:
+                                result["sequence"].insert(3, "SSH recovery integrity verification")
+                                result["verification_report"] = str(verification.directory / "report.json")
+                            print(json.dumps(result, indent=2))
                         else:
                             flash(firmware, NetworkDevice("192.168.129.1", check_transport=check_transport),
-                                  C100X_PROFILE, report=lambda text: print(text, flush=True))
+                                  C100X_PROFILE, report=lambda text: print(text, flush=True), verification=verification)
         return 0
     except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:
         print(f"{args.command} failed: {exc}", file=sys.stderr)

@@ -81,6 +81,10 @@ model is **brand.line.code**, yielding `1.0.99`; configuration is not the line.
 State 4 means normal operation requiring recovery for a main-firmware update.
 State 1 means recovery. An extra-status field other than zero is rejected.
 
+In ordinary non-NFS normal boot, state 4 also reflects completion of the stock
+daemon's installed recovery **uImage** checksum check. It does not cover recovery
+rootfs or DTBs; see the offline findings below.
+
 These queries, including uptime and normalized identity, have been exercised on
 the existing modified intercom through the research tunnel and directly over
 native USB. On 2026-10-27, both native `probe` and the non-writing `plan` passed;
@@ -139,9 +143,104 @@ The selected recovery and kernel files are byte-identical to stock. See
 - Ctrl-C stops further commands and closes local sockets. It cannot cancel a
   write already accepted by the device. Keep the device powered after an error.
 - Final protocol completion must be followed by calls, audio/video, door-release
-  and SSH acceptance checks. No installed-filesystem readback is available here.
+  and SSH acceptance checks. The optional SSH gate below adds installed recovery
+  readback; ordinary stock-device flashing has no full-filesystem readback.
 
 Deliberate fault injection is restricted to simulation.
+
+The actual device's boot environment was read on 2026-10-29. Its normal-to-recovery
+fallback checks the kernel image and DTB load, not later Linux/rootfs/application
+health. Bootloader and rescue evidence, including limitations of public recovery
+reports, is recorded in [RECOVERY.md](RECOVERY.md).
+
+## 2026-10-29: Stock USB-accessible recovery verification (offline research)
+
+**Partial verification already exists; full recovery readback was not found.**
+The existing post-recovery-write normal reboot and query-40 state check provide
+more evidence than worker completion alone, but do not verify the recovery rootfs.
+No new command was sent to the device during this research.
+
+### Installed kernel check behind query 40
+
+- Stock-matching `bt_daemon` was decompiled offline into
+  `research/device/bt_daemon.c`. Startup clears status flags and sets recovery
+  kernel status to `0` (around lines 2261–2304).
+- Its normal, non-NFS startup path calls `FUN_0001d93c("/mnt/uImage", ...)`
+  (around lines 1517–1558). This mounts the recovery kernel partition, opens the
+  installed `uImage`, checks U-Boot magic, header CRC and data CRC, then unmounts
+  it (function at `0x1d93c`, around lines 3794–3874). The caller records
+  `1:<hex-data-CRC>` on success, or `2` on failure. A maintenance path also invokes
+  the same check; this is not an on-demand readback command.
+- `libcommon.so.0.0.c`, getters/setters near `0x4570c`/`0x45a84`, reads/writes
+  `/var/tmp/flags/RECOVERY_PARTITION_KNL_STATUS`. A missing flag reads as `0`.
+- `bt_device.c`, query 40 around lines 5780–5840, returns NACK while that value
+  is `0`. In normal mode, value `2` produces `*#13**40*2*0##`; a successful
+  normal state can produce the expected `4*0`. Running recovery produces `1*0`.
+  Query 45 merely checks that kernel status is nonzero: it ACKs even a failed
+  check and is not an integrity alternative.
+- `classe100x/updater.py` already requires a verified normal reboot and state 4
+  after writing recovery and before clearing the main kernel. In the ordinary
+  stock non-NFS boot path this therefore gates the transition on the newly booted
+  daemon's recovery-kernel check. This behavior is established from code, not from
+  an actual flash or a deliberately corrupted-device experiment.
+
+Coverage is **only `uImage` self-consistency**. No stock-pinned hash comparison,
+DTB validation, recovery-rootfs scan or filesystem consistency check occurs in
+that routine. Query 40 exposes status, not the stored CRC or installed bytes.
+It reads cached status rather than rechecking storage on each query. NFS and
+already-running-recovery paths can mark kernel status good without this read;
+the interpretation above is specifically the normal non-NFS path.
+
+### Other candidates do not provide the missing readback
+
+- Query 44 reads `/MTD_KERNEL_RECOVERY_OK` and `/MTD_FS_RECOVERY_OK`, then takes
+  the ACK/reboot path. It does not compute their contents. A literal scan of the
+  stock main image found each filename only in `bt_device`; no producer was
+  established. The FS status helpers in `libcommon`/`libopen` are flag accessors,
+  not evidence of a filesystem checksum producer. Query 44 remains excluded.
+- Configuration export `#31` copies `conf.zip` from
+  `/home/bticino/cfg/extra/conf/conf.img`; extra export `#39` archives the selected
+  extra beneath `/home/bticino/cfg/extra`. Their checksum queries 32/35 cover
+  those staged exports, not recovery partitions (`bt_device.c`, around
+  5676–5738, 6592–6647 and 6807–6840).
+- Stock FTP chroots local accounts; the firmware accounts' home is the staging
+  directory `/var/tmp/ftp`. Its normal file retrieval is not a raw-partition
+  readback facility. Stock runlevel-5 startup does not establish a usable SSH or
+  telnet inspection service. The Dropbear startup in `bt-networking.sh` is a
+  runlevel-4 path, not proof of ordinary stock USB shell access.
+- Public searches found no demonstrated C100X 1.5.8 stock USB partition-readback
+  procedure. The [USB backup question in upstream issue 31](https://github.com/fquinto/bticinoClasse300x/issues/31#issuecomment-2505409654)
+  concerns 2.x hardware and supplies no validated answer for this profile.
+
+These findings do not establish that every possible diagnostic interface is
+absent. They establish no evidenced stock USB mechanism suitable for adding the
+proposed rootfs/DTB readback gate to the current flasher.
+
+### Optional SSH readback gate
+
+`--verify-recovery-ssh` uses an already-enabled administrative SSH service over
+managed USB. Its preflight requires UID 0, normal `RUNNING_FW_COPY=1`, fixed p2/p3
+block devices and expected sizes, matching sysfs/device-node major/minor numbers,
+empty sysfs holders and no matching mountinfo major/minor entries. Those checks
+are repeated around acquisitions and at the end; snapshots cannot rule out a
+transient concurrent mount/raw writer. This is intended for the trusted supported
+installation, not arbitrary Linux storage configurations.
+
+After the existing verified normal reboot, the gate reads p2/p3 using bounded
+`dd` and compares each exact-length stream with independent device-side
+`sha256sum` output. It runs host `e2fsck -f -n`, compares p3's reference-defined
+153600000-byte filesystem extent with the staged stock recovery gzip, and uses
+read-only `debugfs` to compare p2's complete 21-file kernel/DTB set with the staged
+kernel ZIP. The unwritten p3 partition tail is excluded from stock equality, but
+included in acquisition integrity. Local image hashes must remain unchanged.
+
+No SSH command mounts, repairs or writes a device partition. A passed report must
+be saved before normal-kernel invalidation. Missing prerequisites, failed reads,
+mismatches, timeout, cancellation or report-save failure stop that transition;
+there is no unchecked fallback or transfer retry. First-seen/changed host keys
+warn rather than block, so this does not establish cryptographic identity
+continuity. Readback does not establish uncached physical-media verification or
+recovery boot/USB operation. See [ADR-012](DECISIONS.md#adr-012-optional-ssh-recovery-integrity-gate).
 
 ## 2026-10-28: Builder package and SSH evidence (offline)
 

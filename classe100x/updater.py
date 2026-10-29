@@ -178,12 +178,15 @@ class NetworkDevice:
 
 
 def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
-          report=print) -> dict:
+          report=print, *, verification=None) -> dict:
     """Three verified reboot boundaries; any failure stops subsequent writes."""
     stage = "preflight"
     try:
         info = device.connect()
         check_identity(info, 4)
+        if verification is not None:
+            verification.preflight()
+            verification.update_result("in_progress", stage)
         for recovery, names, credentials in (
             (True, RECOVERY_FILES, profile.normal),
             (False, MAIN_FILES, profile.recovery),
@@ -209,17 +212,37 @@ def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProf
             report(stage)
             info = device.reboot_and_wait(4)
             if recovery:
+                if verification is not None:
+                    stage = "recovery: verifying installed contents over SSH"
+                    report(stage)
+                    verification.verify()
                 stage = "entering recovery: clearing main kernel"
                 report(stage)
                 device.client.invalidate_main_kernel()
                 stage = "entering recovery: rebooting"
                 report(stage)
                 device.reboot_and_wait(1)
+        stage = "update sequence completed"
+        if verification is not None:
+            verification.update_result("completed", stage)
         report("Update sequence completed; verify calls, audio/video, door release and SSH")
         return info
     except (UpdateError, ProtocolError, OSError) as exc:
+        if verification is not None:
+            _record_stop(verification, stage, report)
         raise UpdateError(f"Stopped at '{stage}': {exc}. Keep the device powered; no automatic retry or cleanup reboot.") from None
     except KeyboardInterrupt:
+        if verification is not None:
+            _record_stop(verification, stage, report)
         raise UpdateError(f"Interrupted at '{stage}'. Keep the device powered; no automatic retry or cleanup reboot.") from None
     finally:
         device.close()
+
+
+def _record_stop(verification, stage, report):
+    try:
+        # The device sequence may have completed even if final report publication
+        # failed. Preserve that distinction from an interrupted device operation.
+        verification.update_result("completed" if stage == "update sequence completed" else "stopped", stage)
+    except (OSError, UpdateError):
+        report("Warning: could not save update outcome in the verification report")

@@ -19,6 +19,8 @@ Mac, supervised child of plan/flash (sudo)
     TetherKit CLI <-> feth/BPF <-> libusb <-> USB RNDIS, device 192.168.129.1
 
 Research only: LAN SSH -> read-only inspection / authorized partition backups
+
+Optional verification: USB SSH :22 -> installed recovery readback -> host e2fsprogs
 ```
 
 The USB worker has no firmware or credential responsibilities. It
@@ -47,6 +49,8 @@ host/port overrides and uses an existing connection, including the research tunn
 | `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
+| `recovery.py` | Optional pre-write SSH prerequisites and post-recovery-write integrity gate; bounded acquisition, offline checks and private evidence |
+| `ssh.py`, `ssh_askpass.py`, `ssh-askpass` | Fixed USB OpenSSH reads, invoking-user authentication, memory-only password broker and warning-only host-key evidence |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
 | `usb_session.py` | Parent-owned USB worker, readiness/route checks, bounded startup and cleanup |
 | `resources.py`, `entrypoint.py` | Relocatable release assets and isolated child interpreter entry points |
@@ -56,8 +60,10 @@ and vendor credentials; those modules do not depend on the updater. Transport is
 independent of the update state machine. The Python CLI uses only the standard
 library. `bitrock-unpacker` is a research-only dependency, used to establish the
 bundled profile from the public installer.
-Builder modules are imported only for builder commands. They do not add e2fsprogs,
-7zip, Dropbear keygen or OpenSSL dependencies to inspection/planning/flashing.
+Builder modules are imported only for builder commands. Ordinary inspection,
+planning and flashing do not require builder tools. Explicit SSH recovery
+verification imports the shared host-tool boundary and requires e2fsprogs; it
+does not import the builder or require 7zip, Dropbear keygen or OpenSSL.
 No native macOS frameworks are imported by the Python CLI; the USB supervisor's
 feth/helper execution remains macOS-specific.
 
@@ -94,6 +100,7 @@ configuration/data (`p7`). See [OPERATIONS.md](OPERATIONS.md) for that distincti
 validate all local inputs -> inspect compatible device in state 4
   -> recovery: filesystem upload/commit/idle, kernel upload/commit/idle
   -> close FTP, settle, reboot -> verify state 4 + reset uptime
+  -> if selected: SSH readback + offline checks + persist passed evidence
   -> invalidate main kernel, reboot -> verify state 1 + reset uptime
   -> main: filesystem upload/commit/idle, kernel upload/commit/idle
   -> close FTP, settle, reboot -> verify state 4 + reset uptime
@@ -110,6 +117,16 @@ there is no persistent resume journal, automatic rollback or write retry.
 The updater closes its local socket in `finally`; that cannot cancel work already
 accepted by the device. Staged local files are removed on normal context exit and
 handled exceptions, not guaranteed after abrupt process death.
+
+The optional verifier runs prerequisites before the first recovery write. At its
+gate it reads only the fixed recovery partitions, requires them unmounted by
+major/minor identity, compares an independent device read/hash, verifies the
+reference-defined rootfs extent and kernel/DTB file set, and runs read-only fsck
+on host images. Every failure blocks main-kernel invalidation. Reports retain
+integrity and update outcomes separately; no report is a resume token. The
+standard path has no verifier. Authentication and evidence ownership use the
+invoking ordinary user even though USB management runs under sudo. See
+[ADR-012](DECISIONS.md#adr-012-optional-ssh-recovery-integrity-gate).
 
 Managed USB sessions handle SIGINT/SIGTERM/SIGHUP, stop the worker and allow the
 helper to clean up before forced termination. The standalone `usb` developer

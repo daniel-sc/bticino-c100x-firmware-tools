@@ -28,7 +28,7 @@ per-user installation). Upcoming DMGs include an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
 together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.
-[v0.1.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.1)
+[v0.1.0-alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.2)
 is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
 Each release's `release.json` records its minimum macOS version.
 
@@ -56,6 +56,10 @@ sudo /Applications/C100X/c100x flash custom.fwz
 USB networking is started, maintained across reboots, and cleaned up automatically.
 `plan` performs read-only device checks; `flash` writes firmware. See the
 [flashing guide](docs/FLASHING.md) for device compatibility and acceptance details.
+
+**Already have SSH enabled?** An optional [recovery verification check](docs/FLASHING.md#optional-recovery-verification-existing-ssh)
+reads back recovery before clearing the working normal kernel. Stock devices do
+not need SSH for the standard workflow.
 
 **Building and flashing are separate operations.** Existing outputs are never
 overwritten. Alpha downloads precede full hardware acceptance; v1 will follow

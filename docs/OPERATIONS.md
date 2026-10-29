@@ -112,6 +112,24 @@ on-device changes but is a different artifact.
 
 ## Continuing development or hardware testing
 
+- Optional recovery verification is now selected with `--verify-recovery-ssh` on
+  `plan`/`flash`; usage is in [FLASHING.md](FLASHING.md#optional-recovery-verification-existing-ssh).
+  Its private `c100x-verification-*/` evidence directories are Git-ignored. Normal
+  cleanup removes `raw/`; abrupt termination may leave it for explicit removal.
+  Neither a passed report nor a previous research backup authorizes resumption.
+
+- The 2026-10-29 read-only boot investigation is in [RECOVERY.md](RECOVERY.md).
+  Private environment/boot-region acquisitions and verified-hash manifests are
+  in `.local/boot-research-20261029T132507Z/`; these supplement the older backups
+  but are not a complete or restore-tested backup. The valid saved environment
+  differs materially from embedded bootloader defaults. Preserve it.
+- The subsequent installed-component integrity check acquired recovery kernel
+  (`p2`), recovery rootfs (`p3`) and normal kernel (`p5`) privately under
+  `.local/recovery-integrity-20261029T204358Z/`. `manifest.json` records acquisition
+  hashes; `analysis.json`, `changed-inodes.json` and `recovery-differences.json`
+  record the offline checks and classified differences. Both kernel file sets
+  match stock and all filesystem checks passed. These acquisitions have not been
+  restore-tested and do not establish a supported restore command.
 - Start with [ACCEPTANCE.md](ACCEPTANCE.md) for the last observed results. As of
   2026-10-27, native normal-mode probe/plan/reconnect/cleanup passed; FTP transfer,
   recovery-mode networking and actual flashing remained unverified.

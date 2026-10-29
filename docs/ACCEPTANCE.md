@@ -395,7 +395,7 @@ performed in this session.
   reboot and before clearing the main kernel. Preflight, deadlines, independent
   read/hashes, exact reference comparisons, read-only fsck and evidence publication
   fail closed. Ordinary flashing remains independent of SSH/e2fsprogs.
-- `mise run test`: **128 offline tests passed**, including synthetic ext4
+- `mise run test`: **130 offline tests passed** after review fixes, including synthetic ext4
   corruption/content/metadata differences, mount aliases, acquisition failures,
   deadline/cancellation behavior, report-save failures, gate ordering, later
   update failure, CLI isolation, private cleanup and memory-only askpass IPC.
@@ -410,6 +410,9 @@ performed in this session.
   a previously observed host key did not warn, and legacy RSA host-key negotiation
   lacked its separate OpenSSH exception. Both were corrected with regression
   coverage, including inspection of actual system OpenSSH's resolved configuration.
+- A subsequent fresh review identified the stock OpenWebNet 30-second idle
+  timeout. The updater now reconnects/rechecks state 4 after SSH preflight and
+  readback, with simulated connection expiry and failed-reconnect coverage.
 - USB SSH authentication, sudo-to-user execution on a live connection, the
   post-reboot SSH gate and fresh device-write equality remain hardware-unvalidated.
   No firmware writes, device reboots or hardware fault injection were performed

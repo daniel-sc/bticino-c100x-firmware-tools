@@ -235,7 +235,10 @@ kernel ZIP. The unwritten p3 partition tail is excluded from stock equality, but
 included in acquisition integrity. Local image hashes must remain unchanged.
 
 No SSH command mounts, repairs or writes a device partition. A passed report must
-be saved before normal-kernel invalidation. Missing prerequisites, failed reads,
+be saved before normal-kernel invalidation. The command connection is refreshed
+and state 4 rechecked after SSH preflight and verification: stock `openserver`
+arms a 30-second idle timeout, shorter than a full readback (local decompilation
+`openserver.c`, around lines 5618–5620). Missing prerequisites, failed reads,
 mismatches, timeout, cancellation or report-save failure stop that transition;
 there is no unchecked fallback or transfer retry. First-seen/changed host keys
 warn rather than block, so this does not establish cryptographic identity

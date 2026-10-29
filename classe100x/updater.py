@@ -187,6 +187,9 @@ def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProf
         if verification is not None:
             verification.preflight()
             verification.update_result("in_progress", stage)
+            # SSH work can outlast openserver's 30-second command idle timer.
+            info = device.connect()
+            check_identity(info, 4)
         for recovery, names, credentials in (
             (True, RECOVERY_FILES, profile.normal),
             (False, MAIN_FILES, profile.recovery),
@@ -216,6 +219,9 @@ def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProf
                     stage = "recovery: verifying installed contents over SSH"
                     report(stage)
                     verification.verify()
+                    stage = "recovery: reconnecting after SSH verification"
+                    info = device.connect()
+                    check_identity(info, 4)
                 stage = "entering recovery: clearing main kernel"
                 report(stage)
                 device.client.invalidate_main_kernel()

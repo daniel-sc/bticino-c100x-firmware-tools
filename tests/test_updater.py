@@ -178,12 +178,54 @@ class RecoveryGateTests(unittest.TestCase):
         device = SimulatedDevice()
         gate = SimulatedVerification(device)
         self.run_update(device, gate)
-        self.assertEqual(device.events[:3], ["connect", "ssh-preflight", "idle"])
+        self.assertEqual(device.events[:4], ["connect", "ssh-preflight", "connect", "idle"])
         index = device.events.index("ssh-verify")
-        self.assertEqual(device.events[index - 1:index + 2],
-                         ["reboot-4", "ssh-verify", "invalidate-main-kernel"])
+        self.assertEqual(device.events[index - 1:index + 3],
+                         ["reboot-4", "ssh-verify", "connect", "invalidate-main-kernel"])
         self.assertEqual(device.events.count("ssh-verify"), 1)
         self.assertEqual(gate.outcomes[-1][0], "completed")
+
+    def test_ssh_work_can_expire_both_command_connections(self):
+        class ExpiringDevice(SimulatedDevice):
+            live = False
+
+            def connect(self):
+                self.live = True
+                return super().connect()
+
+            def wait_idle(self):
+                if not self.live:
+                    raise ProtocolError("command connection expired")
+                super().wait_idle()
+
+            def invalidate_main_kernel(self):
+                if not self.live:
+                    raise ProtocolError("command connection expired")
+                super().invalidate_main_kernel()
+
+        device = ExpiringDevice()
+        gate = SimulatedVerification(device)
+        for method in ("preflight", "verify"):
+            original = getattr(gate, method)
+            def expire(original=original):
+                original()
+                device.live = False
+            setattr(gate, method, expire)
+        self.run_update(device, gate)
+        self.assertEqual(device.events.count("connect"), 3)
+        self.assertEqual(device.events.count("invalidate-main-kernel"), 1)
+
+    def test_failed_post_verification_reconnect_cannot_invalidate(self):
+        for response in (ProtocolError("disconnected"), identity(1)):
+            with self.subTest(response=response):
+                device = SimulatedDevice()
+                gate = SimulatedVerification(device)
+                with patch.object(device, "connect", side_effect=[identity(), identity(), response]):
+                    with self.assertRaisesRegex(UpdateError, "reconnecting after SSH verification"):
+                        self.run_update(device, gate)
+                self.assertEqual(gate.verification, "passed")
+                self.assertNotIn("invalidate-main-kernel", device.events)
+                self.assertNotIn("begin-main", device.events)
 
     def test_preflight_failure_permits_no_device_writes(self):
         for error in (UpdateError("SSH unavailable"), OSError("evidence unwritable"), KeyboardInterrupt()):

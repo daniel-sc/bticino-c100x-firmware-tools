@@ -108,6 +108,7 @@ validate package and SSH/tool/storage prerequisites
   -> acquire recovery partitions and verify acquisition length/hashes
   -> compare expected filesystem extent and kernel/DTB files; offline fsck
   -> persist verification result
+  -> reconnect update-control session and recheck normal state
   -> only on success: existing main-kernel clear and remaining update sequence
 ```
 

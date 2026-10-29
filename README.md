@@ -24,7 +24,7 @@ There is no GUI or ready-made MQTT/Home Assistant integration.
 
 Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
-per-user installation). Upcoming DMGs include an Applications shortcut for
+per-user installation). The DMG includes an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
 together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.

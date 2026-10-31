@@ -1,5 +1,33 @@
 # Hardware acceptance record
 
+## 2026-10-31: Alpha.3 publication
+
+- Pushed implementation/review fixes at
+  `abf6e689f2e0abeb0ff43ab5ef97e9b7b432629f` and tag **v0.1.0-alpha.3**.
+  Main CI run `41242378564` passed the offline suite, native MQTT fixture tests,
+  pinned helper build/tests, package assembly and relocated smoke checks.
+- Tagged release run `41242378394` also passed, including Developer ID signing,
+  notarization and stapling. Published
+  [alpha.3](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.3)
+  at **21:16:23 UTC**, with the arm64 DMG, dependency sources, provenance and checksums.
+- Downloaded all published assets and checked SHA-256, version and source commit.
+  DMG SHA-256:
+  `bf58bd3a120195c6f2ecdaa5a3a5fb6cbfa754ee8ca862df2a66ff8fd9839787`.
+  Stapler validation passed; Gatekeeper accepted it as Notarized Developer ID.
+  Mounted read-only, copied the bundle and detached the image. All **84 native
+  files** passed strict signature and expected Developer ID team checks.
+- The downloaded bundle passed relocated smoke checks with system-only PATH,
+  including bundled MQTT assets and host configuration code. Minimum OS is
+  **macOS 15.0**, arm64. Private downloads are in `.local/downloaded-alpha3/`.
+- The downloaded CLI, with system-only PATH, built a real pinned-stock MQTT+SSH
+  image using disposable credentials. Filesystem checks, payload verification,
+  packaging and reopened-image verification all passed. Output
+  `.local/alpha3-image-validation/mqtt-ssh.fwz` has SHA-256
+  `3cb8084e7bfdfc80461ac94ffeed46e27deb8538bd988d9bc7bdfdab163ba407`;
+  an independent reread matched its report. Output mode is 0600 and the original
+  stock hash remained unchanged. No intercom or household-broker connection,
+  firmware write or reboot occurred during these release checks.
+
 ## 2026-10-31: Optional MQTT payload — offline implementation validation
 
 - Implemented the explicitly selected `mqtt` payload under ADR-013, with private

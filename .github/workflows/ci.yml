@@ -33,7 +33,9 @@ jobs:
           mise install python cmake
           brew install e2fsprogs dropbear openssl@3 libusb sevenzip pkgconf xz zstd
       - name: Offline suite
-        run: mise run test
+        run: |
+          mise exec -- python tests/build_mqtt_library.py
+          CLASSE100X_MQTT_LIBRARY="$PWD/.local/mqtt-native/mosquitto-1.4.14/lib/libmosquitto.so.1" mise run test
       - name: Build pinned USB helper
         if: github.event_name != 'pull_request'
         run: |

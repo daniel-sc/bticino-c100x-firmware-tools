@@ -1,5 +1,71 @@
 # Hardware acceptance record
 
+## 2026-10-31: Optional MQTT payload — offline implementation validation
+
+- Implemented the explicitly selected `mqtt` payload under ADR-013, with private
+  build-time configuration, stock-runtime ctypes bindings, public-monitor events,
+  serialized commands, bounded queues, retained availability and bridge-only
+  supervision. The builder checks stock prerequisites, installed bytes/metadata,
+  startup links and final/reopened image results.
+- Native fixture tests passed with host-built **libmosquitto 1.4.14** under both
+  mise Python **3.14.9** and host Python **2.7.18**. The seven Python-2-compatible
+  tests cover framing/coalescing, credential redaction/log rotation and logging
+  failures, MQTT wire flags/callbacks, retained-command rejection, bounded queues,
+  publication stalls, ordered command exchanges and monitor-loss cleanup.
+  Host Python 2 required Apple Silicon configure/system-libffi build adjustments;
+  this establishes host compatibility, not the stock ARM ABI.
+- Additional offline tests exercise input privacy, configuration validation,
+  command expiry/partial writes/uncertain delivery, generation disposal, capped
+  retry delays and actual fork/signal/flock supervision. Synthetic ext4 builds
+  passed MQTT+SSH composition in both orders, prerequisite rejection and
+  final/reopened verification failures after deliberate fixture tampering.
+  The final full `mise run test` run passed **150 tests**, with native tests enabled
+  and no skips. A new CLI test initially leaked its process umask into a recovery
+  fixture; the test now restores it and the complete suite passes.
+- A real pinned-stock MQTT+SSH build with disposable broker/login settings passed
+  filesystem checks, payload readback, packaging and reopened verification:
+  `.local/mqtt-image-validation/mqtt-ssh.fwz`, SHA-256
+  `9f1894448128bf6f30b4a74bcf0ff32e3ed1e24a960af93a33a2d3616610ddb9`.
+  The output hash was independently reread and matched the private build report.
+  The original stock hash was unchanged on reread; output permissions are 0600.
+- Independent standards/correctness and spec reviews identified one logging
+  exception mismatch between Python 2 and 3. It was fixed and reproduced by a
+  passing Python-2 regression test. The spec review found no violations.
+  A subsequent fresh correctness review found no actionable findings and
+  independently reran all 150 offline tests and seven Python-2 runtime tests.
+- No candidate code was installed on the intercom or connected to household MQTT.
+  Target imports/ABI, fresh-image startup, reconnect behavior, retained availability,
+  existing notifications, calls/audio/video and door control still require
+  separately authorized hardware acceptance. Firmware and test inputs stay private.
+
+## 2026-10-31: Public monitor event coverage — live observation
+
+- With user authorization, opened an IPv4-loopback OpenWebNet monitor session
+  on the existing modified C100X 1.5.8 and observed it alongside a temporary
+  loopback tcpdump capture using the legacy traffic exclusions. Both were ready
+  at **20:19:06 UTC**. Private evidence:
+  `.local/mqtt-monitor-probe/20261031T201904Z/`.
+- Both sources observed exactly two `*8*1#1#4#21*10##` doorbell events, at about
+  **20:21:22** and **20:24:57 UTC**. Host-receipt differences were approximately
+  52 ms and 118 ms; these are comparative observations, not latency guarantees.
+  The user confirmed the first ring's existing notification arrived.
+- The user answered the second call and hung up after approximately 3–5 seconds.
+  The monitor carried subsequent call-state frames, including
+  `*8*2#1#4*10##` and `*8*3#1#4*410##`; exact physical-action timing was not measured.
+- At **20:26:52–53 UTC**, both sources observed the existing HA door-control pair
+  `*8*19*20##`, `*8*20*20##`. The user confirmed the door opened normally.
+- The monitor and capture are not byte-for-byte equivalent streams: capture
+  includes internal ACKs/repeated observations, while monitor adds application
+  state notifications. This establishes coverage of the tested household events,
+  not every possible legacy raw message or duplicate-free delivery.
+- Notifications and commands still used the installed legacy MQTT bridge. No
+  candidate MQTT payload was installed or published to MQTT by the observers.
+  Fresh-image startup, MQTT-library binding, reconnection and full household
+  acceptance of a new payload remain unvalidated.
+- Temporary observers stopped at **20:28:04 UTC**, with the cleanup marker and
+  SSH exit 0 recorded. A separate check confirmed the temporary tcpdump PID was
+  absent. The user's SSH master remained available.
+
 ## 2026-10-29: Published alpha and signed-download validation
 
 - Published [v0.1.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.1)

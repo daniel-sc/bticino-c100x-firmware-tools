@@ -46,6 +46,7 @@ host/port overrides and uses an existing connection, including the research tunn
 | `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback, bounded/redacted subprocess boundary |
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
 | `payloads/ssh/` | Stock-specific SSH account/config/key preparation, raw image commands and verification |
+| `payloads/mqtt/` | Stock-runtime bridge, private broker configuration, startup integration and image readback checks |
 | `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
@@ -134,6 +135,17 @@ command retains its own signal handling. Restarting transport is not resuming an
 interrupted update; no device reboot/write is performed as local cleanup.
 
 ## Test boundaries and extension points
+
+The optional MQTT payload is self-contained: host hooks verify stock dependencies
+and install scripts/configuration. On-device, a lock-holding Python supervisor
+restarts one worker. The worker owns a connection generation: clean-session MQTT,
+public loopback monitor and serialized short-lived command sockets. Generation
+failure discards queued data and closes its resources before bounded backoff.
+Native callbacks enqueue bounded commands; the same worker loop drives MQTT,
+event framing and command progress. A dead supervisor causes its worker to exit.
+No vendor process, updater or SSH service is managed by this payload. See
+[ADR-013](DECISIONS.md#adr-013-optional-stock-runtime-mqtt-payload) and
+[builder usage](BUILDER.md#optional-mqtt-bridge) for the compatibility contract.
 
 The builder's lifecycle and trust contract are detailed in [BUILDER.md](BUILDER.md).
 It starts from pinned stock, edits only a private main-filesystem copy, checks

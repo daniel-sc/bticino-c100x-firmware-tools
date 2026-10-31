@@ -15,17 +15,18 @@ Plan/flash manage USB networking automatically. Keep stable device power and USB
 throughout flashing. An error stops subsequent commands; uncertain writes are
 never retried, and cleanup does not reboot the device.
 
-**New in alpha.2:** optional recovery readback before clearing the normal kernel,
-for devices with SSH already enabled. Add
-`--verify-recovery-ssh --ssh-user root2 --ssh-password` to `plan`/`flash`;
-the password is prompted once per command and kept in memory. See the included
-flashing guide for key authentication and verification limits. The standard
-stock-device workflow still needs no SSH. This release also adds the DMG's
-drag-and-drop Applications shortcut.
+**New in alpha.3:** optional `mqtt` builder payload using stock Python/libmosquitto
+and the public loopback event monitor. Supply private broker settings with
+`--inputs` and select `--payload mqtt`; SSH remains independently selectable.
+The bridge preserves the tested household bell and door-control payloads, rejects
+retained command replay and reconnects without deliberately replaying queued work.
+See the included builder guide for plaintext transport, topic configuration,
+compatibility limits and diagnostics. No HA configuration is installed.
 
 **Experimental alpha:** offline tests and packaged smoke checks have passed.
 Full native flashing, recovery-mode networking and functional acceptance remain
-unverified, including the new USB/SSH verification path. Version 1 waits for
+unverified, including USB/SSH verification and the new MQTT payload's target
+runtime/startup/end-to-end behavior. Version 1 waits for
 successful hardware validation.
 
 The DMG is Developer ID signed, notarized and stapled. Dependency sources and

@@ -91,6 +91,80 @@ Building never invokes flashing. Use the separate [flashing guide](FLASHING.md),
 including the real-device compatibility checks.
 Neither a build report nor a successful offline inspection proves bootability.
 
+## Optional MQTT bridge
+
+Select `--payload mqtt` to install the bridge using stock Python 2.7 and
+libmosquitto. SSH is independently selectable. Create a mode-0600 JSON file
+outside source control, for example `.local/build.private.json`:
+
+```json
+{
+  "mqtt": {
+    "transport": "plain",
+    "host": "192.0.2.10",
+    "port": 1883,
+    "username": "REPLACE_WITH_BROKER_USERNAME",
+    "password": "REPLACE_WITH_BROKER_PASSWORD",
+    "prefix": "Bticino"
+  }
+}
+```
+
+Replace the example address and credentials with your broker settings. V1 requires
+explicit plaintext transport, a numeric IPv4 address and nonempty username/password.
+Port and prefix default to `1883` and `Bticino`. Prefixes use ASCII letters, digits,
+`_`, `-` and nonempty `/`-separated levels, at most 128 characters. Credentials
+are UTF-8, at most 512 bytes each, without NUL/newlines. Unknown fields fail.
+
+```sh
+chmod 600 .local/build.private.json
+mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
+  --payload mqtt --inputs .local/build.private.json \
+  --output .local/mqtt.fwz --report .local/mqtt.build.json
+```
+
+Add `--payload ssh --ssh-password` or `--ssh-public-key ...` for administrative
+access. Broker configuration is embedded privately in the image; changing it means
+rebuilding and flashing. Hex-encoded configuration values are **not encryption**.
+Keep the inputs and generated FWZ private. TLS and runtime provisioning are deferred.
+Use a unique prefix per device on a shared broker: it also determines the MQTT
+client ID. Broker ACLs should permit this client to publish its `tx`, `start_date`
+and `LastWillT` topics and subscribe to its `rx` topic.
+
+| Topic suffix | Behavior |
+| --- | --- |
+| `/tx` | Public-monitor OpenWebNet frames, QoS 0, non-retained |
+| `/rx` | One raw numeric `##`-terminated command per message, at most 4096 bytes |
+| `/start_date` | Retained worker-start date/time from the device's local clock |
+| `/LastWillT` | Retained `online` / `offline`, QoS 1 |
+
+Existing household bell payload `*8*1#1#4#21*10##` and door press/release
+`*8*19*20##`, `*8*20*20##` are preserved. Callers send the two commands with their
+own timing. This does not install HA discovery/configuration, administrative
+JSON/file/shell operations or physical-button reporting. Public-monitor output
+is not identical to the legacy tcpdump stream; only the documented household
+coverage has been observed on the existing device.
+
+`online` means MQTT, the subscription and the loopback public monitor are ready.
+Detected failures discard pending work and reconnect; commands are serialized
+through short-lived port-30006 connections and never retried on uncertain delivery.
+Clean sessions and retained-command rejection prevent retained replay. Publish
+commands non-retained; MQTT 3.1.1 does not identify a live retained publish as
+retained for existing subscribers. There is no persistent event/command queue.
+Undetected stalls may delay already-in-flight data. Pending commands expire after
+two seconds, with a 16-command queue and two-second exchange deadline. Outgoing
+publications are limited to 64, with a three-second stall deadline. MQTT keepalive
+is 15 seconds; reconnect delays are 1/2/4/8/16/30 seconds, capped at 30.
+
+The runlevel-5 service starts one Python supervisor and one worker. It only owns
+bridge resources. Diagnostics (including raw frames, with credentials redacted)
+rotate across two files totaling at most 1 MiB under
+`/var/volatile/tmp/c100x-mqtt/`; reboot removes them. If SSH was selected separately,
+`/etc/init.d/c100x-mqtt status` checks the supervisor, not broker readiness;
+`stop`, `start` and `restart` manage this service. Readiness is reported via MQTT
+and private logs. Fresh-image boot, target ABI and household behavior still need
+hardware acceptance; offline build verification establishes installed bytes only.
+
 ## Downloads and package policy
 
 The single catalog entry uses
@@ -159,7 +233,8 @@ third-party package installation is provided. Interpreter startup is isolated
 from user site packages and `PYTHONPATH`. Optional Tk GUI and GNU dbm extensions
 are not bundled; SQLite, ctypes, TLS and all standard compression codecs are.
 
-`--inputs .local/build.private.json` accepts an object keyed by payload ID:
+`--inputs .local/build.private.json` requires private permissions (mode 0600) and
+accepts an object keyed by payload ID:
 
 ```json
 {
@@ -226,3 +301,10 @@ Integration tests use synthetic filesystems and skip when tools are absent.
 The SSH-mode fixture test additionally requires OpenSSH keygen, Dropbear keygen
 and OpenSSL. Proprietary images are used only in explicitly authorized local
 validation; the dated results and pending hardware work are in ACCEPTANCE.md.
+
+Native MQTT tests use ephemeral loopback fixture servers and a host build of
+libmosquitto 1.4.14. Prepare that test-only dependency with
+`mise exec -- python tests/build_mqtt_library.py`, then run the suite with
+`CLASSE100X_MQTT_LIBRARY="$PWD/.local/mqtt-native/mosquitto-1.4.14/lib/libmosquitto.so.1" mise run test`.
+CI requires these native tests; without the environment variable they skip locally.
+`tests/test_mqtt_runtime.py` also runs under Python 2.7 for compatibility checks.

@@ -40,6 +40,19 @@ def main():
         tools = bundle / "support/app/tools"
         run(tools / "tetherkit-cli", "--help")  # Never enumerate/connect hardware.
 
+        # Bundled MQTT assets must survive packaging/relocation byte-for-byte.
+        mqtt = bundle / "support/app/payloads/mqtt"
+        source_mqtt = Path(__file__).resolve().parent.parent / "payloads/mqtt"
+        for name in ("payload.json", "prepare.py", "verify.py", "common.py", "apply.debugfs",
+                     "files/bridge.py", "files/init.sh"):
+            assert (mqtt / name).read_bytes() == (source_mqtt / name).read_bytes()
+        run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
+            "import sys, runpy; sys.path.insert(0, sys.argv[1]); "
+            "config = runpy.run_path(sys.argv[2])['configuration']; "
+            "assert b'username_hex=' in config(dict(transport='plain', host='192.0.2.1', "
+            "username='fixture', password='fixture'))",
+            bundle / "support/app", mqtt / "common.py")
+
         # Exercise the shipped askpass helper/IPC and OpenSSH argument handling
         # with local fake SSH processes, using the relocated isolated interpreter.
         run(bundle / "support/python/bin/python3", "-I", "-B", "-c",

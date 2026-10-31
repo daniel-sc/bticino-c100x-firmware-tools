@@ -131,6 +131,8 @@ def main() -> int:
             inputs, input_base = {}, Path.cwd()
             if args.inputs:
                 with regular_file(args.inputs) as stream:
+                    if os.fstat(stream.fileno()).st_mode & 0o077:
+                        raise ValueError("Payload inputs file must have private permissions (chmod 600)")
                     data = stream.read(1024 * 1024 + 1)
                 if len(data) > 1024 * 1024:
                     raise ValueError("Payload inputs exceed the size limit")

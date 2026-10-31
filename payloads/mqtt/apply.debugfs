@@ -1,0 +1,25 @@
+mkdir /etc/c100x-mqtt
+set_inode_field /etc/c100x-mqtt uid 0
+set_inode_field /etc/c100x-mqtt gid 0
+set_inode_field /etc/c100x-mqtt mode 040700
+write generated/config.ini /etc/c100x-mqtt/config.ini
+set_inode_field /etc/c100x-mqtt/config.ini uid 0
+set_inode_field /etc/c100x-mqtt/config.ini gid 0
+set_inode_field /etc/c100x-mqtt/config.ini mode 0100600
+write files/bridge.py /usr/sbin/c100x-mqtt.py
+set_inode_field /usr/sbin/c100x-mqtt.py uid 0
+set_inode_field /usr/sbin/c100x-mqtt.py gid 0
+set_inode_field /usr/sbin/c100x-mqtt.py mode 0100755
+write files/init.sh /etc/init.d/c100x-mqtt
+set_inode_field /etc/init.d/c100x-mqtt uid 0
+set_inode_field /etc/init.d/c100x-mqtt gid 0
+set_inode_field /etc/init.d/c100x-mqtt mode 0100755
+symlink /etc/rc5.d/S99c100x-mqtt ../init.d/c100x-mqtt
+set_inode_field /etc/rc5.d/S99c100x-mqtt uid 0
+set_inode_field /etc/rc5.d/S99c100x-mqtt gid 0
+symlink /etc/rc0.d/K01c100x-mqtt ../init.d/c100x-mqtt
+set_inode_field /etc/rc0.d/K01c100x-mqtt uid 0
+set_inode_field /etc/rc0.d/K01c100x-mqtt gid 0
+symlink /etc/rc6.d/K01c100x-mqtt ../init.d/c100x-mqtt
+set_inode_field /etc/rc6.d/K01c100x-mqtt uid 0
+set_inode_field /etc/rc6.d/K01c100x-mqtt gid 0

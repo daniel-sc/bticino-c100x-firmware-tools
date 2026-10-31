@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import runpy
 import signal
 import struct
 import sys
@@ -422,3 +423,85 @@ class BuilderTests(unittest.TestCase):
                 self.assertNotIn(password, json.dumps(result))
                 self.assertNotIn(key.with_suffix(".pub").read_text().split()[1], json.dumps(result))
                 self.output.unlink()
+
+    def mqtt_fixture(self, with_ssh=False):
+        facts = runpy.run_path(str(builder.BUNDLED / "mqtt/common.py"))
+        originals = {path: ("synthetic " + path + "\n").encode() for path in facts["HASHES"]}
+        originals["/etc/inittab"] = b"id:5:initdefault:\n"
+        ssh_originals = {
+            "/etc/init.d/dropbear": b"#!/bin/sh\n# synthetic init\n",
+            "/etc/default/dropbear": b'\nDROPBEAR_EXTRA_ARGS="-B"\nDROPBEAR_RSAKEY_DIR=/var/lib/dropbear\n',
+            "/etc/passwd": b"root:x:0:0:root:/home/root:/bin/sh\n",
+            "/etc/shadow": b"root:*:18033:0:99999:7:::\n",
+            "/etc/inittab": originals["/etc/inittab"],
+            "/usr/sbin/dropbearmulti": b"synthetic daemon\n",
+        }
+        if with_ssh:
+            originals.update(ssh_originals)
+        directories = {"/etc/rc5.d", "/etc/rc0.d", "/etc/rc6.d", "/usr/sbin"}
+        if with_ssh:
+            directories.update(("/etc/dropbear", "/home/root"))
+        for path in list(originals) + list(directories):
+            directories.update(str(p) for p in Path(path).parents if str(p) != "/")
+        setup = "".join("mkdir %s\n" % path for path in sorted(directories, key=lambda p: (p.count('/'), p)))
+        for index, (path, data) in enumerate(originals.items()):
+            name = "mqtt-stock-%d" % index
+            (self.root / name).write_bytes(data)
+            setup += f"write {name} {path}\nset_inode_field {path} mode 0100755\n"
+        for path, target in facts["LINKS"].items():
+            setup += f"symlink {path} {target}\n"
+        if with_ssh:
+            setup += "symlink /usr/sbin/dropbear ./dropbearmulti\nset_inode_field /home/root mode 040700\n"
+        self.commands(setup)
+        self.restock()
+        paths = []
+        for name, values in (("mqtt", {path: originals[path] for path in facts["HASHES"]}),
+                             ("ssh", ssh_originals)) if with_ssh else (("mqtt", originals),):
+            payload = self.root / (name + "-source")
+            shutil.copytree(builder.BUNDLED / name, payload)
+            with (payload / "common.py").open("a") as stream:
+                stream.write("\nHASHES = " + repr({p: hashlib.sha256(data).hexdigest() for p, data in values.items()}) + "\n")
+            paths.append(payload)
+        return paths
+
+    def test_mqtt_install_composition_and_private_report(self):
+        payloads = self.mqtt_fixture(with_ssh=True)
+        inputs = {"mqtt": {"transport": "plain", "host": "192.0.2.1", "username": "fixture-user",
+                           "password": "private-%#; ü-value"}, "ssh": {"password": "synthetic-password"}}
+        original = self.stock.read_bytes()
+        for order in (payloads, list(reversed(payloads))):
+            result = self.build(payloads=order, inputs=inputs)
+            self.assertTrue(all(p["verification"] == "passed" for p in result["payloads"]))
+            self.assertNotIn(inputs["mqtt"]["password"], json.dumps(result))
+            self.assertNotIn(inputs["mqtt"]["password"].encode().hex(), json.dumps(result))
+            self.assertEqual(self.stock.read_bytes(), original)
+            self.output.unlink()
+
+    def test_mqtt_rejects_changed_prerequisite(self):
+        payloads = self.mqtt_fixture()
+        self.commands("set_inode_field /usr/bin/python2.7 mode 0100644\n")
+        self.restock()
+        with self.assertRaisesRegex(FirmwareError, "not executable"):
+            self.build(payloads=payloads, inputs={"mqtt": {"transport": "plain", "host": "192.0.2.1",
+                                                         "username": "fixture", "password": "private"}})
+        self.check_clean_failure()
+
+    def test_mqtt_final_and_reopened_verification_rejects_tampering(self):
+        payloads = self.mqtt_fixture()
+        inputs = {"mqtt": {"transport": "plain", "host": "192.0.2.1", "username": "fixture", "password": "private"}}
+        bad = self.payload("conflict", "set_inode_field /etc/c100x-mqtt/config.ini mode 0100644\n")
+        with self.assertRaisesRegex(FirmwareError, "verification failed"):
+            self.build(payloads=payloads + [bad], inputs=inputs)
+        self.check_clean_failure()
+        original_pack = builder.pack
+
+        def tampered_pack(directory, output, sevenzip):
+            image = self.root / "tampered.ext4"
+            image.write_bytes(gzip.decompress((directory / "btweb_only.ext4.gz").read_bytes()))
+            self.commands("rm /etc/rc5.d/S99c100x-mqtt\n", image=image)
+            (directory / "btweb_only.ext4.gz").write_bytes(gzip.compress(image.read_bytes()))
+            original_pack(directory, output, sevenzip)
+
+        with patch.object(builder, "pack", side_effect=tampered_pack), self.assertRaises(FirmwareError):
+            self.build(payloads=payloads, inputs=inputs)
+        self.check_clean_failure()

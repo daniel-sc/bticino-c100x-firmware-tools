@@ -65,6 +65,25 @@ stock password hashes. The fixed settings are bundled as public profile data;
 normal log output and credential representations remain redacted. Personal SSH
 credentials, generated host keys and private device configuration are not bundled.
 
+## Local event-monitor interface (2026-10-31)
+
+Separate from the command-session handshake, stock `openserver` recognizes
+`*99*1##` as MONITOR (`research/device/openserver.c:6550–6650`). Its authentication
+decision explicitly exempts IPv4 loopback (`:5301–5343`). An SSH-executed observer
+successfully connected to `127.0.0.1:20000`, received ACK, sent `*99*1##`, received
+ACK and then read `##`-terminated frames without additional authentication.
+
+Live observation on the existing modified C100X established receipt of the
+household's exact doorbell event, call-state transitions during answer/hang-up,
+and the door-release press/release pair. See [ACCEPTANCE.md](ACCEPTANCE.md).
+The application monitor is not an exact replacement for all internal traffic
+visible to tcpdump; WHO-manager/HLS routing can distinguish those streams
+(`openserver.c:2752–2799,2480–2530`).
+
+Do not use internal port 31006 as another observer: stock `bt_vct`'s single-client
+monitor handler can close the existing vendor connection when a second arrives
+(offline disassembly `0x13440–0x13478`). The tested public monitor uses port 20000.
+
 ## Read-only identity
 
 | Request | Meaning / required result |

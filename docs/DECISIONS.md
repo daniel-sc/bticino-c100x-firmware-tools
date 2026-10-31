@@ -280,3 +280,46 @@ durability or household functional acceptance. Private reports survive; raw
 images are removed during normal cleanup. Implementation and publication do not
 authorize hardware writes. Detailed decisions are in
 [SSH-VERIFICATION-DESIGN.md](SSH-VERIFICATION-DESIGN.md).
+
+## ADR-013: Optional stock-runtime MQTT payload
+
+**Accepted 2026-10-31**, after the MQTT-payload design interview and live public
+monitor comparison recorded in [ACCEPTANCE.md](ACCEPTANCE.md).
+
+**Decision:** Add an explicitly selected `mqtt` image payload through the existing
+builder hooks. Keep the flasher unchanged and SSH independently selectable. Write
+small MIT-licensed scripts using stock Python 2.7 and `libmosquitto` via ctypes;
+do not redistribute vendor runtime binaries or import the legacy GPL supervisor.
+Use the evidenced public loopback monitor on port 20000, not tcpdump or the
+single-client internal monitor. Forward raw commands once, in order, through
+bounded short-lived connections to loopback port 30006. Do not retry uncertain
+delivery or synthesize the caller's door press/release sequence.
+
+Preserve the tested household event/command payloads and configurable-prefix
+`tx`, `rx`, `start_date`, `LastWillT` topics (default prefix `Bticino`). The public
+monitor is not byte-for-byte equivalent to legacy internal-traffic capture.
+Omit administrative JSON/file/shell commands and physical-button reporting.
+
+Require a private build-input object with numeric IPv4 broker address and
+username/password. V1 uses explicitly selected plaintext MQTT; TLS and runtime
+provisioning are deferred. Configuration changes use another build and flash.
+Ordinary events are QoS 0/non-retained; availability/startup information is
+retained. Use clean sessions, reject retained command replay, and discard pending
+work on detected connection failure. There is no persistent queue or deliberate
+replay, but undetected stalls may delay already-transmitted data. No timestamp
+protocol, synchronized clocks or HA configuration changes are required.
+
+One instance owns MQTT and monitor readiness, command forwarding and retained
+availability. Any connection failure makes the bridge offline and pauses commands
+until both paths recover. Manage only bridge resources: no vendor-service restart,
+gateway-ping gating, local broker, implicit SSH or reboot. Defaults: 15-second MQTT
+keepalive; reconnect delays 1/2/4/8/16/30 seconds, capped at 30; 1 MiB of rotated
+volatile raw-event diagnostics with credentials redacted.
+
+**Consequences:** `online` means monitored prerequisites are ready, not physical
+acceptance or instantaneous loss detection. The payload verifies installed bytes,
+metadata, startup integration and stock prerequisites offline. Target ABI/imports,
+fresh-image startup, reconnection and end-to-end household behavior need separate
+hardware acceptance. The successful observation used the installed legacy bridge
+for MQTT and door commands; it does not validate the new payload. Implementation
+authorization covers host-side code, documentation and offline checks, not flashing.

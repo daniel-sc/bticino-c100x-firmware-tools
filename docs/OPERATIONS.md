@@ -19,6 +19,32 @@ These are maintainer reference paths, not setup requirements for other users.
 New builds use the pinned original download or a supplied stock image as described
 in [BUILDER.md](BUILDER.md).
 
+### Legacy MQTT filter correction (2026-10-31)
+
+The selected November 2025 MQTT FWZ contains the same `/home/root/filter.py`
+as the October 27 device backup and October 31 pre-repair file (SHA-256
+`26ff7bb32580f74ab03626f6b78d00f6e22803f4d9b21a7cf1e98b94ebd2f162`).
+The Python-2 buffering defect predates this project's sessions: upstream
+`fquinto/bticinoClasse300x` commit `a97e1a6b393e102f885a910d0e502d65ef3857ba`
+(2022-07-21) introduced `for line in sys.stdin:`.
+
+Both local legacy `mqtt_scripts/filter.py` templates, under
+`research/bticinoClasse300x/` and the backup checkout above, now use
+`for line in iter(sys.stdin.readline, ""):`. Their builders copy this template
+directly to `/home/root/filter.py`. Corrected SHA-256:
+`1faaaeec571baab9856bffdca0c280a4bae41ae407e7a5811d559c1194fc903f`.
+Carry this one-line correction into any replacement upstream checkout before
+building MQTT firmware. The preserved old FWZ still contains the defect;
+reinstalling it restores the faulty filter. This project's optional `mqtt` payload
+uses the public monitor directly and does not install the legacy filter.
+
+Six relevant session histories were inspected. No recent filter installation
+preceded the October 31 repair. The Halloween session restarted HA and tested
+simulated sensor states on October 28; those tests bypassed the device/MQTT path.
+The precise trigger for the recent symptom remains unproven. Private history
+exports and the provenance record are in `.local/mqtt-provenance-20261031/`;
+the repair evidence is in `~/Developer/halloween-2026/private/klingel-repair-20261031T085754Z/`.
+
 ### SSH access
 
 The existing modified device can be reached with the user's `klingel` SSH alias

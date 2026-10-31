@@ -4,7 +4,7 @@ A command-line tool for building custom firmware images and flashing a
 **BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS.
 
 **Experimental:** image building and read-only USB preflight have passed local
-validation. Full native flashing and the generated images' boot/SSH behavior
+validation. Full native flashing and the generated images' boot/SSH/MQTT behavior
 still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
 
 ## What's included?
@@ -13,12 +13,14 @@ still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
   copy, apply selected payloads, and produce a new `.fwz` file.
 - **Bundled SSH payload:** configure administrative access with your public key,
   a password, or both. A binary/config/service example helps you add other payloads.
+- **Optional MQTT payload:** bridge public OpenWebNet events and raw commands
+  using stock runtime components and private build-time broker settings.
 - **Device flasher:** inspect an image, check the connected device, and explicitly
   start an update over USB. The stock-device flashing workflow does not require SSH.
 
 The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
-There is no GUI or ready-made MQTT/Home Assistant integration.
+There is no GUI or Home Assistant configuration/discovery integration.
 
 ## Quick start: download and build
 
@@ -96,6 +98,7 @@ RSA keys need a legacy client option, and Ed25519 keys are unsupported.
 | Goal | Guide |
 | --- | --- |
 | Use your own firmware file, choose SSH authentication, or inspect a build | [Builder usage](docs/BUILDER.md) |
+| Add the optional MQTT bridge | [MQTT payload](docs/BUILDER.md#optional-mqtt-bridge) |
 | Add scripts, binaries or configuration through a local payload | [Payload authoring](docs/BUILDER.md#authoring-trusted-payloads) |
 | Set up USB, run read-only checks, or flash an image | [Flashing guide](docs/FLASHING.md) |
 | Check what has actually been tested | [Validation and remaining hardware work](docs/ACCEPTANCE.md) |

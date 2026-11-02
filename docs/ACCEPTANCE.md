@@ -1,5 +1,13 @@
 # Hardware acceptance record
 
+**Status through 2026-10-31:** offline builds, packaged-tool checks and native
+read-only USB checks have passed. Full native flashing, recovery-mode networking,
+USB/SSH verification and generated-image boot/SSH/MQTT behavior remain unvalidated.
+
+The entries below are dated evidence and maintainer test plans, not current setup
+instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
+for the current one.
+
 ## 2026-10-31: Alpha.3 publication
 
 - Pushed implementation/review fixes at

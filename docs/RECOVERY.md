@@ -1,5 +1,8 @@
 # C100X boot fallback and rescue investigation
 
+Research evidence, not a tested repair walkthrough. For ordinary use, see
+[FLASHING.md](FLASHING.md).
+
 **2026-10-29 — read-only investigation of the existing modified C100X 1.5.8,
 hardware `02*06*0`, SHARK Dig-2/Car-6.**
 

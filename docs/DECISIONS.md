@@ -41,7 +41,7 @@ match the stock gadget/trusted-source configuration. Manage tools with mise.
 
 **Consequences:** There are two terminal lifecycles, and the helper output format
 is an integration dependency. Changing TetherKit needs revalidation of interface
-detection, reconnect and cleanup. Pin details are in [FLASHING.md](FLASHING.md).
+detection, reconnect and cleanup. Pin details are in [SOURCE.md](SOURCE.md#usb-helper-setup).
 Python 3.14.9 was selected after the research dependency `dissect.cstruct` failed
 under 3.15; this was an observed dependency issue, not proof the CLI cannot ever
 support newer Python. A VM/Windows runtime and SSH-based flashing are not part of

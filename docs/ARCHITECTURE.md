@@ -145,9 +145,9 @@ Native callbacks enqueue bounded commands; the same worker loop drives MQTT,
 event framing and command progress. A dead supervisor causes its worker to exit.
 No vendor process, updater or SSH service is managed by this payload. See
 [ADR-013](DECISIONS.md#adr-013-optional-stock-runtime-mqtt-payload) and
-[builder usage](BUILDER.md#optional-mqtt-bridge) for the compatibility contract.
+[builder reference](BUILDER-REFERENCE.md#mqtt-limits-and-diagnostics) for the compatibility contract.
 
-The builder's lifecycle and trust contract are detailed in [BUILDER.md](BUILDER.md).
+The builder's lifecycle and trust contract are detailed in [BUILDER-REFERENCE.md](BUILDER-REFERENCE.md).
 It starts from pinned stock, edits only a private main-filesystem copy, checks
 the baseline/output read-only with e2fsck, preserves archive components, and
 reopens the final FWZ before no-clobber publication. No filesystem is mounted.

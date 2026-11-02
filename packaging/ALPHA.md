@@ -1,26 +1,16 @@
 Self-contained builder and flasher for **Apple Silicon macOS**. See `release.json`
 for the artifact's minimum macOS version, bundled tool versions and source hashes.
 
-Open the DMG and drag `C100X` onto the Applications shortcut, then eject the DMG.
-Open a terminal in a writable working folder and run `/Applications/C100X/c100x --help`.
-Keep `c100x` and `support` together. No Homebrew, Python, Xcode or MyHOME setup.
-For a per-user installation, copy to `~/Applications` and adjust the paths below.
-Generated firmware belongs in your working folder, outside the installation.
-
-- Build as your ordinary user: `/Applications/C100X/c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password --output custom.fwz`
-- Read-only device preflight: `sudo /Applications/C100X/c100x plan custom.fwz`
-- Explicit firmware update: `sudo /Applications/C100X/c100x flash custom.fwz`
-
-Plan/flash manage USB networking automatically. Keep stable device power and USB
-throughout flashing. An error stops subsequent commands; uncertain writes are
-never retried, and cleanup does not reboot the device.
+Start with `README.md` in the downloaded `C100X` folder for installation and links
+to the build/flash guides. [Current online overview](https://github.com/daniel-sc/bticino-c100x-firmware-tools#readme).
+No Homebrew, Python, Xcode or MyHOME setup is required.
 
 **New in alpha.3:** optional `mqtt` builder payload using stock Python/libmosquitto
 and the public loopback event monitor. Supply private broker settings with
 `--inputs` and select `--payload mqtt`; SSH remains independently selectable.
 The bridge preserves the tested household bell and door-control payloads, rejects
 retained command replay and reconnects without deliberately replaying queued work.
-See the included builder guide for plaintext transport, topic configuration,
+See `docs/BUILDER.md` for plaintext transport, topic configuration,
 compatibility limits and diagnostics. No HA configuration is installed.
 
 **Experimental alpha:** offline tests and packaged smoke checks have passed.

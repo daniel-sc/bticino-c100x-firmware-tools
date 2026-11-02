@@ -1,90 +1,83 @@
-# Flashing from macOS
+# Flash firmware
 
-The bundled CLI manages USB networking and the researched OpenWebNet/FTP update
-flow in one terminal. **Alpha status:** native read-only USB checks passed in the
-earlier two-terminal workflow. Automatic session management is covered offline;
-FTP transfer, recovery-mode networking and full flashing still need hardware
-validation. See [ACCEPTANCE.md](ACCEPTANCE.md).
+Install using the [README](../README.md#installation), then use a compatible
+`.fwz` image, such as the one from [Build firmware](BUILDER.md). Stock devices
+do not need SSH. **Experimental:** full native flashing and generated-image
+behavior still need [hardware validation](ACCEPTANCE.md).
 
 ## Compatibility
 
-The target is **C100X Door Entry 1.5.8**, hardware `02*06*0`, object model `1.0.99`,
-initial status `4*0`. Firmware must retain the stock manifest, recovery and kernel
-and match the main-filesystem profile. These checks establish package
-compatibility, not bootability. The release manifest declares the minimum macOS
-version; the downloadable bundle is for Apple Silicon.
+Only **C100X Door Entry 1.5.8** is supported. Preflight checks hardware `02*06*0`,
+object model `1.0.99` and initial status `4*0`. Images must preserve the stock
+manifest, recovery and kernel and match the main-filesystem profile. Passing
+these checks does not prove bootability.
 
-## Download, inspect and flash
+## 1. Inspect and run preflight
 
-Download the DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases)
-and copy the `C100X` folder into a writable location. Keep the executable and its support
-folder together. No separate runtime, driver installation or MyHOME installer is
-needed. C100X profile provenance is recorded in [PROTOCOL.md](PROTOCOL.md).
-
-In a terminal in that folder:
+Open Terminal in the folder containing your image. These examples use the
+builder guide's working folder and filename; adjust them if needed:
 
 ```sh
-./c100x inspect-fw /path/to/custom.fwz
+cd ~/C100X-firmware
+/Applications/C100X/c100x inspect-fw custom.fwz
 ```
 
-Connect the powered intercom by USB, then run the read-only preflight:
+Inspection prints the validated image's metadata and checksums without contacting
+the device. Connect the powered intercom with a USB data cable, then run preflight:
 
 ```sh
-sudo ./c100x plan /path/to/custom.fwz
+sudo /Applications/C100X/c100x plan custom.fwz
 ```
 
-The command validates the image, starts the bundled USB helper, configures the
-reported feth interface, verifies the route to `192.168.129.1`, and checks device
-identity/status. It shuts down its helper on exit. Root is needed for macOS
-feth/BPF networking; image building should run without sudo.
+`sudo` asks for your Mac password. The tool manages USB networking automatically
+and checks device identity/status without writing firmware. A successful result
+includes `"device_writes": false` and the proposed sequence. If you want the
+[optional existing-SSH check](#optional-recovery-verification-existing-ssh), add
+its options to both preflight and flashing.
 
-To explicitly write firmware:
+## 2. Flash
+
+Keep the Mac awake, USB connected and device power stable throughout the update.
+This command explicitly writes firmware and reboots the intercom:
 
 ```sh
-sudo ./c100x flash /path/to/custom.fwz
+sudo /Applications/C100X/c100x flash custom.fwz
 ```
 
-This runs the same preflight and then performs all four payload writes and three
-reboot transitions. The helper stays alive through reconnects and configures each
-new interface; network operations check the managed USB route. No second terminal
-or manual `ifconfig`/route setup is required.
+Progress reports each stage; networking is maintained across the three reboot
+transitions. On error, keep the device powered and record the stage and message.
+There is no automatic retry, resume, rollback or cleanup reboot.
 
-Keep the Mac awake, USB connected and device power stable throughout flashing.
-The intercom's `C100X` storage volume is separate from USB networking; firmware
-is not copied to that volume. Eject it before an idle physical disconnect.
+The intercom may also expose a `C100X` storage volume. Do not copy firmware onto
+it; flashing uses USB networking. Eject that volume before disconnecting after
+the operation has finished.
 
-The sequence is recovery filesystem/kernel → reboot normal → clear main kernel →
-reboot recovery → main filesystem/kernel → reboot normal. Each payload is uploaded
-and committed separately. On error, keep the device powered and record the stage.
-The CLI stops subsequent actions; it does not retry uncertain writes, resume a
-partial update or reboot as cleanup. Cleanup only closes local resources.
+## 3. Check the result
 
-Before clearing the main kernel, the normal-reboot status check reflects stock
-firmware's installed recovery `uImage` CRC check on ordinary non-NFS boots. It
-does **not** verify the installed recovery filesystem or device-tree files. Full
-readback is available through the optional SSH check below; stock USB update
-services alone do not provide it. Details are in [PROTOCOL.md](PROTOCOL.md).
+Protocol completion is not functional acceptance. Check calls, two-way audio,
+video and door release, plus whichever features you selected:
 
-After protocol completion, test calls, audio/video, door release and payload
-behavior. For SSH, test each configured authentication method and host identity
-across a normal reboot. An ACK or completed sequence is not functional acceptance.
-
-Stock restoration through Windows first is an acceptance-test choice, not a
-protocol prerequisite. See [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
+- **SSH:** find the intercom's LAN address in your router and connect from the
+  same network with `ssh root2@INTERCOM_IP` (replace `INTERCOM_IP`). For the dedicated
+  key in the builder guide, insert `-i ~/.ssh/c100x_ecdsa` before `root2@INTERCOM_IP`.
+  Test each selected login
+  method and confirm host identity persists across a subsequent normal reboot.
+  A newly built image has a new host identity; investigate unexpected key changes.
+- **MQTT:** in your broker's MQTT client, subscribe to your prefix's `/LastWillT`
+  and `/tx` topics. Expect `online` when the bridge is ready and event frames
+  during a doorbell call. A retained `online` message alone does not prove event
+  delivery or household behavior. The [topic table](BUILDER.md#mqtt-bridge)
+  describes the interface.
 
 ## Optional recovery verification (existing SSH)
 
-If the **currently installed firmware** already has SSH enabled, add the same
-options to `plan` and `flash`. For the usual administrative `root2` account:
+If the **currently installed firmware** already has SSH enabled, add these options
+to `plan` and `flash`: `--verify-recovery-ssh --ssh-user root2 --ssh-password`.
+Here the password is the **existing intercom password**, not the new password
+chosen during a build. SSH in the incoming image cannot provide this access yet.
 
-```sh
-sudo ./c100x plan custom.fwz --verify-recovery-ssh --ssh-user root2 --ssh-password
-sudo ./c100x flash custom.fwz --verify-recovery-ssh --ssh-user root2 --ssh-password
-```
-
-Each command prompts once. The password stays in memory and is reused after the
-normal reboot. SSH uses the managed USB connection, not a LAN alias. Incoming
-firmware that enables SSH cannot provide this access yet.
+Each command prompts once; the password stays in memory. Verification uses the
+managed USB connection, not LAN SSH.
 
 `plan` checks prerequisites without firmware writes. During `flash`, the extra
 check runs **after writing recovery and rebooting normally, before clearing the
@@ -111,38 +104,20 @@ functions. USB/SSH hardware validation of this new feature remains pending.
 
 Use `sudo` from your ordinary account and an administrative device account (UID
 0). This mode requires managed USB, so it cannot be combined with `--external-usb`.
-Release bundles include the filesystem tools; source users need e2fsprogs.
+Release bundles include the required filesystem tools.
 
-## Development from source
+## Troubleshooting
 
-Source builds require Homebrew and Xcode Command Line Tools (C++ compiler/macOS
-SDK for TetherKit; full Xcode is not required). Install the command-line tools with
-`xcode-select --install` if needed, then from the repository root:
+- **Image rejected:** use a profile-compatible image; version 1.5.8 alone is not
+  enough. Building requires original stock; flashing accepts compatible custom images.
+- **USB preflight fails:** check device power and a data-capable cable. Keep the
+  reported error; manual network setup should not be necessary.
+- **SSH verification fails:** confirm that SSH already works on the installed
+  firmware and that you supplied its current credentials. A failed integrity check
+  needs investigation; it is not a reason to resume without verification.
+- **Flash fails:** preserve power and the stage/error output for investigation.
+  Do not rerun an uncertain write. There is no validated general rescue procedure;
+  [recovery evidence](RECOVERY.md) documents the limits.
 
-```sh
-brew install mise libusb pkgconf
-mise trust
-mise install python cmake
-git clone https://github.com/XiaoMiku01/TetherKit.git research/TetherKit
-git -C research/TetherKit checkout --detach 1ded051fd243c547fd6e250a898f0164cc30561d
-mise run transport-build
-mise run test
-mise exec -- ctest --test-dir .local/tetherkit-build --output-on-failure
-sudo "$(mise which python)" -m classe100x plan /path/to/custom.fwz
-```
-
-For debugging an independently supervised transport, run
-`sudo "$(mise which python)" -m classe100x usb` in one terminal, then use
-`mise exec -- python -m classe100x plan /path/to/custom.fwz --external-usb` in another.
-With `--external-usb`, the caller owns transport lifetime and route verification;
-this advanced mode does not start or clean up the existing helper. `probe` also
-uses an existing network connection and supports the research SSH tunnel.
-
-## Further reference
-
-- [Protocol](PROTOCOL.md): exact commands and evidence.
-- [Acceptance](ACCEPTANCE.md): observed results and pending hardware work.
-- [Boot fallback and rescue evidence](RECOVERY.md): what recovery covers and the
-  remaining serial/ROM rescue gaps.
-- [Operations](OPERATIONS.md): maintainer research and private backups.
-- [Releasing](RELEASING.md): CI packaging, signing and dependency sources.
+For implementation details, see [the protocol](PROTOCOL.md). Developers can use
+the separate [source and USB-helper setup](SOURCE.md#usb-helper-setup).

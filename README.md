@@ -13,8 +13,8 @@ still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
   copy, add features such as SSH or MQTT, and produce a new `.fwz` file.
 - **SSH access:** configure administrative access with your public key,
   a password, or both.
-- **MQTT bridge:** bridge public OpenWebNet events and raw commands
-  using stock runtime components and private build-time broker settings.
+- **MQTT bridge:** publish intercom events to your MQTT broker and receive raw
+  OpenWebNet commands, with broker settings supplied when building.
 - **Device flasher:** inspect an image, check the connected device, and explicitly
   start an update over USB. The stock-device flashing workflow does not require SSH.
 
@@ -22,12 +22,10 @@ The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
 
-The builder calls each optional customization a **payload**—for example,
-`--payload ssh` adds SSH and `--payload mqtt` adds MQTT. Both are included;
-you only need to supply their settings. Creating your own payload is an advanced
-option for adding something the included features do not provide.
+SSH and MQTT are independently optional and can be combined. Building creates a
+file on your Mac; flashing installs that file on the intercom.
 
-## Quick start: download and build
+## Installation
 
 Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
@@ -40,41 +38,25 @@ is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
 Each release's `release.json` records its minimum macOS version.
 Homebrew installation of `c100x` is not available yet; use the DMG.
 
-Open a terminal in a writable working folder for your firmware. Adjust the
-executable path if you chose a different installation folder:
+Open Terminal and check the installed version:
 
 ```sh
-/Applications/C100X/c100x builder-doctor
-/Applications/C100X/c100x build-fw --stock c100x-1.5.8 --payload ssh --ssh-password \
-  --output custom.fwz --report custom.build.json
+/Applications/C100X/c100x --version
 ```
 
-Enter the new SSH password when prompted. The account will be `root2`. The tool
-downloads and verifies stock firmware, works on a private copy, and checks the
-finished image. Keep `custom.fwz` private: it contains SSH credentials and a host
-private key. `custom.build.json` is a redacted report of offline checks.
+For a per-user installation, use `~/Applications/C100X/c100x` instead. Keep your
+firmware and private settings outside the installation folder.
 
-**Want MQTT too?** Follow [MQTT setup](docs/BUILDER.md#optional-mqtt-bridge)
-to supply your broker settings and add `--payload mqtt` to the build.
+## Build and install firmware
 
-Build as your ordinary user. To check and then explicitly flash a connected device:
+1. [Build firmware](docs/BUILDER.md): choose [SSH access](docs/BUILDER.md#ssh-access),
+   [MQTT](docs/BUILDER.md#mqtt-bridge), or both, and create a checked `.fwz` image.
+2. [Flash firmware](docs/FLASHING.md): connect by USB, run read-only preflight,
+   explicitly flash, then check the intercom's functions.
 
-```sh
-sudo /Applications/C100X/c100x plan custom.fwz
-sudo /Applications/C100X/c100x flash custom.fwz
-```
-
-USB networking is started, maintained across reboots, and cleaned up automatically.
-`plan` performs read-only device checks; `flash` writes firmware. See the
-[flashing guide](docs/FLASHING.md) for device compatibility and acceptance details.
-
-**Already have SSH enabled?** An optional [recovery verification check](docs/FLASHING.md#optional-recovery-verification-existing-ssh)
-reads back recovery before clearing the working normal kernel. Stock devices do
-not need SSH for the standard workflow.
-
-**Building and flashing are separate operations.** Existing outputs are never
-overwritten. Alpha downloads precede full hardware acceptance; v1 will follow
-successful native flashing and functional validation.
+Already have a compatible image? Start with the flashing guide. USB networking
+is managed automatically. Building runs as your normal user; device checks and
+flashing use `sudo`. Keep generated images private: they can contain credentials.
 
 ## Updating the Mac tool
 
@@ -85,58 +67,13 @@ Check the version with `/Applications/C100X/c100x --version`.
 Updating the Mac tool leaves the intercom unchanged. To update its SSH/MQTT
 features, rebuild from stock with your settings and flash the new image.
 
-## Run from source
+## Advanced use and development
 
-You need [Homebrew](https://brew.sh) and at least
-**4 GiB of free disk space**. Clone or download this repository, then open a
-terminal in its root directory—the folder containing `mise.toml`.
-
-Xcode Command Line Tools are needed when compiling the USB helper for flashing;
-the builder quick start uses prebuilt tools on Apple Silicon.
-
-```sh
-brew install mise e2fsprogs dropbear openssl
-mise trust
-mise install python 7zip
-mise exec -- python -m classe100x builder-doctor
-```
-
-```sh
-mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
-  --payload ssh --ssh-password \
-  --output .local/custom.fwz --report .local/custom.build.json
-```
-
-Prefer public-key login or an offline build? See the
-[builder guide](docs/BUILDER.md). Stock Dropbear supports ECDSA P-256 keys;
-RSA keys need a legacy client option, and Ed25519 keys are unsupported.
-
-## What next?
-
-| Goal | Guide |
-| --- | --- |
-| Use your own firmware file, choose SSH authentication, or inspect a build | [Builder usage](docs/BUILDER.md) |
-| Add the optional MQTT bridge | [MQTT setup](docs/BUILDER.md#optional-mqtt-bridge) |
-| Add your own files or startup service to the firmware (advanced) | [Create your own firmware customization](docs/BUILDER.md#create-your-own-firmware-customization) |
-| Set up USB, run read-only checks, or flash an image | [Flashing guide](docs/FLASHING.md) |
-| Check what has actually been tested | [Validation and remaining hardware work](docs/ACCEPTANCE.md) |
-
-Only use customizations from sources you trust: their build instructions run on
-your Mac with your user permissions.
-
-## Development
-
-```sh
-mise run test
-```
-
-Tests use simulated devices and synthetic filesystems; no intercom or root access
-is required. Builder integration tests run when their tools are installed.
-
-For implementation details, see the [architecture](docs/ARCHITECTURE.md),
-[design decisions](docs/DECISIONS.md), and [protocol evidence](docs/PROTOCOL.md).
-Run `mise exec -- python -m classe100x --help` for the command list.
-Release packaging and signing are documented in [RELEASING.md](docs/RELEASING.md).
+- [Custom payloads and builder reference](docs/BUILDER-REFERENCE.md): add your own
+  files or services. These instructions run on your Mac; use only trusted sources.
+- [Run from source and test](docs/SOURCE.md).
+- [Architecture](docs/ARCHITECTURE.md), [decisions](docs/DECISIONS.md),
+  [protocol evidence](docs/PROTOCOL.md), and [release packaging](docs/RELEASING.md).
 
 ## License
 

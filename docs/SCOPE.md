@@ -1,5 +1,9 @@
 # Native macOS Classe 100X flashing
 
+Historical project scope and research context, recorded during 2026-10-27–28.
+For current use, start with the [README](../README.md); validation results are
+tracked in [ACCEPTANCE.md](ACCEPTANCE.md).
+
 ## Goal
 
 Flash an existing, previously Windows-tested modified C100X 1.5.8 `.fwz`
@@ -10,8 +14,9 @@ the pinned stock original, with trusted local payloads and optional verified
 stock download. Home Assistant design remains outside the project. See ADR-007
 and [BUILDER.md](BUILDER.md).
 
-SSH on the currently modified intercom is available for read-only research.
-USB access requires manual setup and is only occasionally available.
+At the time of the initial research, SSH on the modified intercom was available
+for read-only work and USB access required manual setup. The distributed CLI now
+manages USB networking automatically.
 
 ## Acceptance
 
@@ -70,7 +75,7 @@ there. Legacy C100X support does exist.
   2026-10-27, followed by idle reconnect and supervisor cleanup checks. FTP,
   recovery-mode networking and flashing checks remain pending.
 
-## Current validation status
+## Validation snapshot (2026-10-28)
 
 Implemented `usb`, `probe`, `inspect-fw`, `plan`, `flash`, `fetch-fw`,
 `builder-doctor` and `build-fw`. Build and Flash are separate operations.

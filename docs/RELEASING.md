@@ -77,13 +77,18 @@ candidate DMG. These ad-hoc-signed candidates are CI artifacts only. Tags matchi
 sign all Mach-O files, test the signed bundle, notarize/staple the DMG, and publish
 a GitHub prerelease with sources, provenance and SHA-256 checksums.
 
+Choose a new tag matching `v0.<minor>.<patch>-alpha.<number>`. Use the same
+`VERSION` below for the local build, tag and download; never reuse a published tag.
 Build locally with Command Line Tools, the pinned helper, and mise Python:
 
 ```sh
 brew install e2fsprogs dropbear openssl@3 libusb sevenzip pkgconf xz zstd
-mise exec -- python packaging/build.py --version 0.1.0-alpha.1 --output .local/release
-mise exec -- python packaging/smoke.py .local/release/C100X
-mise exec -- python packaging/dmg.py .local/release/C100X .local/release/c100x-candidate.dmg
+printf 'New release tag: '
+read -r VERSION
+OUT=".local/release-$VERSION"
+mise exec -- python packaging/build.py --version "$VERSION" --output "$OUT"
+mise exec -- python packaging/smoke.py "$OUT/C100X"
+mise exec -- python packaging/dmg.py "$OUT/C100X" "$OUT/c100x-candidate.dmg"
 ```
 
 Choose a fresh output directory for each build. Python links explicitly to
@@ -96,13 +101,27 @@ the manifest minimum when dependencies require a newer OS; local Homebrew
 bottles may therefore require a newer OS than a GitHub-built release. The audit
 rejects missing arm64 slices, external libraries/symlinks and remaining rpaths.
 
-After CI passes and signing secrets are configured:
+Before tagging, commit the documentation alongside the code:
+
+- Check README setup/update instructions and `docs/BUILDER.md` against the release.
+- Update `packaging/ALPHA.md` for the chosen version. Preserve dated validation
+  history; add new results to `docs/ACCEPTANCE.md` only after observing them.
+- Check the candidate's `README.md`, short `README.txt` entry point and linked
+  `docs/` files. The package copies the repository README directly.
+
+After main CI passes and signing secrets are configured, tag the intended commit:
 
 ```sh
-git tag v0.1.0-alpha.1
-git push origin v0.1.0-alpha.1
-gh release download v0.1.0-alpha.1 --dir .local/downloaded-alpha
-(cd .local/downloaded-alpha && shasum -a 256 -c SHA256SUMS)
+git tag -a "$VERSION" -m "C100X $VERSION"
+git push origin "$VERSION"
+```
+
+After the tagged workflow publishes the release:
+
+```sh
+DOWNLOAD=".local/downloaded-$VERSION"
+gh release download "$VERSION" --dir "$DOWNLOAD"
+(cd "$DOWNLOAD" && shasum -a 256 -c SHA256SUMS)
 ```
 
 Assess the downloaded DMG with `spctl --assess --type open --context
@@ -110,5 +129,7 @@ context:primary-signature --verbose=2 <file.dmg>` and validate its stapled ticke
 Mount it read-only, copy out `C100X`, check its native Developer ID signatures,
 and repeat `packaging/smoke.py` against the copy. Gatekeeper's app-execution
 assessment can reject a bare CLI as "not an app" even with valid code signatures.
-Exercise real local firmware builds separately; firmware stays outside
-GitHub CI. Record observed results in ACCEPTANCE.md before claiming validation.
+Check the downloaded README and guide links as well. Exercise real local firmware
+builds separately; firmware stays outside GitHub CI. Record observed results in
+ACCEPTANCE.md before claiming validation, then update the online README's release
+link. Released documentation remains a snapshot; corrections ship in a new release.

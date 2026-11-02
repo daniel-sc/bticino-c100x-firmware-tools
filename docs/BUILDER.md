@@ -198,15 +198,107 @@ the profile. The real stock and SSH round trips passed with mise's 7zip 26.05.
 Windows/MyHOME import compatibility is a target, still awaiting an actual import
 test; matching ZIP properties is not that acceptance test.
 
-## Authoring trusted payloads
+<a id="authoring-trusted-payloads"></a>
+
+## Create your own firmware customization
+
+**This section is for advanced users adding their own files or services.**
+For the included SSH and MQTT features, use the setup instructions above; you do
+not need to write any of the files described here.
+
+A **payload** is a folder containing files to add to the firmware and instructions
+for the builder. The included `ssh` and `mqtt` folders are examples. You can make
+your own to add a configuration file, install a device-compatible program, or
+arrange for a service to start when the intercom boots.
+
+The builder copies the original firmware into a private working folder, applies
+your instructions to that copy, checks the result, and saves a new `.fwz` file.
+Installing that image on the intercom is a separate flashing step.
+
+**Why must you trust the source?** Build instructions run on your Mac with the
+same permissions as you. They can access your host files, not just the firmware
+copy. A private working folder does not isolate those instructions from your Mac.
+
+### Example: add a text file to the firmware
+
+This small example adds `/etc/c100x-note.txt` to the new image. It demonstrates
+how to include a file and check that it was installed correctly.
+
+Create a folder called `my-note` containing these four files:
+
+```text
+my-note/
+  payload.json       # identifies this customization
+  note.txt           # the file to include in the firmware
+  apply.debugfs      # instructions for editing the firmware filesystem
+  verify.py          # checks the installed file
+```
+
+**1. `payload.json` — name and supported firmware:**
+
+```json
+{"id":"my-note","version":"1","profile":"c100x-1.5.8","verification_required":true}
+```
+
+**2. `note.txt` — the file's contents:**
+
+```text
+Built with my custom firmware settings.
+```
+
+**3. `apply.debugfs` — copy the file and set its owner and permissions:**
+
+```text
+write note.txt /etc/c100x-note.txt
+set_inode_field /etc/c100x-note.txt uid 0
+set_inode_field /etc/c100x-note.txt gid 0
+set_inode_field /etc/c100x-note.txt mode 0100644
+```
+
+`debugfs` is the tool the builder uses to edit the Linux filesystem inside the
+firmware image. These are its commands, not shell commands. The first path is
+relative to your payload folder; `/etc/c100x-note.txt` is inside the image.
+The remaining lines make the file root-owned and readable by everyone, with only
+root allowed to change it. `0100644` includes the regular-file type and permissions.
+
+**4. `verify.py` — read the file back from the image and check it:**
+
+```python
+from classe100x.payload import Context
+
+c = Context()
+c.image.require_file(
+    "/etc/c100x-note.txt",
+    (c.directory / "note.txt").read_bytes(),
+    mode=0o644,
+)
+```
+
+This Python script runs on your Mac during the build. It checks the file's exact
+contents, root ownership and permissions. If a check fails, the build fails.
+
+From the folder containing `my-note`, run:
+
+```sh
+/Applications/C100X/c100x build-fw --stock c100x-1.5.8 \
+  --payload ./my-note --output custom-note.fwz --report custom-note.build.json
+```
+
+For a source checkout, replace `/Applications/C100X/c100x` with
+`mise exec -- python -m classe100x`. You can combine this with included features;
+for example, add `--payload ssh --ssh-password` to the same build command.
+
+### File and script reference
+
+For more involved customizations, the full folder structure is:
 
 ```text
 my-payload/
-  payload.json
-  prepare.py          # optional trusted host Python
-  apply.debugfs       # required raw commands
-  verify.py           # optional generally, required for bundled payloads
-  files/              # optional ordinary assets
+  payload.json        # required name, version and supported firmware
+  prepare.py          # optional Python script to check inputs and prepare files
+  apply.debugfs       # required instructions for editing the image
+  verify.py           # Python script to check the result; recommended
+  files/              # optional folder for files to include in the image
 ```
 
 ```json
@@ -216,6 +308,11 @@ my-payload/
 Set `"verification_required": true` to require `verify.py`. IDs are unique within
 a build. Repeating `--payload` defines execution order; there is no dependency
 solver, implicit SSH installation, command substitution or conflict inference.
+
+`prepare.py` and `verify.py` are also called **hooks**: Python scripts the builder
+runs before editing the image and when checking the result. They run on your Mac.
+Programs copied into the firmware must be compatible with the intercom's Linux/ARM
+environment; the builder does not run those programs on your Mac.
 
 The engine snapshots payload files into individual private directories and uses
 that directory as each hook/command file's working directory. Source symlinks
@@ -255,10 +352,8 @@ The supplied service script must use those paths. This demonstrates the
 binary/config/service pattern; it is not a maintained MQTT integration or proof
 of the binary's ABI/runtime compatibility. No target programs execute on the host.
 
-`debugfs` commands and Python hooks have the builder user's host permissions.
-Raw commands can access other host files and invoke a shell. The private
-workspace is **not a sandbox**. Review payloads as host programs. The engine
-neither proves the complete write set nor detects every service interaction.
+The builder does not determine every change a customization can make or detect
+every possible interaction between installed services.
 
 The backend checks process status and rejects stderr other than the recognized
 debugfs version banner. A failing mutation can return 0 and the rest of its batch

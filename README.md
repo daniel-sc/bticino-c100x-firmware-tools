@@ -10,10 +10,10 @@ still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
 ## What's included?
 
 - **Image builder:** download the verified original firmware or use your own
-  copy, apply selected payloads, and produce a new `.fwz` file.
-- **Bundled SSH payload:** configure administrative access with your public key,
-  a password, or both. A binary/config/service example helps you add other payloads.
-- **Optional MQTT payload:** bridge public OpenWebNet events and raw commands
+  copy, add features such as SSH or MQTT, and produce a new `.fwz` file.
+- **SSH access:** configure administrative access with your public key,
+  a password, or both.
+- **MQTT bridge:** bridge public OpenWebNet events and raw commands
   using stock runtime components and private build-time broker settings.
 - **Device flasher:** inspect an image, check the connected device, and explicitly
   start an update over USB. The stock-device flashing workflow does not require SSH.
@@ -21,6 +21,11 @@ still need hardware testing. See the [validation record](docs/ACCEPTANCE.md).
 The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
+
+The builder calls each optional customization a **payload**—for example,
+`--payload ssh` adds SSH and `--payload mqtt` adds MQTT. Both are included;
+you only need to supply their settings. Creating your own payload is an advanced
+option for adding something the included features do not provide.
 
 ## Quick start: download and build
 
@@ -33,6 +38,7 @@ together. The release includes Python and all required tools;
 [v0.1.0-alpha.3](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.3)
 is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
 Each release's `release.json` records its minimum macOS version.
+Homebrew installation of `c100x` is not available yet; use the DMG.
 
 Open a terminal in a writable working folder for your firmware. Adjust the
 executable path if you chose a different installation folder:
@@ -47,6 +53,9 @@ Enter the new SSH password when prompted. The account will be `root2`. The tool
 downloads and verifies stock firmware, works on a private copy, and checks the
 finished image. Keep `custom.fwz` private: it contains SSH credentials and a host
 private key. `custom.build.json` is a redacted report of offline checks.
+
+**Want MQTT too?** Follow [MQTT setup](docs/BUILDER.md#optional-mqtt-bridge)
+to supply your broker settings and add `--payload mqtt` to the build.
 
 Build as your ordinary user. To check and then explicitly flash a connected device:
 
@@ -66,6 +75,15 @@ not need SSH for the standard workflow.
 **Building and flashing are separate operations.** Existing outputs are never
 overwritten. Alpha downloads precede full hardware acceptance; v1 will follow
 successful native flashing and functional validation.
+
+## Updating the Mac tool
+
+Finish any running build or flash, download the newer DMG, and replace the entire
+installed `C100X` folder. Keep firmware and private settings outside that folder.
+Check the version with `/Applications/C100X/c100x --version`.
+
+Updating the Mac tool leaves the intercom unchanged. To update its SSH/MQTT
+features, rebuild from stock with your settings and flash the new image.
 
 ## Run from source
 
@@ -98,13 +116,13 @@ RSA keys need a legacy client option, and Ed25519 keys are unsupported.
 | Goal | Guide |
 | --- | --- |
 | Use your own firmware file, choose SSH authentication, or inspect a build | [Builder usage](docs/BUILDER.md) |
-| Add the optional MQTT bridge | [MQTT payload](docs/BUILDER.md#optional-mqtt-bridge) |
-| Add scripts, binaries or configuration through a local payload | [Payload authoring](docs/BUILDER.md#authoring-trusted-payloads) |
+| Add the optional MQTT bridge | [MQTT setup](docs/BUILDER.md#optional-mqtt-bridge) |
+| Add your own files or startup service to the firmware (advanced) | [Create your own firmware customization](docs/BUILDER.md#create-your-own-firmware-customization) |
 | Set up USB, run read-only checks, or flash an image | [Flashing guide](docs/FLASHING.md) |
 | Check what has actually been tested | [Validation and remaining hardware work](docs/ACCEPTANCE.md) |
 
-Only use payloads you trust: their commands and Python scripts run with your
-host-user permissions.
+Only use customizations from sources you trust: their build instructions run on
+your Mac with your user permissions.
 
 ## Development
 

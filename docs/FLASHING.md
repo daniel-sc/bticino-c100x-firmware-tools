@@ -92,7 +92,8 @@ check runs **after writing recovery and rebooting normally, before clearing the
 main kernel**. It compares the recovery filesystem and kernel/DTB contents with
 stock and checks the copied filesystems offline. Failure or uncertainty stops
 the update. This verifies integrity, not recovery bootability or household
-functions. USB/SSH hardware validation of this new feature remains pending.
+functions. The first hardware run passed this integrity gate; an uninterrupted
+full flash with alpha.4 and functional validation remain pending.
 
 - Allow several extra minutes and **512 MiB** of free space. SSH readiness is
   limited to two minutes; readback/analysis to fifteen minutes. Failed acquisitions

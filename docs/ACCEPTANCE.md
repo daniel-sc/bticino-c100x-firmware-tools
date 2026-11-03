@@ -11,6 +11,37 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-03: Alpha.4 publication and downloaded-bundle validation
+
+- Pushed reviewed implementation at
+  `64f05c27a88714addf87c782cb9d2d4148766cb4`. Main CI run `41724341757`
+  passed the full offline suite, pinned helper build/tests, relocatable package
+  assembly and expanded packaged smoke checks.
+- Tagged **v0.1.0-alpha.4** at that commit. Release CI run `41725306574`
+  passed, including signed-bundle smoke tests, Developer ID signing, notarization
+  and stapling. Published the
+  [alpha.4 prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.4)
+  at **21:57:35 UTC**, with the DMG, dependency sources, provenance and checksums.
+- Downloaded all assets and verified every SHA-256 checksum. DMG SHA-256:
+  `4a05039e1da0202a049d5de18e2c42e45ec22c05542eb3c230115bce86101ee4`.
+  Gatekeeper accepted it as Notarized Developer ID and its stapled ticket passed
+  validation. Mounted read-only, copied out the bundle and detached the DMG.
+- All **84 native files** passed strict signature verification and the expected
+  Developer ID team check. Copied CLI reports `v0.1.0-alpha.4`; provenance points
+  to the reviewed commit, minimum macOS **15.0**, architecture arm64. Changed
+  implementation modules match the checkout, and the bundled guide includes
+  installed recovery-command usage.
+- The downloaded bundle passed `packaging/smoke.py`: relocated path with spaces,
+  fresh HOME/system-only PATH, shipped tools/hooks/SSH IPC and the new USB,
+  storage-unmount, updater and CLI simulations. Downloads and the copied bundle
+  are private under `.local/downloaded-alpha4/`; `/Applications/C100X` was not
+  replaced. No device connection, storage unmount, firmware write or reboot was
+  performed during release validation.
+- Pending hardware work remains the uninterrupted full flash, idle-storage
+  unmount/network check, notification behavior across three reboots and detailed
+  functional acceptance. Issue #1 has the implementation and validation update;
+  its hardware observations remain open for the next authorized run.
+
 ## 2026-11-03: Alpha.4 pre-release review and issue #1
 
 - Two independent, initially unprimed reviewers found the same cancellation gap:

@@ -99,7 +99,9 @@ def main() -> int:
             from .download import fetch_stock
             from .builder import interrupted_build
             with interrupted_build():
-                print(fetch_stock(args.cache))
+                path = fetch_stock(args.cache)
+            print(path)
+            print(f"Stock firmware verified and available at: {path}", file=sys.stderr)
         elif args.command == "builder-doctor":
             from .builder import builder_tools, tool_versions
             from .host import find_tool, run_tool
@@ -121,6 +123,14 @@ def main() -> int:
                 except FirmwareError:
                     result["ssh_tools"][name] = {"available": False}
             print(json.dumps(result, indent=2))
+            print("Core builder tools found and versions checked.", file=sys.stderr)
+            missing = [name for name, capability in (("dropbearkey", "ecdsa_p256"), ("openssl", "sha512_crypt"))
+                       if not result["ssh_tools"][name].get(capability)]
+            if missing:
+                print(f"Optional SSH tool checks incomplete: {', '.join(missing)} (missing tool or required capability).",
+                      file=sys.stderr)
+            else:
+                print("Optional SSH tool checks passed.", file=sys.stderr)
         elif args.command == "build-fw":
             if os.geteuid() == 0:
                 raise ValueError("Build firmware as your ordinary user, without sudo")
@@ -159,9 +169,11 @@ def main() -> int:
                                overrides={"debugfs": args.debugfs, "e2fsck": args.e2fsck, "7zip": args.sevenzip},
                                report_path=args.report, progress=lambda msg: print(msg, file=sys.stderr))
             print(json.dumps(result, indent=2))
+            print(f"Build completed. Offline checks passed. Image saved to: {args.output.absolute()}", file=sys.stderr)
         elif args.command == "probe":
             with ReadOnlyClient(args.host, args.port, args.timeout) as client:
                 print(json.dumps(client.inspect(), indent=2))
+            print("Device information read successfully.", file=sys.stderr)
         elif args.command == "usb":
             run_usb(args.tetherkit)
         else:
@@ -193,6 +205,10 @@ def main() -> int:
                         else:
                             flash(firmware, NetworkDevice("192.168.129.1", check_transport=check_transport),
                                   C100X_PROFILE, report=lambda text: print(text, flush=True), verification=verification)
+            if args.command == "inspect-fw":
+                print("Firmware validation passed.", file=sys.stderr)
+            elif args.command == "plan":
+                print("Preflight passed. All requested preflight checks passed. No firmware was written.", file=sys.stderr)
         return 0
     except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:
         print(f"{args.command} failed: {exc}", file=sys.stderr)

@@ -30,8 +30,9 @@ sudo /Applications/C100X/c100x plan custom.fwz
 ```
 
 `sudo` asks for your Mac password. The tool manages USB networking automatically
-and checks device identity/status without writing firmware. A successful result
-includes `"device_writes": false` and the proposed sequence. If you want the
+and checks device identity/status without writing firmware. Success is confirmed
+by a **Preflight passed** message; the JSON includes `"device_writes": false`
+and the proposed sequence. If you want the
 [optional existing-SSH check](#optional-recovery-verification-existing-ssh), add
 its options to both preflight and flashing.
 

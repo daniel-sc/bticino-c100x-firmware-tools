@@ -231,7 +231,7 @@ def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProf
         stage = "update sequence completed"
         if verification is not None:
             verification.update_result("completed", stage)
-        report("Update sequence completed; verify calls, audio/video, door release and SSH")
+        report("Update sequence completed; verify calls, audio/video, door release and any enabled SSH/MQTT features")
         return info
     except (UpdateError, ProtocolError, OSError) as exc:
         if verification is not None:

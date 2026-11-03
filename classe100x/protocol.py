@@ -139,6 +139,19 @@ class ReadOnlyClient(AbstractContextManager):
             self.close()
             raise
 
+    def idle(self) -> bool:
+        """Query 42: no active update child, not proof of successful writes."""
+        deadline = time.monotonic() + self.timeout
+        try:
+            self._send(b"*#13**42##", deadline)
+            reply = self.stream.receive(deadline)
+            if reply not in (ACK, NACK):
+                raise ProtocolError("Unexpected update-worker status")
+            return reply == ACK
+        except BaseException:
+            self.close()
+            raise
+
     def inspect(self) -> dict[str, tuple[str, ...]]:
         result = {label: self.query(dimension) for dimension, label in READ_QUERIES.items()}
         # Device type 200 is shared by multiple products. The extended identity

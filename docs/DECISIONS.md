@@ -61,7 +61,8 @@ OpenWebNet commands. Do not substitute direct partition writes or synthesize the
 manifest's absent extra files.
 
 **Consequences:** Four payload writes and three reboot boundaries are required by
-this implementation. There is no recovery-skip or main-only shortcut. The six
+normal-entry flashing. ADR-014 adds an explicit main installation from an already
+running recovery environment after investigation of a stopped update. The six
 absent extras in both researched packages do not block their separate firmware
 actions. Exact commands and source references are in [PROTOCOL.md](PROTOCOL.md).
 
@@ -323,3 +324,93 @@ fresh-image startup, reconnection and end-to-end household behavior need separat
 hardware acceptance. The successful observation used the installed legacy bridge
 for MQTT and door commands; it does not validate the new payload. Implementation
 authorization covers host-side code, documentation and offline checks, not flashing.
+
+## ADR-014: Explicit main installation from running recovery
+
+**Accepted 2026-11-03**, following a stopped hardware flash and the user's request
+to finish recovery on the Mac.
+
+**Context:** Alpha.3 completed recovery integrity verification and acknowledged
+main-kernel invalidation, then failed to verify reconnection. Subsequent read-only
+probes established matching identity, recovery state `1*0` and an idle worker.
+macOS had bound recovery's ECM network function to native `en7`, rather than the
+managed helper's `feth` interface. The exact original timeout cause remains
+unproven. Vendor `UpdateFrwFullEth` and `DoFileTransfer` support main installation
+from recovery using recovery FTP credentials.
+
+**Decision:** Add separate `plan-recovery` (device-read-only) and `recover`
+(explicit write) commands. Validate the whole FWZ, require matching recovery
+identity and an immediately idle worker, then reuse the existing main filesystem,
+kernel, close/settle and verified-normal-reboot sequence. Do not clear the main
+kernel again or rewrite recovery. A prior report is not an authorization token;
+the operator must establish that this is an appropriate new main installation,
+not a retry of an uncertain main write.
+
+For these commands, discover native Ethernet only beneath the fixed C100X USB
+VID/PID in IORegistry; reject multiple devices/interfaces, configure `.2/30` and
+require the destination route through that interface. If native networking
+disappears, start the existing managed helper for normal-mode RNDIS. Keep helper
+lifetime and signal cleanup scoped to the command. Ordinary `flash` retains its
+normal-state entry. ADR-015 subsequently unifies transport across these commands
+and ordinary flashing.
+
+**Consequences:** No generic resume journal, rollback, raw-partition restore,
+write retry or cleanup reboot is introduced. Recovery-mode SSH is not required.
+The commands initially exist in source only, not installed alpha.3 bundles.
+Offline checks and observed live results are recorded separately in ACCEPTANCE.md.
+
+## ADR-015: One managed session for native ECM and helper-backed RNDIS
+
+**Accepted 2026-11-03**, following successful explicit recovery installation and
+the user's request to prevent the normal flasher's recovery-reconnection failure.
+
+**Context:** The recovery-only path worked through native ECM and then the helper
+after normal reboot, but ordinary `flash` still used a feth-only managed session.
+An offline replay through that session and the actual reboot gate reproduced
+`Reboot/reconnection was not verified` when recovery used native `en7`, even with
+valid recovery identity and reset uptime. The exact original helper trace was
+not retained, but this is a confirmed defect matching the observed handover.
+
+**Decision:** Use one managed USB session for `plan`, `flash`, `plan-recovery` and
+`recover`. Discover native Ethernet by C100X USB ancestry on each transport check.
+Stop/reap the worker before configuring native ECM; start a new worker when no
+native interface is available. Worker startup must not block native discovery:
+poll feth readiness non-blockingly within bounded parent-side waiting. Preserve
+USB-only routing, single-device checks for native discovery, signal cleanup,
+expected identity/state, reset-uptime proof and all no-write-retry behavior.
+
+**Consequences:** Both handover directions are supported in source. Mode/interface
+changes are logged. No longer timeout or automatic flash retry is needed for this
+defect. The standalone developer `usb` command remains the RNDIS helper supervisor;
+`--external-usb` callers still own their transport. An uninterrupted hardware
+flash with this change is pending; alpha.3 requires a new release to include it.
+
+## ADR-016: Best-effort USB storage unmount before planned reboots
+
+**Accepted 2026-11-03**, implementing GitHub issue
+[#1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/1).
+
+**Context:** C100X USB exposes storage alongside networking. Re-enumeration can
+disconnect a mounted volume, producing a macOS notification even though firmware
+transfers use FTP. Storage preparation must not eject the network device or alter
+the researched firmware-write sequence.
+
+**Decision:** A small standard-library host helper uses IORegistry USB ancestry
+(`1da4:0056`) to select exactly one whole disk, then `diskutil list -plist` to
+check whether it is mounted. Rediscover and compare USB/media registry identities
+before ordinary `diskutil unmountDisk`; skip absent/unmounted storage and warn on
+ambiguity, command failure or timeout. Use a ten-second total budget and maximum
+five-second subprocess waits. No force, eject, persistent settings or dependencies.
+
+Inject the helper only for `flash`/`recover`, at the central planned-reboot boundary.
+Refresh the stock command session's 30-second idle timer with a read before the
+bounded host work, then recheck transport and sample uptime for reboot proof.
+Unmount failures warn and permit the planned sequence to continue; cancellation
+still stops before reboot. No command is retried, and error cleanup never invokes
+the helper or reboots the device.
+
+**Consequences:** Offline fixtures cover identification, disk renumbering/replacement,
+absent/unmounted/ambiguous storage, errors/timeouts, budgets and protocol ordering.
+Hardware acceptance must separately show preserved USB control after idle unmount
+and notification behavior during all three planned reboot boundaries. Failure of
+this optional host step alone does not establish firmware failure.

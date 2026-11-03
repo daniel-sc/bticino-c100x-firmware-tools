@@ -167,6 +167,39 @@ The selected recovery and kernel files are byte-identical to stock. See
 
 Deliberate fault injection is restricted to simulation.
 
+### Explicit recovery entry (2026-11-03)
+
+Source `plan-recovery`/`recover` require compatible state `1*0` and an immediately
+idle query-42 response. `recover` then executes steps 5–6 above using the same
+main-transfer implementation and recovery credentials. It sends no recovery
+transfer or main-kernel-invalidation command. Full archive validation remains
+mandatory; uncertain main writes must be investigated, not automatically retried.
+
+Supporting vendor evidence: `ProtocolHelperEth.UpdateFrwLauncher` calls
+`UpdateFrwFullEth` (lines 303–309); that routine authenticates, transfers the main
+firmware and requests reboot (1516–1535). `EthernetProtocolUtility.DoFileTransfer`
+selects recovery FTP credentials when the authenticated state is recovery
+(1313–1346). This is the same tail reached by the normal recovery-first sequence.
+
+After the reported alpha.3 stop, read-only probes observed matching recovery state
+`1*0`, advancing uptime and an idle worker. IORegistry showed an AppleUserECM
+interface beneath USB `1da4:0056`, with the `.1` route through native `en7` at
+`.2/30`. These establish working recovery control/networking, not completed main
+installation or the precise cause of the earlier reconnection timeout.
+
+The subsequent recovery-entry run completed main transfers and verified normal
+boot. An offline replay through the original managed session and actual reboot
+gate reproduced the timeout with valid recovery identity/uptime when the route
+changed to native ECM. Source managed sessions now switch in both directions
+between native ECM and helper RNDIS (ADR-015). The update frames and reboot-proof
+criteria are unchanged; an uninterrupted hardware flash with this fix is pending.
+
+Alpha.4 also performs best-effort host storage unmounting before each planned
+reboot (issue #1 / ADR-016). A query-19 read refreshes the 30-second command idle
+timer before the ten-second host budget; transport and uptime are read again
+afterward. This adds only read-only protocol traffic. The reboot frame is still
+sent once, and host unmount failure does not become a device retry or cleanup reboot.
+
 The actual device's boot environment was read on 2026-10-29. Its normal-to-recovery
 fallback checks the kernel image and DTB load, not later Linux/rootfs/application
 health. Bootloader and rescue evidence, including limitations of public recovery

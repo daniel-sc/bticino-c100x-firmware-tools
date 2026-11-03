@@ -70,18 +70,6 @@ class UpdateClient(ReadOnlyClient):
     def commit(self, payload: Payload) -> None:
         self._once(f"*#13**#35*{payload.size}*0*{payload.cksum}##".encode(), "start payload write")
 
-    def idle(self) -> bool:
-        deadline = time.monotonic() + self.timeout
-        try:
-            self._send(b"*#13**42##", deadline)
-            reply = self.stream.receive(deadline)
-            if reply not in (ACK, NACK):
-                raise ProtocolError("Unexpected update-worker status")
-            return reply == ACK
-        except BaseException:
-            self.close()
-            raise
-
     def finish(self) -> None:
         self._once(b"*#13**#33*0##", "close FTP")
 
@@ -95,11 +83,12 @@ class UpdateClient(ReadOnlyClient):
 class NetworkDevice:
     def __init__(self, host: str, port: int = 20000, *, timeout: float = 30,
                  reboot_timeout: float = 240, write_timeout: float = 180,
-                 check_transport=lambda: None):
+                 check_transport=lambda: None, before_reboot=None):
         self.host, self.port, self.timeout = host, port, timeout
         self.reboot_timeout, self.write_timeout = reboot_timeout, write_timeout
         self.client: UpdateClient | None = None
         self.check_transport = check_transport
+        self.before_reboot = before_reboot
 
     def connect(self) -> dict:
         self.close()
@@ -147,6 +136,12 @@ class NetworkDevice:
 
     def reboot_and_wait(self, status: int) -> dict:
         self.check_transport()
+        if self.before_reboot is not None:
+            # Refresh openserver's 30-second idle timer before the bounded
+            # (10-second total) host unmount. Sample reboot uptime afterward.
+            self.client.query(19)
+            self.before_reboot()
+            self.check_transport()
         before = uptime_seconds(self.client.query(19))
         started = time.monotonic()
         self.client.reboot()
@@ -180,24 +175,39 @@ class NetworkDevice:
 def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
           report=print, *, verification=None) -> dict:
     """Three verified reboot boundaries; any failure stops subsequent writes."""
+    return _flash(firmware, device, profile, report, verification=verification)
+
+
+def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
+                   report=print) -> dict:
+    """Explicit main installation from already running recovery; never a write retry."""
+    return _flash(firmware, device, profile, report, from_recovery=True)
+
+
+def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False):
     stage = "preflight"
     try:
         info = device.connect()
-        check_identity(info, 4)
+        check_identity(info, 1 if from_recovery else 4)
         if verification is not None:
             verification.preflight()
             verification.update_result("in_progress", stage)
             # SSH work can outlast openserver's 30-second command idle timer.
             info = device.connect()
             check_identity(info, 4)
-        for recovery, names, credentials in (
+        transfers = (
             (True, RECOVERY_FILES, profile.normal),
             (False, MAIN_FILES, profile.recovery),
-        ):
+        )
+        for recovery, names, credentials in transfers[1:] if from_recovery else transfers:
             target = "recovery" if recovery else "main"
             stage = f"{target}: starting transfer"
             report(stage)
-            device.wait_idle()
+            if from_recovery:
+                if not device.client.idle():
+                    raise UpdateError("Recovery update worker is busy; no transfer was started")
+            else:
+                device.wait_idle()
             device.client.begin(recovery)
             for name in names:
                 payload = firmware.payload(name)

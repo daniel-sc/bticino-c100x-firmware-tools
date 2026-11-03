@@ -50,8 +50,15 @@ transitions. On error, keep the device powered and record the stage and message.
 There is no automatic retry, resume, rollback or cleanup reboot.
 
 The intercom may also expose a `C100X` storage volume. Do not copy firmware onto
-it; flashing uses USB networking. Eject that volume before disconnecting after
-the operation has finished.
+it; flashing uses USB networking. Starting with alpha.4, before each planned reboot
+the flasher makes a best-effort ordinary unmount of storage identified beneath the
+C100X USB hardware. It rediscovers disk numbers each time and skips ambiguous
+matches. The host-side attempt has a 10-second total budget; failure warns and
+does not by itself abort flashing. It never forces an unmount or ejects the USB
+device. `plan`/`plan-recovery` do not unmount storage. This is intended to reduce
+macOS's “disk not ejected properly” notification; elimination across all reboot
+boundaries still needs hardware confirmation. Eject any mounted C100X volume
+before disconnecting after the operation has finished.
 
 ## 3. Check the result
 
@@ -109,6 +116,12 @@ Release bundles include the required filesystem tools.
 
 ## Troubleshooting
 
+- **Alpha.3 stops at `entering recovery: rebooting`:** recovery may have booted
+  successfully while macOS switched to native ECM networking. Assess read-only
+  identity/status first. Alpha.4 supports both ECM and helper RNDIS during
+  ordinary flashing; installed alpha.3 does not contain this fix. The recovery-entry
+  commands below were used to complete one such stopped installation.
+
 - **Image rejected:** use a profile-compatible image; version 1.5.8 alone is not
   enough. Building requires original stock; flashing accepts compatible custom images.
 - **USB preflight fails:** check device power and a data-capable cable. Keep the
@@ -122,3 +135,33 @@ Release bundles include the required filesystem tools.
 
 For implementation details, see [the protocol](PROTOCOL.md). Developers can use
 the separate [source and USB-helper setup](SOURCE.md#usb-helper-setup).
+
+## Finishing from an already running recovery environment
+
+**Available starting with v0.1.0-alpha.4.** Use this after assessing
+a stopped update that reached recovery before starting the main installation.
+It is not a retry procedure for an uncertain main-filesystem/kernel write.
+
+`plan-recovery` validates the full image and requires matching C100X 1.5.8 identity,
+status `1*0` and an idle worker without writing to the device. `recover` repeats
+those checks, installs the main filesystem and kernel through the vendor updater,
+and requests one reboot, requiring normal state `4*0` and reset uptime afterward.
+It does not need SSH. The original recovery-verification report remains unchanged.
+
+With alpha.4 or newer installed, adjust the image path to your working folder:
+
+```sh
+sudo /Applications/C100X/c100x plan-recovery ~/C100X-firmware/custom.fwz
+```
+
+After **Preflight passed**, explicitly start the main installation:
+
+```sh
+sudo /Applications/C100X/c100x recover ~/C100X-firmware/custom.fwz
+```
+
+All managed commands support macOS's native recovery ECM interface and
+switch to/from the bundled USB helper when normal boot requires RNDIS. Interface
+names are discovered, not hard-coded. Keep power/USB stable and the Mac awake. On
+an error, stop and preserve the output; do not rerun an uncertain write. After completion, perform the
+[functional checks](#3-check-the-result). See [ADR-014](DECISIONS.md#adr-014-explicit-main-installation-from-running-recovery).

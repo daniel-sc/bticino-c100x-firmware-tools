@@ -61,10 +61,41 @@ class CliTests(unittest.TestCase):
         self.network.assert_not_called()
         self.assertEqual(self.device.events, [])
 
+    def test_recovery_plan_is_read_only_and_requires_idle_recovery(self):
+        client = self.probe.return_value.__enter__.return_value
+        client.inspect.return_value = identity(1)
+        client.idle.return_value = True
+        status, output = self.invoke("plan-recovery")
+        self.assertEqual(status, 0)
+        result = json.loads(output)
+        self.assertFalse(result["device_writes"])
+        self.assertTrue(result["worker_idle"])
+        self.assertEqual(result["sequence"], ["main filesystem", "main kernel", "reboot to normal"])
+        self.network.assert_not_called()
+        self.usb.assert_called_once()
+        client.idle.return_value = False
+        self.assertEqual(self.invoke("plan-recovery")[0], 1)
+        client.inspect.return_value = identity(4)
+        self.assertEqual(self.invoke("plan-recovery")[0], 1)
+
+    def test_recover_uses_recovery_credentials_and_only_main_payloads(self):
+        self.device.initial = identity(1)
+        with patch.object(self.device, "upload", wraps=self.device.upload) as upload:
+            status, _ = self.invoke("recover")
+        self.assertEqual(status, 0)
+        self.assertEqual([call.args[0].name for call in upload.call_args_list],
+                         ["btweb_only.ext4.gz", "uImage.zip"])
+        self.assertTrue(all(call.args[1] is C100X_PROFILE.recovery for call in upload.call_args_list))
+        self.assertEqual([e for e in self.device.events if e.startswith("reboot")], ["reboot-4"])
+        self.assertNotIn("invalidate-main-kernel", self.device.events)
+        self.usb.assert_called_once()
+        self.usb.return_value.__exit__.assert_called_once()
+
     def test_flash_uses_bundled_settings_for_each_running_environment(self):
         with patch.object(self.device, "upload", wraps=self.device.upload) as upload:
             status, _ = self.invoke("flash")
         self.assertEqual(status, 0)
+        self.assertIs(self.network.call_args.kwargs["before_reboot"], cli.unmount_usb_storage)
         expected = (C100X_PROFILE.normal, C100X_PROFILE.normal,
                     C100X_PROFILE.recovery, C100X_PROFILE.recovery)
         self.assertEqual(upload.call_count, 4)
@@ -78,14 +109,14 @@ class CliTests(unittest.TestCase):
         info["object_model"] = ("1", "0", "98")
         self.probe.return_value.__enter__.return_value.inspect.return_value = info
         self.device.initial = info
-        for command in ("plan", "flash"):
+        for command in ("plan", "flash", "plan-recovery", "recover"):
             with self.subTest(command=command):
                 self.assertEqual(self.invoke(command)[0], 1)
-        self.assertEqual(self.device.events, ["connect", "close"])
+        self.assertEqual(self.device.events, ["connect", "close", "connect", "close"])
 
     def test_invalid_firmware_stops_before_any_device_connection(self):
         self.prepare.return_value.__enter__.side_effect = FirmwareError("Invalid fixture image")
-        for command in ("plan", "flash"):
+        for command in ("plan", "flash", "plan-recovery", "recover"):
             with self.subTest(command=command):
                 self.assertEqual(self.invoke(command)[0], 1)
         self.probe.assert_not_called()

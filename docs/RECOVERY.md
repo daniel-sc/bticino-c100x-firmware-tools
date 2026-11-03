@@ -164,8 +164,11 @@ For a future failed update:
    routing state. `1da4:0056` with network interface `MI_00` is the reported
    Windows driver case, not a ROM-download identifier.
 3. Establish read-only identity/status before choosing another write operation.
-   The current native `flash` command requires normal state 4 at entry; it is
-   **not** a recovery-state resume command. Do not bypass that check.
+   The native `flash` command requires normal state 4 at entry; it is
+   **not** a recovery-state resume command. Do not bypass that check. Alpha.4
+   `plan-recovery`/`recover` now provide an explicit main installation from
+   matching idle recovery state 1 after assessment; see the
+   [recovery-entry workflow](FLASHING.md#finishing-from-an-already-running-recovery-environment).
 4. If the vendor tool can communicate with the matching device in its actual
    state, the established MyHOME workflow is the candidate repair route. The
    linked driver script is third-party material, not a locally validated tool.

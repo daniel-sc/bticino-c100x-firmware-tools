@@ -12,7 +12,8 @@
 - Bundle TetherKit, libusb, e2fsprogs, 7zip, Dropbear keygen and OpenSSL. Use
   relative library paths, preserve license notices, and publish dependency source
   archives/build metadata beside binaries.
-- `plan`/`flash` own USB startup, readiness, route checks, reconnection and cleanup.
+- `plan`/`flash` and `plan-recovery`/`recover` own USB startup, readiness, route
+  checks, ECM/RNDIS handover and cleanup.
   Firmware validation precedes USB startup. The updater retains its existing
   recovery-first sequence and never retries uncertain writes. Local cleanup does
   not send device commands. `--external-usb` is an advanced development escape hatch.

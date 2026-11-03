@@ -1,12 +1,98 @@
 # Hardware acceptance record
 
-**Status through 2026-10-31:** offline builds, packaged-tool checks and native
-read-only USB checks have passed. Full native flashing, recovery-mode networking,
-USB/SSH verification and generated-image boot/SSH/MQTT behavior remain unvalidated.
+**Status through 2026-11-03:** offline builds, packaged-tool checks and native
+read-only USB checks have passed. A hardware flash passed recovery integrity
+verification but stopped at recovery-reboot verification. Subsequent recovery-entry
+installation completed the main filesystem/kernel update and verified normal boot.
+An uninterrupted full flash with the unified USB-session fix and detailed
+SSH/MQTT/household functional acceptance remain pending.
 
 The entries below are dated evidence and maintainer test plans, not current setup
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
+
+## 2026-11-03: Alpha.4 pre-release review and issue #1
+
+- Two independent, initially unprimed reviewers found the same cancellation gap:
+  a signal during live helper handover could interrupt `ExitStack` teardown.
+  A regression failed for SIGINT/SIGTERM/SIGHUP before the fix and passed after
+  deferring cancellation until bounded worker cleanup completes. The reviewer
+  verified the fix and found no remaining substantive issue in that change.
+- Implemented issue #1's USB-associated, dynamic, ordinary best-effort storage
+  unmount with a ten-second total budget. Tests cover identification, ambiguity,
+  disk changes, absent/unmounted media, command failures/timeouts, cancellation
+  and ordering at each planned reboot. User documentation and ADR-016 record the
+  warning-only policy and hardware limits.
+- With USB disconnected, observed that `ioreg -a -r -c IOUSBHostDevice` can emit
+  empty output instead of a plist. Both discovery paths now treat that as absence;
+  network discovery then waits for transport rather than failing plist parsing.
+- A fresh independent release review found only the then-missing issue #1 user
+  documentation, now added. The full suite with the native MQTT fixture library
+  passed **177 tests, no skips**. Packaged smoke checks now also run USB handover,
+  storage, updater and CLI simulations using the relocated bundled interpreter.
+- Hardware was disconnected before storage-helper work. **Pending:** idle-device
+  unmount followed by read-only USB probing; notification observation across all
+  three reboots in a separately authorized full flash. No hardware unmount,
+  firmware write or reboot was performed for this issue's implementation/review.
+
+## 2026-11-03: Main installation completed; unified USB handover regression
+
+- The user supplied successful source `plan-recovery` output for the same image
+  SHA-256 `b22897d4c69f504ef0f91d3974f9967b4b1407a32152c261489dd302cb8c9cf8`.
+  It records matching recovery state `1*0`, uptime 17:15, an idle worker and
+  `device_writes: false`.
+- The subsequent user-run `recover` log records main filesystem upload/write,
+  kernel upload/write, reboot, managed helper readiness and **Update sequence
+  completed**. That message is emitted only after verifying normal identity/state
+  `4*0` and reset uptime. The main filesystem came from the selected custom FWZ;
+  the shared kernel remains the stock-pinned component by design.
+- This establishes protocol completion across the original stopped flash plus
+  explicit recovery entry, not a successful uninterrupted alpha.3 flash or a
+  full main-filesystem readback. The user reports "all good"; individual calling,
+  audio/video, door-release and new SSH/MQTT checks have not been reported.
+- An offline replay through the real `NetworkDevice.reboot_and_wait` and managed
+  USB session reproduced the exact original error with a valid recovery reply
+  and the observed native `en7` route. The feth-only session rejects the native
+  route. Unified transport handling now discovers native ECM while the helper is
+  waiting, stops/reaps the old helper before using ECM and starts a fresh helper
+  when normal RNDIS returns. Identity, route, reset-uptime and no-write-retry
+  requirements remain in force (ADR-015).
+- Regression tests cover the complete RNDIS → ECM → RNDIS handover, worker
+  cleanup, exactly one reboot request and ECM appearing before a helper reports
+  any feth interface. The fix was tested offline; no additional device write or
+  reboot was performed to test it. Installed alpha.3 remains unchanged.
+- Final `mise run test`: **165 tests, 162 passed, 3 optional MQTT native ABI tests
+  skipped**. The previously failing handover replay passes with exactly one
+  reboot request and both helper processes reaped. `git diff --check` passed.
+
+## 2026-11-03: Stopped alpha.3 flash and live recovery assessment
+
+- User ran installed alpha.3 against `~/klingel-fw/custom.fwz` with optional
+  existing-SSH verification. Image SHA-256 is
+  `b22897d4c69f504ef0f91d3974f9967b4b1407a32152c261489dd302cb8c9cf8`;
+  a subsequent complete offline source inspection passed with the same hash.
+- The supplied log records recovery filesystem/kernel transfers, a verified
+  normal reboot, successful SSH readback, acknowledged main-kernel invalidation,
+  then failure to verify the reboot/reconnection into recovery. No main upload
+  appears in that sequence.
+- Private report `~/klingel-fw/c100x-verification-20261103T205438Z-i754cv4k/report.json`
+  records passed preflight and integrity verification, matching rootfs/kernel
+  contents, independent partition hashes and filesystem checks, with update outcome
+  `stopped` at `entering recovery: rebooting`. Raw copies were removed. Its changed
+  SSH host-key warning did not block the integrity check.
+- Subsequent live read-only probes returned device 200, firmware 1.5.8, hardware
+  `02*06*0`, model `1.0.99`, state `1*0`, and advancing recovery uptime (first
+  observed 5:26). A later query 42 ACK established an idle update worker.
+- Host IORegistry shows USB `1da4:0056` with an AppleUserECM Ethernet interface,
+  native `en7` at `192.168.129.2/30`; the device route uses that interface. This
+  establishes recovery boot/control availability after the failed reconnection
+  gate. The exact cause of the earlier timeout is not yet proven.
+- Added source-only `plan-recovery`/`recover` under ADR-014. Offline simulations
+  cover main-only ordering/credentials, wrong state/identity, busy entry,
+  disconnection at each step, native USB ancestry/routing and transition to the
+  existing helper. `mise run test`: **163 tests, 160 passed, 3 optional MQTT native
+  ABI tests skipped**. No write/reboot was sent during this follow-up assessment;
+  running the recovery command and functional acceptance were pending at this point.
 
 ## 2026-10-31: Alpha.3 publication
 

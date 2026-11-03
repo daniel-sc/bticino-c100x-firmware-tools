@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from classe100x.firmware import Payload, PreparedFirmware, SELECTED_SHA256
 from classe100x.protocol import ACK, FrameStream, ProtocolError
-from classe100x.updater import NetworkDevice, UpdateClient, UpdateError, UncertainDelivery, check_identity, flash, uptime_seconds
+from classe100x.updater import NetworkDevice, UpdateClient, UpdateError, UncertainDelivery, check_identity, flash, flash_recovery, uptime_seconds
 from classe100x.vendor import Credentials, VendorProfile
 
 
@@ -40,6 +40,10 @@ class SimulatedDevice:
 
     def wait_idle(self):
         self.event("idle")
+
+    def idle(self):
+        self.event("check-idle")
+        return True
 
     def begin(self, recovery):
         self.event("begin-recovery" if recovery else "begin-main")
@@ -140,6 +144,57 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         self.assertEqual(observed, [b"*#13**#35*100*0*123##", b""])
         self.assertIsNone(client.stream)
+
+
+class RecoveryUpdateTests(unittest.TestCase):
+    setUp = UpdaterTests.setUp
+
+    def run_update(self, device):
+        return flash_recovery(self.firmware, device, self.profile, report=lambda _: None)
+
+    def test_recovery_entry_writes_only_main_with_one_reboot(self):
+        device = SimulatedDevice(initial=identity(1))
+        with patch.object(device, "upload", wraps=device.upload) as upload:
+            result = self.run_update(device)
+        self.assertEqual(result, identity(4))
+        self.assertEqual(device.events, [
+            "connect", "check-idle", "begin-main", "upload-btweb_only.ext4.gz",
+            "commit-btweb_only.ext4.gz", "idle", "upload-uImage.zip",
+            "commit-uImage.zip", "idle", "finish", "settle", "reboot-4", "close",
+        ])
+        self.assertTrue(all(call.args[1] is self.profile.recovery for call in upload.call_args_list))
+
+    def test_disconnection_at_each_step_stops_all_subsequent_actions(self):
+        complete = SimulatedDevice(initial=identity(1))
+        self.run_update(complete)
+        for index, event in enumerate(complete.events[:-1]):
+            with self.subTest(index=index, event=event):
+                device = SimulatedDevice(initial=identity(1), fail=index)
+                with self.assertRaises(UpdateError):
+                    self.run_update(device)
+                self.assertEqual(device.events, complete.events[:index + 1] + ["close"])
+
+    def test_normal_mode_cannot_start(self):
+        device = SimulatedDevice()
+        with self.assertRaises(UpdateError):
+            self.run_update(device)
+        self.assertEqual(device.events, ["connect", "close"])
+
+    def test_wrong_recovery_identity_cannot_start(self):
+        for key, value in (("hardware", ("2", "7", "0")), ("object_model", ("1", "0", "98")),
+                           ("firmware", ("2", "0", "0")), ("update_status", ("1", "47"))):
+            info = identity(1)
+            info[key] = value
+            device = SimulatedDevice(initial=info)
+            with self.subTest(key=key), self.assertRaises(UpdateError):
+                self.run_update(device)
+            self.assertEqual(device.events, ["connect", "close"])
+
+    def test_busy_recovery_cannot_start(self):
+        device = SimulatedDevice(initial=identity(1))
+        with patch.object(device, "idle", return_value=False), self.assertRaisesRegex(UpdateError, "busy"):
+            self.run_update(device)
+        self.assertEqual(device.events, ["connect", "close"])
 
 
 class SimulatedVerification:
@@ -294,6 +349,34 @@ class NetworkWaitTests(unittest.TestCase):
             self.device.wait_idle()
         self.client.reboot.assert_not_called()
         self.client.finish.assert_not_called()
+
+    def test_host_preparation_is_before_each_single_planned_reboot(self):
+        events = []
+
+        def prepare():
+            events.append("unmount")
+            self.clock += 10
+
+        self.device.before_reboot = prepare
+        probe = patch("classe100x.updater.ReadOnlyClient").start().return_value.__enter__.return_value
+        for status in (4, 1, 4):
+            events.clear()
+            self.device.client = self.client
+            self.client.query.side_effect = lambda _: events.append("uptime") or ("0", "0", "10", "0")
+            self.client.reboot.side_effect = lambda: events.append("reboot")
+            info = identity(status)
+            info["uptime"] = ("0", "0", "0", "1")
+            probe.inspect.return_value = info
+            with patch.object(self.device, "connect", return_value=info):
+                self.assertEqual(self.device.reboot_and_wait(status), info)
+            self.assertEqual(events, ["uptime", "unmount", "uptime", "reboot"])
+        self.assertEqual(self.client.reboot.call_count, 3)
+
+    def test_cancelled_host_preparation_never_reboots(self):
+        self.device.before_reboot = MagicMock(side_effect=KeyboardInterrupt)
+        with self.assertRaises(KeyboardInterrupt):
+            self.device.reboot_and_wait(4)
+        self.client.reboot.assert_not_called()
 
     def test_stale_normal_reply_is_not_a_completed_reboot(self):
         probe = patch("classe100x.updater.ReadOnlyClient").start().return_value.__enter__.return_value

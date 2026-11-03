@@ -30,7 +30,7 @@ def main():
                                   capture_output=True, check=True, timeout=120).stdout
         cli = bundle / "c100x"
         run(cli, "--version")
-        for command in ("build-fw", "inspect-fw", "plan", "flash", "usb"):
+        for command in ("build-fw", "inspect-fw", "plan", "flash", "plan-recovery", "recover", "usb"):
             run(cli, command, "--help")
         doctor = json.loads(run(cli, "builder-doctor"))
         assert doctor["ssh_tools"]["openssl"]["sha512_crypt"]
@@ -60,7 +60,17 @@ def main():
             "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern='test_ssh.py'); "
             "result = unittest.TextTestRunner().run(suite); "
             "raise SystemExit(not result.wasSuccessful())",
-            bundle / "support/app", Path(__file__).resolve().parent.parent / "tests")
+             bundle / "support/app", Path(__file__).resolve().parent.parent / "tests")
+
+        # Exercise USB handover/recovery sequencing with simulated devices using
+        # the shipped interpreter and modules, including isolated child workers.
+        for pattern in ("test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py"):
+            run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
+                "import sys, unittest; sys.path.insert(0, sys.argv[1]); "
+                "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern=sys.argv[3]); "
+                "result = unittest.TextTestRunner().run(suite); "
+                "raise SystemExit(not result.wasSuccessful())",
+                bundle / "support/app", Path(__file__).resolve().parent.parent / "tests", pattern)
 
         # Fixture creation is a host build-time operation; all tested operations
         # below use only shipped tools. mke2fs is not an end-user dependency.

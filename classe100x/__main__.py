@@ -12,12 +12,13 @@ from .protocol import ProtocolError, ReadOnlyClient
 from .transport import run_usb
 from .resources import tetherkit, version
 from .usb_session import usb_session
-from .updater import NetworkDevice, UpdateError, check_identity, flash
+from .usb_storage import unmount_usb_storage
+from .updater import NetworkDevice, UpdateError, check_identity, flash, flash_recovery
 from .vendor import C100X_PROFILE
 
 
 def recovery_verification(args, firmware, check_transport):
-    if not args.verify_recovery_ssh:
+    if args.command in ("plan-recovery", "recover") or not args.verify_recovery_ssh:
         return nullcontext(None)
     from .recovery import RecoveryVerifier
     from .ssh import SSHConnection
@@ -73,11 +74,14 @@ def main() -> int:
         ("inspect-fw", "Validate firmware and calculate payload checksums offline"),
         ("plan", "Validate firmware and device identity without device writes"),
         ("flash", "Write recovery and main firmware, including recovery-mode transition and reboots"),
+        ("plan-recovery", "Read-only preflight for main installation from running recovery"),
+        ("recover", "Install main firmware from idle recovery state 1 and reboot to normal"),
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("firmware", type=Path)
-        if name in ("plan", "flash"):
+        if name != "inspect-fw":
             command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the USB helper executable")
+        if name in ("plan", "flash"):
             command.add_argument("--external-usb", action="store_true", help="Advanced: use an already running USB supervisor")
             command.add_argument("--verify-recovery-ssh", action="store_true", help="Optional: require installed recovery readback before clearing the main kernel (existing SSH required)")
             command.add_argument("--ssh-user", help="Existing administrative SSH account for recovery verification")
@@ -182,13 +186,17 @@ def main() -> int:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
                 else:
-                    session = nullcontext(lambda: None) if args.external_usb else usb_session(args.tetherkit)
+                    from_recovery = args.command in ("plan-recovery", "recover")
+                    external_usb = not from_recovery and args.external_usb
+                    session = nullcontext(lambda: None) if external_usb else usb_session(args.tetherkit)
                     with session as check_transport, recovery_verification(args, firmware, check_transport) as verification:
                         check_transport()
-                        if args.command == "plan":
+                        if args.command in ("plan", "plan-recovery"):
                             with ReadOnlyClient("192.168.129.1") as client:
                                 info = client.inspect()
-                            check_identity(info, 4)
+                                check_identity(info, 1 if from_recovery else 4)
+                                if from_recovery and not client.idle():
+                                    raise UpdateError("Recovery update worker is busy; no transfer was started")
                             if verification is not None:
                                 verification.preflight()
                             result = {
@@ -198,16 +206,24 @@ def main() -> int:
                                              "main kernel", "reboot to normal"],
                                 "device_writes": False,
                             }
+                            if from_recovery:
+                                result["sequence"] = ["main filesystem", "main kernel", "reboot to normal"]
+                                result["worker_idle"] = True
                             if verification is not None:
                                 result["sequence"].insert(3, "SSH recovery integrity verification")
                                 result["verification_report"] = str(verification.directory / "report.json")
                             print(json.dumps(result, indent=2))
                         else:
-                            flash(firmware, NetworkDevice("192.168.129.1", check_transport=check_transport),
-                                  C100X_PROFILE, report=lambda text: print(text, flush=True), verification=verification)
+                            device = NetworkDevice("192.168.129.1", check_transport=check_transport,
+                                                   before_reboot=unmount_usb_storage)
+                            report = lambda text: print(text, flush=True)
+                            if from_recovery:
+                                flash_recovery(firmware, device, C100X_PROFILE, report=report)
+                            else:
+                                flash(firmware, device, C100X_PROFILE, report=report, verification=verification)
             if args.command == "inspect-fw":
                 print("Firmware validation passed.", file=sys.stderr)
-            elif args.command == "plan":
+            elif args.command in ("plan", "plan-recovery"):
                 print("Preflight passed. All requested preflight checks passed. No firmware was written.", file=sys.stderr)
         return 0
     except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:

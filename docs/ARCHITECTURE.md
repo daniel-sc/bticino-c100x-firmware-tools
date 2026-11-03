@@ -35,6 +35,14 @@ uses the reported feth interface. Reconnection and FTP setup recheck this route.
 `--external-usb` retains the developer-managed transport mode. `probe` accepts
 host/port overrides and uses an existing connection, including the research tunnel.
 
+All managed commands use one USB session across both environments: native
+Ethernet discovered beneath the C100X USB VID/PID, or the existing helper when
+native Ethernet is absent. Native `.2/30` configuration and destination routing
+are checked before device access. During reconnection the parent checks for ECM
+even when the worker has not reported a feth interface, stops/reaps the helper
+before using native ECM, and starts a fresh helper if RNDIS returns. An arbitrary
+LAN `en` interface is never accepted (ADR-015).
+
 ## Module responsibilities
 
 | Module | Responsibility and boundary |
@@ -53,7 +61,8 @@ host/port overrides and uses an existing connection, including the research tunn
 | `recovery.py` | Optional pre-write SSH prerequisites and post-recovery-write integrity gate; bounded acquisition, offline checks and private evidence |
 | `ssh.py`, `ssh_askpass.py`, `ssh-askpass` | Fixed USB OpenSSH reads, invoking-user authentication, memory-only password broker and warning-only host-key evidence |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
-| `usb_session.py` | Parent-owned USB worker, readiness/route checks, bounded startup and cleanup |
+| `usb_session.py` | Native ECM/helper RNDIS selection, parent-owned worker, readiness/route checks, bounded startup and cleanup |
+| `usb_storage.py` | Bounded best-effort macOS unmount of USB-associated storage before planned reboot; no device protocol or persistent host settings |
 | `resources.py`, `entrypoint.py` | Relocatable release assets and isolated child interpreter entry points |
 
 The CLI composes these modules. The updater depends on protocol, firmware metadata
@@ -118,6 +127,18 @@ there is no persistent resume journal, automatic rollback or write retry.
 The updater closes its local socket in `finally`; that cannot cancel work already
 accepted by the device. Staged local files are removed on normal context exit and
 handled exceptions, not guaranteed after abrupt process death.
+
+`recover` is a separate explicit entry into the shared main-transfer sequence.
+It requires matching state `1*0` and an idle worker, writes only main filesystem
+and kernel, then verifies one normal reboot. `plan-recovery` performs only local
+validation and device reads. Neither command interprets a previous report as a
+resume token; the interrupted state must be assessed first.
+
+The CLI injects host storage preparation only into write-capable `NetworkDevice`
+instances. Before each planned reboot, query 19 refreshes the command idle timer,
+then a best-effort unmount uses a ten-second total budget. Transport is rechecked
+and uptime sampled afterward for the existing reboot proof. Preflight and error
+cleanup never unmount storage or request a reboot (ADR-016).
 
 The optional verifier runs prerequisites before the first recovery write. At its
 gate it reads only the fixed recovery partitions, requires them unmounted by

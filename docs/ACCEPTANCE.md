@@ -11,6 +11,35 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-04: Alpha.6 publication and downloaded-bundle validation
+
+- Committed/pushed the independently reviewed changes as
+  `a833f9e92316f698bd5853e79e860c5e0b3668f9`. Main CI `41908753233` passed
+  offline tests, USB helper build/tests and candidate packaged checks. Tagged
+  `v0.1.0-alpha.6` at that commit; release CI `41910819831` passed signing,
+  notarization, stapling and publication at **21:05:47 UTC**.
+- Downloaded all published assets and verified every SHA-256. DMG SHA-256:
+  `77f12ca0fdfed25b080f549f7eea0abd286519b97b5dca6be842d36068da954e`.
+  Gatekeeper accepted Notarized Developer ID; the stapled ticket validated.
+  Copied the bundle from a read-only DMG and detached it.
+- All **84 native files** passed strict Developer ID signature/team checks.
+  Manifest matches the release commit, arm64 and macOS **15.0** minimum. CLI
+  reports alpha.6; shipped SSH-v2 payload files match the reviewed source. Bundled
+  guides include SSH lifecycle verification. Relocated packaged smoke passed.
+- The actual downloaded CLI built an SSH-v2 image from pinned stock successfully,
+  including filesystem and final archive/payload readback checks. Private result:
+  `.local/ssh-diagnosis-20261104/alpha6-bundled.fwz`, SHA-256
+  `da10ee3d9d23642c08623bc99888a364e4a9e077c561c8d35eeefd5f99609ea9`.
+- Updated/pushed Homebrew cask version/checksum in tap commit `fdf626a`.
+  Strict audit/style passed. Because the user's alpha.5 cask was installed,
+  verified installation through a temporary renamed smoke cask and app directory:
+  PATH-linked alpha.6 version, builder tools, launcher signature and SSH-v2 assets
+  passed. Removed that test installation/cask; the user's alpha.5 was preserved.
+- Release verification was host-only. No new image has been flashed; failure-state
+  boot verification and household checks remain pending. Keep working vendor
+  `abil_ssh=1` through the old-image/recovery stages; exercise the disabled setting
+  only after verifying the new image's independent service.
+
 ## 2026-11-04: Independently owned SSH image service (offline)
 
 - Implemented SSH payload version 2 and ADR-017: `c100x-ssh` owns its defaults,

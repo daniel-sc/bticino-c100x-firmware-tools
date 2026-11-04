@@ -11,6 +11,35 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-04: Alpha.5 publication and downloaded-bundle validation
+
+- Tagged **v0.1.0-alpha.5** at reviewed commit
+  `adf4df91db8f0ffdfccdd737e774596194083aab` after main CI passed. Tagged
+  workflow `41836811783` passed offline tests, helper build/tests, package checks,
+  Developer ID signing, notarization and stapling. Published the
+  [alpha.5 prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.5)
+  at **13:26:30 UTC**.
+- Downloaded all assets; every SHA-256 checksum matched. Published DMG SHA-256:
+  `33a08dc2123bbf5d8426a714c476775a2909189eab2c0f119fe1150b56618ba2`.
+  Gatekeeper accepted Notarized Developer ID and the stapled ticket validated.
+  Mounted read-only, copied the bundle, and detached the DMG.
+- All **84 native files** passed strict Developer ID signature/team checks.
+  Provenance matches the reviewed commit, arm64 and minimum macOS **15.0**.
+  Copied CLI reports alpha.5; Python modules match the checkout. Bundled README
+  and guides include diagnostics and Homebrew installation instructions.
+- The downloaded copy passed relocated `packaging/smoke.py`, including diagnostics,
+  SSH, USB/storage, updater and CLI simulations. A real missing-file CLI invocation
+  also confirmed `--debug` traceback/error output. Assets and copied bundle remain
+  private under `.local/downloaded-alpha5/`.
+- Updated the public Homebrew tap to alpha.5 and the published DMG checksum in
+  `4029328`. Strict cask audit/style passed. Installed into a temporary application
+  directory, verified PATH-linked `c100x --version`, builder-doctor capabilities
+  and launcher signature, then removed the test install and temporary PATH link.
+  The existing `/Applications/C100X` installation was preserved.
+- No hardware access, storage unmount on the intercom, firmware write or reboot
+  was performed. Uninterrupted flashing, USB-storage notification observations,
+  detailed functional acceptance and the earlier SSH failure diagnosis remain pending.
+
 ## 2026-11-04: Alpha.5 independent review and candidate checks
 
 - Two fresh, independent standards/spec reviewers found a USB worker regression:
@@ -28,6 +57,15 @@ for the current one.
 - Alpha.5 notes and the existing Homebrew setup/release documentation were reviewed
   against the implementation and public tap. Candidate/release publication and
   downloaded-bundle verification are recorded separately after completion.
+- Committed and pushed the reviewed candidate as
+  `adf4df91db8f0ffdfccdd737e774596194083aab`. Main CI `41835761805` passed
+  offline tests, the pinned helper build/tests and relocated packaged smoke checks.
+- A real offline no-payload build from pinned stock passed all checks. Its main
+  filesystem SHA-256 remains
+  `80f04c61a9a34032e397d1dc6a1209ad029162a59d08981d7fd9f81348264354`;
+  generated FWZ SHA-256 is
+  `4b729d4700fcdc4609c999b2fea3f924ab396270691e292480f7c4303d4edd96`.
+  Private image/report/log remain under `.local/alpha5-noop*`.
 - No hardware access or device-changing operation was performed during this review.
 
 ## 2026-11-04: Failure diagnostics (offline)

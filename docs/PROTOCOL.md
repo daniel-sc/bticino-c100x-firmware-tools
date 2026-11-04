@@ -66,6 +66,50 @@ credential representations and known passwords remain redacted; failed FTP
 operations now retain the server's original error and operation context. Personal SSH
 credentials, generated host keys and private device configuration are not bundled.
 
+## Saved-configuration export (research, 2026-11-04)
+
+MyHOME calls device-to-host configuration transfer `uploadConfiguration`.
+`EthernetCommandParser.cs:265–276` and
+`EthernetProtocolUtility.cs:1313–1454` in the BTESUXP.ETH decompilation establish:
+
+1. `*#13**#31*0##`: stage saved configuration and start FTP; require ACK.
+2. FTP `RETR conf.zip`, using the profile's `ftp_*_uploadCfg` settings.
+3. `*#13**32##`: read `*#13**32*<length>*0*<POSIX checksum>##`, then ACK;
+   compare both with the downloaded file.
+4. `*#13**#33*0##`: normal export close; require ACK.
+
+Matching `research/device/bt_device.c:6591–6647` reads persistent
+`/home/bticino/cfg/extra/conf/conf.img` after its 1024-byte header into the
+temporary FTP archive, replacing staged files and restarting FTP. It does not
+apply configuration. Checksum handling is at `:5675–5704`; close at `:6747–6792`
+stops FTP and removes staging files, with a conditional configuration-status
+transition. This is **not** part of the side-effect-free preflight allowlist.
+The inspected image's `bt_device` matches the decompiled binary, SHA-256
+`e0db9d2d01e549479a0c3e832a6dbcb76a5d355d95b3105d00fe1eb303b604be`.
+
+The sequence was exercised once from matching normal state with an idle worker,
+without retries, configuration apply or reboot. It retrieves saved configuration,
+not necessarily the current in-memory `/var/tmp/conf.xml`. Results are recorded
+in [ACCEPTANCE.md](ACCEPTANCE.md); no supported CLI export command is implemented.
+
+### Configuration apply used for the SSH repair
+
+MyHOME names host-to-device configuration transfer `downloadConfiguration`.
+The same parser/transfer implementation establishes `*#13**#30*0##`, FTP
+`STOR conf.zip` using `ftp_*_downloadCfg`,
+`*#13**#32*<length>*0*<POSIX checksum>##`, worker query `*#13**42##`, then
+normal transfer close `*#13**#33*0##`. This is an explicit configuration write.
+The MyHOME date/time-setting step is separate and was not needed for this repair.
+
+`bt_device.c:6527–6589` enters configuration-transfer mode and prepares FTP.
+`:6649–6745` validates size/checksum, backs up the runtime XML, extracts the
+archive, checks its XML declaration and marks the configuration changed.
+`bt_daemon.c:520–605` observes runtime XML changes, persists them through its
+normal configuration writer and may restart application services; its parent
+handles child exit 10 at `:2733–2752`. Acknowledgement alone does not prove saved
+configuration or activation. The repair separately verified a new export,
+runtime `abil_ssh=1`, SSH listeners and authenticated access on both interfaces.
+
 ## Local event-monitor interface (2026-10-31)
 
 Separate from the command-session handshake, stock `openserver` recognizes
@@ -337,6 +381,10 @@ Read-only stock-file inspection confirmed:
   to generic `-r`, and only generates an RSA key when that configured file does
   not exist. The default read-only-rootfs key path is volatile. The factory-key
   copy is conditional on runlevel 4, not the normal runlevel 5.
+- Its `NO_START` gate runs before dispatching both start and stop. SSH payload v2
+  sets `NO_START=1` in that image file and installs a separate `c100x-ssh` service,
+  removing the race with vendor calls. Its private PID file is supplied through
+  Dropbear `-P`; `-r` supplies the persistent host key.
 - `/etc/default/dropbear` initially sets `DROPBEAR_EXTRA_ARGS="-B"`.
 - `/home/root` is root-owned 0700; `.ssh` is absent. `/etc/dropbear` initially has
   UID/GID 1000:1000 and mode 0775. The SSH payload intentionally changes that
@@ -346,7 +394,7 @@ Read-only stock-file inspection confirmed:
 The payload's guarded input hashes are in `payloads/ssh/common.py`; proprietary
 file contents remain local. Original account entries are preserved, including
 vendor-specific duplicate passwd entries. The bundled payload appends `root2`
-and enables the existing init script, rather than replacing the daemon.
+and reuses the stock daemon under its own init script (ADR-017).
 
 Upstream references used as supporting evidence:
 
@@ -354,7 +402,13 @@ Upstream references used as supporting evidence:
   `97ce7e9b95acc3a337a3d6657b023314e15882db`, `FirmwareRegistry.cs`,
   `Ext4Probe.cs` and the C100X 1.5.8 verification record.
 - Dropbear tag `DROPBEAR_2017.75`, `svr-runopts.c` (`-s` disables password login;
-  `-B` permits blank passwords), `svr-auth.c`, `svr-authpubkey.c` and `signkey.c`.
+  `-B` permits blank passwords, `-P` selects the PID file), `svr-auth.c`,
+  `svr-authpubkey.c` and `signkey.c`.
+- BusyBox 1.27.2 `debianutils/start_stop_daemon.c`: `-K -t -q` checks for a live
+  process matching both `-p` PID file and `-x` executable; `-K` sends TERM. The
+  SSH service uses bounded process checks rather than `--retry`, which this
+  BusyBox implementation accepts but ignores. Target applet execution remains a
+  hardware acceptance check.
 - Its 2020.79 changelog introduces Ed25519 and RSA-SHA2 support; do not attribute
   those capabilities to the stock 2017.75 daemon.
 

@@ -77,6 +77,41 @@ video and door release, plus whichever features you selected:
   delivery or household behavior. The [topic table](BUILDER.md#mqtt-bridge)
   describes the interface.
 
+### SSH lifecycle verification (alpha.6-built images)
+
+After flashing an image built with SSH payload v2, log in and confirm:
+
+```sh
+cat /etc/default/c100x-ssh
+tail -n 1 /etc/default/dropbear
+/etc/init.d/c100x-ssh status
+```
+
+Expect `PASSWORD_AUTH=0` for key-only or `1` for password-enabled builds,
+`NO_START=1` in the vendor defaults, and `c100x-ssh: running`. These checks establish
+that the new service is installed before exercising the former failure path.
+
+Invoke the exact vendor stop entry point, then check the owned service:
+
+```sh
+/etc/init.d/dropbear stop
+/etc/init.d/c100x-ssh status
+```
+
+Open a **new** SSH connection over Wi-Fi and USB; an existing session alone does
+not prove the listener survived. Repeat after `/etc/init.d/dropbear start`.
+The vendor commands should return successfully without affecting `c100x-ssh`.
+
+For a full reproduction of the original boot condition, use a fresh verified
+configuration export and change only `configuratore/setup/servizi/abil_ssh` to
+zero (or remove that field) through the evidenced vendor configuration flow.
+This is a separate persistent-configuration write, not part of flashing or the
+supported CLI. A maintainer-assisted test should verify saved/runtime readback,
+then perform a deliberate normal reboot and confirm new SSH logins on both
+interfaces with the same host key. Preserve the current configuration when making
+that one-field change; the older backup is historical evidence, not test input.
+Also check selected password/key authentication, MQTT and household functions.
+
 ## Optional recovery verification (existing SSH)
 
 If the **currently installed firmware** already has SSH enabled, add these options

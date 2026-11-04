@@ -219,6 +219,10 @@ identity. Password mode retains other vendor accounts and their existing records
 The generated FWZ contains credentials/private host identity and stays private.
 SSH is selected explicitly, so a no-payload build remains a useful no-op test.
 
+**Superseded in part by ADR-017 (2026-11-04):** retain stock Dropbear, accounts and
+host-key policy, but give the selected SSH payload its own init service instead
+of enabling the vendor-controlled init script.
+
 ## ADR-010: Bundle the public C100X settings and simplify setup
 
 **Accepted 2026-10-28**, at the user's request.
@@ -441,3 +445,53 @@ absent/unmounted/ambiguous storage, errors/timeouts, budgets and protocol orderi
 Hardware acceptance must separately show preserved USB control after idle unmount
 and notification behavior during all three planned reboot boundaries. Failure of
 this optional host step alone does not establish firmware failure.
+
+## ADR-017: The selected SSH payload owns its service lifecycle
+
+**Accepted 2026-11-04**, following the SSH failure investigation and the user's
+selection of an independently owned image service.
+
+**Context:** Stock `bt_daemon` starts or stops `/etc/init.d/dropbear` according to
+the persistent `configuratore/setup/servizi/abil_ssh` field; an absent field means
+stop. Its asynchronous initialization can race with the payload's startup link.
+The failing device's saved configuration was byte-identical to its older backup
+and lacked this field. Setting only `abil_ssh=1` through the vendor configuration
+flow restored SSH on USB and Wi-Fi. The old volatile RSA-key generation versus
+the new persistent key provides a plausible ordering change, not observed boot
+timing. Selecting SSH must work independently of that persistent configuration.
+
+**Decision:** SSH payload version 2 installs `/etc/init.d/c100x-ssh` and owns
+`/var/run/c100x-ssh.pid`. Reuse stock Dropbear and the existing persistent ECDSA
+host key/authentication preparation. `/etc/default/c100x-ssh` records whether
+password authentication is enabled; key-only mode passes `-s`. Start on port22
+on all interfaces in runlevel 5; stop in runlevels 0, 1 and 6, before networking
+teardown. Support idempotent start/stop, restart/force-reload and process status.
+Bound startup/shutdown waits; a failed stop prevents restart. No crash-restart
+supervisor or force-kill escalation is introduced. Status establishes the daemon
+process, not authenticated access or full functional acceptance.
+
+Append `NO_START=1` to the image's `/etc/default/dropbear`. The hash-pinned stock
+init script checks this before dispatching **both start and stop**, making vendor
+SSH control calls no-ops. Keep that script and the daemon binary unchanged, and
+do not install the old `S98dropbear` startup link. Our service never sources the
+vendor defaults. This disables the vendor control path; a different service name
+alone would not establish isolation.
+
+Keep this policy entirely in the SSH image payload. Do not modify the persistent
+configuration/data partition, factory defaults or flashing protocol. The selected
+payload means SSH is enabled regardless of `abil_ssh`; administrators manage it
+through `c100x-ssh`, not the vendor SSH switch. Rebuilding without the payload
+omits this policy. No new build option or migration command is needed.
+
+**Alternatives:** Boot-time persistent-configuration provisioning adds ordering,
+write and activation responsibilities. Ignoring selected stop calls makes service
+semantics ambiguous. A supervisor fights the competing owner; delays or renewed
+key generation remain timing-dependent. Vendor binary patches are unnecessary.
+
+**Consequences:** Guard and verify the disabled vendor configuration, independent
+service/configuration, PID/key arguments and startup/shutdown links. Offline
+checks exercise vendor-before/service-before orderings, repeated vendor calls,
+authentication modes and failed startup/shutdown. Image readback checks must
+reject later payloads that break ownership. Flashing and fresh-image hardware
+acceptance remain separate, explicitly authorized work; the live configuration
+repair does not validate the new service.

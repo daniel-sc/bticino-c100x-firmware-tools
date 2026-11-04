@@ -15,6 +15,14 @@ HASHES = {
     "/usr/sbin/dropbearmulti": "25593c31c1793bb2ea51d6ff084af51d527ee13c1913915612a4f0bcc8312760",
 }
 HOST_KEY = "/etc/dropbear/classe100x_ecdsa_host_key"
+SERVICE = "/etc/init.d/c100x-ssh"
+CONFIG = "/etc/default/c100x-ssh"
+BOOT_LINKS = {
+    "/etc/rc5.d/S98c100x-ssh": "../init.d/c100x-ssh",
+    "/etc/rc0.d/K01c100x-ssh": "../init.d/c100x-ssh",
+    "/etc/rc1.d/K01c100x-ssh": "../init.d/c100x-ssh",
+    "/etc/rc6.d/K01c100x-ssh": "../init.d/c100x-ssh",
+}
 
 
 def public_key(data: bytes) -> tuple[bytes, str]:

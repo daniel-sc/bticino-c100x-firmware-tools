@@ -13,6 +13,14 @@ write generated/dropbear.conf /etc/default/dropbear
 set_inode_field /etc/default/dropbear uid 0
 set_inode_field /etc/default/dropbear gid 0
 set_inode_field /etc/default/dropbear mode 0100644
+write generated/c100x-ssh.conf /etc/default/c100x-ssh
+set_inode_field /etc/default/c100x-ssh uid 0
+set_inode_field /etc/default/c100x-ssh gid 0
+set_inode_field /etc/default/c100x-ssh mode 0100644
+write files/init.sh /etc/init.d/c100x-ssh
+set_inode_field /etc/init.d/c100x-ssh uid 0
+set_inode_field /etc/init.d/c100x-ssh gid 0
+set_inode_field /etc/init.d/c100x-ssh mode 0100755
 mkdir /home/root/.ssh
 set_inode_field /home/root/.ssh uid 0
 set_inode_field /home/root/.ssh gid 0
@@ -32,6 +40,15 @@ write generated/host_key /etc/dropbear/classe100x_ecdsa_host_key
 set_inode_field /etc/dropbear/classe100x_ecdsa_host_key uid 0
 set_inode_field /etc/dropbear/classe100x_ecdsa_host_key gid 0
 set_inode_field /etc/dropbear/classe100x_ecdsa_host_key mode 0100600
-symlink /etc/rc5.d/S98dropbear ../init.d/dropbear
-set_inode_field /etc/rc5.d/S98dropbear uid 0
-set_inode_field /etc/rc5.d/S98dropbear gid 0
+symlink /etc/rc5.d/S98c100x-ssh ../init.d/c100x-ssh
+set_inode_field /etc/rc5.d/S98c100x-ssh uid 0
+set_inode_field /etc/rc5.d/S98c100x-ssh gid 0
+symlink /etc/rc0.d/K01c100x-ssh ../init.d/c100x-ssh
+set_inode_field /etc/rc0.d/K01c100x-ssh uid 0
+set_inode_field /etc/rc0.d/K01c100x-ssh gid 0
+symlink /etc/rc1.d/K01c100x-ssh ../init.d/c100x-ssh
+set_inode_field /etc/rc1.d/K01c100x-ssh uid 0
+set_inode_field /etc/rc1.d/K01c100x-ssh gid 0
+symlink /etc/rc6.d/K01c100x-ssh ../init.d/c100x-ssh
+set_inode_field /etc/rc6.d/K01c100x-ssh uid 0
+set_inode_field /etc/rc6.d/K01c100x-ssh gid 0

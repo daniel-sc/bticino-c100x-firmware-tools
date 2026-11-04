@@ -11,6 +11,91 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-04: Independently owned SSH image service (offline)
+
+- Implemented SSH payload version 2 and ADR-017: `c100x-ssh` owns its defaults,
+  PID file and runlevel-5 startup/runlevel-0/1/6 shutdown. The unchanged stock
+  Dropbear init script is disabled for both start and stop through image-local
+  `NO_START=1`. Persistent device configuration is not edited by this payload.
+- The full native-MQTT-enabled offline suite passed **187 tests, no skips**.
+  Shell lifecycle tests execute the new script with simulated process control:
+  vendor/service ordering, repeated vendor calls, idempotent start/stop, restart,
+  key-only/password flags, missing-key/launch failure and bounded failed stop.
+  Synthetic image tests cover all authentication modes and reject later payloads
+  that reenable vendor control or remove the shutdown link.
+- Also replayed the actual hash-pinned vendor init script with rebased paths and
+  mocked process effects. Both startup orderings and repeated vendor
+  start/stop/restart calls preserved the independent service. A negative control
+  changing `NO_START` back to zero reached process control and was detected by
+  the isolation assertion. No ARM binary or live device was used in these checks.
+- A real offline SSH-v2 build from pinned stock passed filesystem checks, payload
+  verification and final archive reopen/readback. Generated FWZ SHA-256:
+  `8cdc2632459f09905b1de8d59573e752b24c9e1f7b6316e82827a754c8db2ade`.
+  Private image/report/log remain under
+  `.local/ssh-diagnosis-20261104/owned-service*`; this key-only validation image
+  has not been flashed.
+- Two fresh, independent standards/spec reviewers reported no actionable findings.
+  Each independently passed the four SSH lifecycle tests and 29 builder tests;
+  neither accessed hardware or edited project files.
+- Fresh-image boot, actual BusyBox process matching, lifecycle behavior across
+  vendor application restarts, authentication and a full reboot remain hardware
+  acceptance work. The earlier live configuration repair validates a different
+  startup arrangement.
+
+## 2026-11-04: SSH restored through vendor configuration
+
+- User authorized restoring SSH on the current device and started managed USB.
+  A fresh checksum-verified configuration export matched the earlier backup.
+  Prepared an encrypted `conf.zip` adding only `<abil_ssh>1</abil_ssh>` under
+  `configuratore/setup/servizi`; all existing XML bytes were preserved. Verified
+  archive encryption/compression and decrypted readback before device access.
+- After matching identity/state `4*0` and idle-worker checks, used the evidenced
+  vendor configuration sequence: begin `#30`, FTP upload, length/POSIX-checksum
+  apply `#32`, worker-readiness query and normal close `#33`. All commands ACKed;
+  no write was retried. No firmware write or explicit reboot/restart was sent.
+- Both USB and Wi-Fi then returned `SSH-2.0-dropbear_2017.75`. The existing RSA
+  identity authenticated as `root2` with UID/GID 0 over both interfaces, ignoring
+  user SSH configuration and strictly checking the host key derived from the image.
+  Firmware-copy flag was `1`; uptime continued without a full device reboot.
+- A subsequent checksum-verified export exactly matched the prepared XML. Runtime
+  `/var/tmp/conf.xml` also contains `abil_ssh=1`; listeners exist on IPv4 wildcard
+  and IPv6 wildcard port22. This demonstrates that changing the vendor SSH policy
+  restores access. The earlier boot-race ordering itself remains inferred.
+- Private backups, prepared archive, no-repeat apply journal and login evidence
+  are under `.local/ssh-diagnosis-20261104/enable-ssh-695luyyw/`; fresh pre/post
+  exports are `live-config-1a7a9xcb/` and `live-config-n_h84oj2/` beside it.
+  Password authentication, persistence across a later full reboot and household
+  functional checks were not exercised in this repair. The builder payload still
+  needs a general lifecycle fix for devices with stock SSH-disable configuration.
+
+## 2026-11-04: SSH refusal and saved-configuration export
+
+- Wi-Fi TCP22 refusal was independently reproduced at the router-confirmed device
+  address. The user then observed USB TCP22 refusal with managed RNDIS ready;
+  a subsequent direct USB check reproduced it. Authentication was never reached.
+- Traced the vendor configuration-export sequence through matching device code
+  and MyHOME BTESUXP. With user-authorized USB access, verified matching normal
+  identity/state `4*0` and idle worker, requested export, retrieved `conf.zip`,
+  verified device-reported length/POSIX checksum and received export-close ACK.
+  This stages a temporary file and starts/stops FTP; it is not a strictly
+  side-effect-free query. No configuration apply, firmware write or reboot was sent.
+- The exported configuration XML is **byte-identical to the October 27 backup**;
+  `configuratore/setup/servizi/abil_ssh` is absent. Post-export uptime advanced
+  normally, state remained `4*0`, worker remained idle and USB TCP22 still refused.
+- Matching vendor code defaults an absent `abil_ssh` to zero and requests SSH
+  stop during initialization. Its asynchronous startup races with `S98dropbear`.
+  An offline replay of the real init script with mocked service effects confirmed
+  order-dependent listener state. The new persistent key skips legacy volatile
+  RSA-key generation, providing a plausible timing change. Actual boot ordering
+  and runtime logs remain unobserved; the export reads saved configuration, not RAM.
+- Offline analysis found a valid ECDSA key, compatible key encoding and compiled
+  ECDSA support, wildcard port22 configuration and firewall rules allowing SSH.
+  The stock ARM executable was not executed. Missing SSH is the likely explanation
+  for the old alpha.4 preflight failures, whose discarded stderr remains unavailable.
+- Private image analysis, reproducer and acquisition helper remain under
+  `.local/ssh-diagnosis-20261104/`; verified export/report are in
+  `live-config-8hdh_loq/` beneath it. These contain private device configuration.
+
 ## 2026-11-04: Alpha.5 publication and downloaded-bundle validation
 
 - Tagged **v0.1.0-alpha.5** at reviewed commit

@@ -56,8 +56,11 @@ Ed25519 is unsupported by the stock SSH server. Legacy RSA login keys require
 `-o PubkeyAcceptedAlgorithms=+ssh-rsa` when connecting.
 
 Each build creates a new SSH host identity; it is intended to persist across
-reboots. Key-only builds disable password login. Fresh-image login and identity
-persistence still need hardware validation.
+reboots. Key-only builds disable password login. SSH payload version 2 selects an
+independent `c100x-ssh` service, so the vendor's persistent SSH-enable setting
+cannot disable it. Device configuration is preserved. Available in alpha.6;
+alpha.5 and earlier use the previous startup integration. The new
+service's fresh-image startup and reboot persistence still need hardware validation.
 
 <a id="optional-mqtt-bridge"></a>
 

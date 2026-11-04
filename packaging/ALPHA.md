@@ -5,20 +5,25 @@ Start with `README.md` in the downloaded `C100X` folder for installation and lin
 to the build/flash guides. [Current online overview](https://github.com/daniel-sc/bticino-c100x-firmware-tools#readme).
 No Homebrew, Python, Xcode or MyHOME setup is required.
 
-**New in alpha.5:** richer failure diagnostics throughout SSH/recovery verification,
-USB networking, FTP/flashing, firmware validation/downloads and builder tools/hooks.
-Errors retain original causes, operation/stage, exit status and bounded tool output.
-`--debug` adds Python stack traces; unexpected programming errors show them directly.
-Recovery failure reports and explicitly requested build failure reports retain
-exception chains and stacks even without `--debug`. Existing reports are never
-overwritten; choose a new build-report path for another attempt.
+**New in alpha.6:** SSH payload v2 owns its service lifecycle. The vendor daemon
+could stop the previous SSH service during boot when persistent `abil_ssh` was
+absent or zero. The new image disables that vendor init control path and installs
+`c100x-ssh` with its own configuration, PID file and startup/shutdown links.
+It reuses stock Dropbear, existing authentication options and a fresh persistent
+host key; it does not change the device's configuration/data partition.
 
-SSH preflight identifies the failed prerequisite, and SSH/reboot readiness timeouts
-retain their final failure or observation. Managed USB failures include recent
-helper output. Paths, usernames and original messages remain useful; known secret
-values are removed. Review diagnostics before sharing. This release improves
-evidence capture but does not establish the cause of the previously reported live
-SSH preflight failures.
+Manage SSH through `/etc/init.d/c100x-ssh start|stop|restart|status`. Vendor SSH
+start/stop calls are no-ops for this image. Key-only builds disable password
+authentication. This change requires **rebuilding and flashing** your firmware;
+upgrading the Mac CLI alone does not repair an installed image.
+
+Two independent fresh reviews found no actionable issues. All 187 offline tests
+passed, including lifecycle and payload-composition checks, and a real pinned-stock
+SSH build passed final archive verification. Fresh-image hardware acceptance is
+still pending. See the SSH lifecycle verification section in `docs/FLASHING.md`.
+
+Includes alpha.5's original-error/tool diagnostics, `--debug` tracebacks and saved
+failure evidence. Review reports before sharing; generated firmware remains private.
 
 Includes alpha.4's ECM/RNDIS handover, explicit `plan-recovery`/`recover` commands,
 and best-effort storage unmount before planned reboots. Device-write ordering,

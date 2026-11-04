@@ -1,13 +1,14 @@
 """Prepare guarded account/config edits and a fresh persistent host identity."""
 
 import json
+from pathlib import PurePosixPath
 import re
 
 from classe100x.firmware import FirmwareError
 from classe100x.host import find_tool, run_tool
 from classe100x.payload import Context
 from classe100x.diagnostics import tool_error
-from common import HASHES, HOST_KEY, public_key
+from common import BOOT_LINKS, CONFIG, HASHES, HOST_KEY, SERVICE, public_key
 
 c = Context()
 if set(c.inputs) - {"public_key", "password", "password_file", "dropbearkey", "openssl"}:
@@ -35,9 +36,10 @@ c.image.require_symlink("/usr/sbin/dropbear", "./dropbearmulti")
 daemon = c.image.stat("/usr/sbin/dropbearmulti")
 if daemon["type"] != "regular" or not daemon["mode"] & 0o111:
     raise FirmwareError("Stock SSH daemon is unavailable")
-for path in ("/home/root/.ssh", HOST_KEY, "/etc/dropbear/authorized_keys", "/etc/rc5.d/S98dropbear"):
+for path in ("/home/root/.ssh", HOST_KEY, "/etc/dropbear/authorized_keys", "/etc/rc5.d/S98dropbear",
+             CONFIG, SERVICE, *BOOT_LINKS):
     c.image.require_absent(path)
-for path in ("/home/root", "/etc/dropbear", "/etc/rc5.d"):
+for path in {"/home/root", "/etc/dropbear", *(str(PurePosixPath(p).parent) for p in BOOT_LINKS)}:
     if c.image.stat(path)["type"] != "directory":
         raise FirmwareError("Unexpected SSH parent-directory type")
 for path in ("/etc/passwd", "/etc/shadow"):
@@ -56,15 +58,10 @@ if password is not None:
 
 c.write("passwd", original["/etc/passwd"].rstrip(b"\n") + b"\nroot2:x:0:0:root:/home/root:/bin/sh\n")
 c.write("shadow", original["/etc/shadow"].rstrip(b"\n") + b"\nroot2:" + password_hash + b":18033:0:99999:7:::\n")
-config = original["/etc/default/dropbear"]
-if config.count(b'DROPBEAR_EXTRA_ARGS="-B"') != 1:
-    raise FirmwareError("Unexpected stock SSH argument definition")
-config = config.replace(b'DROPBEAR_EXTRA_ARGS="-B"',
-                        b'DROPBEAR_EXTRA_ARGS="' + (b"-s" if password is None else b"") + b'"')
-# Despite the variable name, init passes this file directly to Dropbear's generic -r.
-# The existing file also prevents init's RSA generation branch on read-only rootfs.
-config += b"\nNO_START=0\nDROPBEAR_RSAKEY=" + HOST_KEY.encode() + b"\n"
-c.write("dropbear.conf", config)
+# The pinned vendor script checks NO_START before dispatching both start and stop.
+# Its calls must never control the independently owned c100x-ssh service.
+c.write("dropbear.conf", original["/etc/default/dropbear"] + b"\nNO_START=1\n")
+c.write("c100x-ssh.conf", b"PASSWORD_AUTH=" + (b"1" if password is not None else b"0") + b"\n")
 c.write("authorized_keys", key)
 
 hostkey = c.generated / "host_key"

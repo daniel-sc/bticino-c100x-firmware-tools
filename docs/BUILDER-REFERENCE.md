@@ -13,12 +13,31 @@ authentication while preserving vendor accounts. The added `root2` account has
 UID/GID 0 and home `/home/root`.
 
 The host key is newly generated for each build and installed at
-`/etc/dropbear/classe100x_ecdsa_host_key`. The existing init script receives that
-path through `DROPBEAR_RSAKEY` (despite the variable name, its `-r` option accepts
-ECDSA). This avoids its volatile RSA-key generation path. Identity is intended
+`/etc/dropbear/classe100x_ecdsa_host_key`. The payload-owned `c100x-ssh` init script
+passes that path directly to stock Dropbear's `-r` option. No boot-time key
+generation is needed. Identity is intended
 to remain stable across reboots; a new build intentionally has a different host
 identity. The FWZ contains the host private key and possibly configuration
 secrets: treat it as a private artifact, not as encrypted secret storage.
+
+SSH payload version 2 owns `/etc/init.d/c100x-ssh`, reads its password-mode flag
+from `/etc/default/c100x-ssh` and uses `/var/run/c100x-ssh.pid`. It starts on port22
+on all interfaces through `rc5.d/S98c100x-ssh`, and stops through `K01c100x-ssh`
+in runlevels 0, 1 and 6. Use `/etc/init.d/c100x-ssh start|stop|restart|status`
+to manage it. Status checks the process, not login readiness; stop closes the
+listener rather than deliberately terminating already-established SSH sessions.
+Startup failures retain tool diagnostics and refer to syslog; a failed bounded
+stop blocks restart.
+
+The image's `/etc/default/dropbear` ends with `NO_START=1`. The unchanged,
+hash-pinned vendor init script checks this before both start and stop, so the
+vendor daemon cannot undo the selected SSH payload through its `abil_ssh` policy.
+Our service does not read that file. The persistent configuration partition is
+not edited, and its SSH switch no longer controls this service. See
+[ADR-017](DECISIONS.md#adr-017-the-selected-ssh-payload-owns-its-service-lifecycle).
+Available in alpha.6; rebuild and flash to install it. Older released
+payloads use the vendor-controlled service. Fresh-image lifecycle acceptance
+remains pending.
 
 ## MQTT limits and diagnostics
 

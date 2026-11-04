@@ -407,6 +407,7 @@ class BuilderTests(unittest.TestCase):
             "/usr/sbin/dropbearmulti": b"synthetic daemon\n",
         }
         setup = "".join(f"mkdir {p}\n" for p in ("/etc", "/etc/init.d", "/etc/default", "/etc/dropbear", "/etc/rc5.d",
+                                                      "/etc/rc0.d", "/etc/rc1.d", "/etc/rc6.d",
                                                      "/home", "/home/root", "/usr", "/usr/sbin"))
         setup += "set_inode_field /home/root mode 040700\n"
         for index, (target, data) in enumerate(originals.items()):
@@ -433,6 +434,19 @@ class BuilderTests(unittest.TestCase):
                 self.assertNotIn(password, json.dumps(result))
                 self.assertNotIn(key.with_suffix(".pub").read_text().split()[1], json.dumps(result))
                 self.output.unlink()
+        # A later payload must not silently return lifecycle control to the vendor
+        # or remove the independent service's shutdown integration.
+        (self.root / "reenable-vendor").write_text("NO_START=0\n")
+        for name, commands in (
+            ("vendor-conflict", "rm /etc/default/dropbear\nwrite reenable-vendor /etc/default/dropbear\n"),
+            ("shutdown-conflict", "rm /etc/rc6.d/K01c100x-ssh\n"),
+        ):
+            conflict = self.payload(name, commands)
+            if name == "vendor-conflict":
+                shutil.copyfile(self.root / "reenable-vendor", conflict / "reenable-vendor")
+            with self.subTest(conflict=name), self.assertRaises(FirmwareError):
+                self.build(payloads=[payload, conflict], inputs={"ssh": {"public_key": str(key) + ".pub"}})
+            self.check_clean_failure()
 
     def mqtt_fixture(self, with_ssh=False):
         facts = runpy.run_path(str(builder.BUNDLED / "mqtt/common.py"))
@@ -450,7 +464,7 @@ class BuilderTests(unittest.TestCase):
             originals.update(ssh_originals)
         directories = {"/etc/rc5.d", "/etc/rc0.d", "/etc/rc6.d", "/usr/sbin"}
         if with_ssh:
-            directories.update(("/etc/dropbear", "/home/root"))
+            directories.update(("/etc/dropbear", "/etc/rc1.d", "/home/root"))
         for path in list(originals) + list(directories):
             directories.update(str(p) for p in Path(path).parents if str(p) != "/")
         setup = "".join("mkdir %s\n" % path for path in sorted(directories, key=lambda p: (p.count('/'), p)))

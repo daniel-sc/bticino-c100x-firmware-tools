@@ -54,7 +54,7 @@ LAN `en` interface is never accepted (ADR-015).
 | `builder.py` | Private working copy, ordered trusted image payloads, repacking, final checks and publication |
 | `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback and bounded subprocess execution with failure diagnostics |
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
-| `payloads/ssh/` | Stock-specific SSH account/config/key preparation, raw image commands and verification |
+| `payloads/ssh/` | Stock-specific SSH account/key preparation, independently owned init service, vendor-control disablement and image verification |
 | `payloads/mqtt/` | Stock-runtime bridge, private broker configuration, startup integration and image readback checks |
 | `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
@@ -168,6 +168,14 @@ command retains its own signal handling. Restarting transport is not resuming an
 interrupted update; no device reboot/write is performed as local cleanup.
 
 ## Test boundaries and extension points
+
+The optional SSH payload owns `c100x-ssh`, with separate defaults and PID file,
+runlevel-5 startup and runlevel-0/1/6 shutdown. Stock Dropbear is reused, but the
+vendor init script exits on `NO_START=1` before either start or stop. Persistent
+`abil_ssh` therefore cannot race with the selected service. No configuration-data
+write or flasher dependency is introduced. Shell lifecycle tests simulate process
+control; image checks verify installed assets, the vendor gate and boot links.
+Fresh-image hardware acceptance remains separate (ADR-017).
 
 The optional MQTT payload is self-contained: host hooks verify stock dependencies
 and install scripts/configuration. On-device, a lock-holding Python supervisor

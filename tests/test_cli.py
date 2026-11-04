@@ -61,6 +61,34 @@ class CliTests(unittest.TestCase):
         self.network.assert_not_called()
         self.assertEqual(self.device.events, [])
 
+    def test_debug_and_unexpected_errors_include_tracebacks(self):
+        for error, options, traceback_expected in (
+                (FirmwareError("fixture invalid"), (), False),
+                (FirmwareError("fixture invalid"), ("--debug",), True),
+                (RuntimeError("fixture bug"), (), True)):
+            self.prepare.side_effect = error
+            self.assertEqual(self.invoke("inspect-fw", *options)[0], 1)
+            self.assertEqual("Traceback (most recent call last)" in self.last_output, traceback_expected)
+            self.assertIn(str(error), self.last_output)
+
+    def test_worker_forwards_diagnostics_readiness_and_failure_as_json(self):
+        for fail in (False, True):
+            output = io.StringIO()
+
+            def run_usb(binary, *, notify, diagnostic):
+                diagnostic("USB fixture starting")
+                notify("feth42")
+                if fail:
+                    raise OSError("USB fixture stopped")
+
+            with patch.object(sys, "argv", ["classe100x", "_usb-worker", "fixture-helper"]), \
+                    patch.object(cli, "run_usb", side_effect=run_usb), contextlib.redirect_stdout(output):
+                self.assertEqual(cli.main(), 1 if fail else 0)
+            messages = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual(messages[:2], [{"diagnostic": "USB fixture starting"}, {"interface": "feth42"}])
+            if fail:
+                self.assertIn("OSError: USB fixture stopped", messages[2]["diagnostic"])
+
     def test_recovery_plan_is_read_only_and_requires_idle_recovery(self):
         client = self.probe.return_value.__enter__.return_value
         client.inspect.return_value = identity(1)

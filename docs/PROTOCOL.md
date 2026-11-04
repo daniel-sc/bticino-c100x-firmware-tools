@@ -62,7 +62,8 @@ Stock `/etc/vsftpd.conf` uses control port 21 and passive port 11111, with local
 users chrooted. The firmware accounts' home is `/var/tmp/ftp`. Vendor normal
 and recovery credentials were verified offline against the corresponding
 stock password hashes. The fixed settings are bundled as public profile data;
-normal log output and credential representations remain redacted. Personal SSH
+credential representations and known passwords remain redacted; failed FTP
+operations now retain the server's original error and operation context. Personal SSH
 credentials, generated host keys and private device configuration are not bundled.
 
 ## Local event-monitor interface (2026-10-31)
@@ -166,6 +167,11 @@ The selected recovery and kernel files are byte-identical to stock. See
   readback; ordinary stock-device flashing has no full-filesystem readback.
 
 Deliberate fault injection is restricted to simulation.
+
+Failure diagnostics retain transport causes, the final read-only reboot-poll
+failure and last stale-uptime observation. SSH prerequisite inspection labels its
+current read-only substep on stderr when the script fails. These diagnostics do
+not change update frames, alter reboot-proof criteria or authorize a write retry.
 
 ### Explicit recovery entry (2026-11-03)
 

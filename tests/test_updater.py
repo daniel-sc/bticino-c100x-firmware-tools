@@ -448,7 +448,8 @@ class FTPTests(unittest.TestCase):
                 with self.assertRaises(UpdateError):
                     self.device.upload(self.path, self.credentials)
 
-    def test_ftp_failures_do_not_expose_server_text(self):
+    def test_ftp_failures_retain_server_text_without_known_password(self):
+        from classe100x.diagnostics import format_failure
         for operation in ("connect", "login", "nlst", "storbinary", "voidcmd", "size"):
             with self.subTest(operation=operation):
                 self.ftp.nlst.side_effect = [[], [self.path.name]]
@@ -456,5 +457,8 @@ class FTPTests(unittest.TestCase):
                 method.side_effect = ftplib.error_perm("fixture-user fixture-secret")
                 with self.assertRaisesRegex(UpdateError, "write was not requested") as caught:
                     self.device.upload(self.path, self.credentials)
-                self.assertNotIn("fixture-", str(caught.exception))
+                output = format_failure(caught.exception)
+                self.assertNotIn("fixture-secret", output)
+                self.assertIn("fixture-user", output)
+                self.assertIn("operation:", output)
                 method.side_effect = None

@@ -17,6 +17,7 @@ from .ext4 import Ext4
 from .firmware import (ARCHIVE_KEY, FirmwareError, MAIN_SIZE, PROFILE, STOCK_SHA256,
                        check_main_image, prepare_firmware, regular_file)
 from .host import find_tool, run_tool
+from .diagnostics import details, failure, format_failure, protect_inputs, tool_error
 
 MEMBER_ORDER = ("btweb_only.ext4.gz", "btweb_only_recovery.ext4.gz", "fwz.xml", "uImage.zip")
 BUNDLED = Path(__file__).resolve().parent.parent / "payloads"
@@ -57,8 +58,8 @@ def load_payloads(paths: list[Path]) -> list[tuple[Path, dict]]:
                 raise ValueError
             if manifest["profile"] != PROFILE:
                 raise ValueError
-        except (ValueError, KeyError, TypeError):
-            raise FirmwareError("Invalid or incompatible payload manifest") from None
+        except (ValueError, KeyError, TypeError) as exc:
+            raise details(FirmwareError("Invalid or incompatible payload manifest"), manifest=path / "payload.json") from exc
         if identity in identities:
             raise FirmwareError("The same payload identity cannot be selected twice")
         identities.add(identity)
@@ -98,10 +99,9 @@ def hook(directory: Path, name: str, *, required: bool = False) -> bool:
     status, _, stderr = run_tool([sys.executable, "-I", "-B", str(runner), str(script), str(directory / "context.json")],
                             cwd=directory, timeout=120)
     if status:
-        message = stderr.decode("utf-8", errors="replace").strip()
-        if message.startswith("Payload error: ") and len(message) <= 315 and "\n" not in message and "\r" not in message:
-            raise FirmwareError(f"Payload {directory.name} {name}: {message[15:]}")
-        raise FirmwareError(f"Payload {directory.name} {name} failed (output withheld to protect inputs)")
+        first = stderr.decode("utf-8", errors="replace").splitlines()
+        summary = first[0][15:] if first and first[0].startswith("Payload error: ") and len(first[0]) <= 315 else "failed"
+        raise tool_error(FirmwareError(f"Payload {directory.name} {name}: {summary}"), script, status, stderr)
     return True
 
 
@@ -132,11 +132,11 @@ def pack(directory: Path, destination: Path, sevenzip: str) -> None:
     # Public format password only. Device/user credentials never enter argv.
     # 7zip may STORE tiny/incompressible entries despite -mm; the final profile
     # check rejects that variant rather than silently broadening compatibility.
-    status, _, _ = run_tool([sevenzip, "a", "-tzip", "-mm=Deflate", "-mx=9", "-mem=ZipCrypto",
+    status, out, err = run_tool([sevenzip, "a", "-tzip", "-mm=Deflate", "-mx=9", "-mem=ZipCrypto",
                             "-p" + ARCHIVE_KEY.decode(), "-mmt=1", "-bd", "-y",
                             str(destination), *MEMBER_ORDER], cwd=directory, timeout=600)
     if status:
-        raise FirmwareError("Encrypted FWZ packaging failed")
+        raise tool_error(FirmwareError("Encrypted FWZ packaging failed"), sevenzip, status, err, stdout=out)
 
 
 def tool_versions(tools: dict) -> dict:
@@ -146,7 +146,7 @@ def tool_versions(tools: dict) -> dict:
         text = (stdout + stderr).decode("utf-8", errors="replace")
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if status or not lines:
-            raise FirmwareError("Unable to identify a builder tool version")
+            raise tool_error(FirmwareError("Unable to identify a builder tool version"), tools[name], status, stderr, stdout=stdout)
         versions[name] = lines[0][:200]
     return versions
 
@@ -161,16 +161,56 @@ def builder_tools(overrides: dict | None = None) -> dict:
 def build(source: Path, output: Path, *, payloads: list[Path] = (), inputs: dict | None = None,
           input_base: Path | None = None, overrides: dict | None = None,
           report_path: Path | None = None, progress=lambda message: None) -> dict:
+    """Preserve failure evidence at the requested report path without overwriting."""
+    if report_path is not None:
+        report_path = report_path.absolute()
+        if (report_path.resolve() in (output.resolve(), source.resolve()) or report_path.exists()
+                or report_path.is_symlink() or not report_path.parent.is_dir()):
+            raise FirmwareError("Report requires a separate, unused path in an existing directory")
+    protect_inputs(inputs)
+    stage = "validating build inputs and tools"
+
+    def report_stage(message):
+        nonlocal stage
+        stage = message
+        progress(message)
+
+    try:
+        return _build(source, output, payloads=payloads, inputs=inputs, input_base=input_base,
+                      overrides=overrides, report_path=report_path, progress=report_stage)
+    except (Exception, KeyboardInterrupt) as exc:
+        details(exc, build_stage=stage)
+        if report_path is not None:
+            try:
+                save_report({"schema": 1, "profile": PROFILE, "status": "failed", "stage": stage,
+                             "failure": failure(exc)}, report_path)
+                details(exc, report=report_path)
+            except (OSError, FirmwareError) as report_error:
+                exc.add_note("Could not publish failure report:\n" + format_failure(report_error))
+        raise
+
+
+def save_report(report, path):
+    fd, name = tempfile.mkstemp(prefix=".build-report-", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(report, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        publish(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _build(source: Path, output: Path, *, payloads=(), inputs=None, input_base=None,
+           overrides=None, report_path=None, progress=lambda message: None) -> dict:
     output = output.absolute()
     if output.exists() or output.is_symlink():
         raise FirmwareError("Output already exists; originals and previous builds are never overwritten")
     if not output.parent.is_dir():
         raise FirmwareError("Output directory does not exist")
-    if report_path is not None:
-        report_path = report_path.absolute()
-        if (report_path.resolve() == output.resolve() or report_path.exists()
-                or report_path.is_symlink() or not report_path.parent.is_dir()):
-            raise FirmwareError("Report requires a separate, unused path in an existing directory")
     selected = load_payloads(payloads)
     inputs = inputs or {}
     if not isinstance(inputs, dict) or any(not isinstance(v, dict) for v in inputs.values()):
@@ -267,19 +307,8 @@ def build(source: Path, output: Path, *, payloads: list[Path] = (), inputs: dict
             os.fsync(stream.fileno())
         publish(artifact, output)
         if report_path is not None:
-            report_temp = None
             try:
-                fd, name = tempfile.mkstemp(prefix=".build-report-", dir=report_path.parent)
-                report_temp = Path(name)
-                with os.fdopen(fd, "w") as stream:
-                    json.dump(report, stream, indent=2)
-                    stream.write("\n")
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                publish(report_temp, report_path)
-            except (OSError, FirmwareError):
-                raise FirmwareError("Firmware was published, but the optional report could not be published") from None
-            finally:
-                if report_temp is not None:
-                    report_temp.unlink(missing_ok=True)
+                save_report(report, report_path)
+            except (OSError, FirmwareError) as exc:
+                raise FirmwareError(f"Firmware was published at {output}, but the optional report could not be published") from exc
         return report

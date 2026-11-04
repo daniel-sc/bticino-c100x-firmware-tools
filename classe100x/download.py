@@ -28,8 +28,8 @@ def publish(source: Path, destination: Path) -> None:
     """Atomic, no-clobber publication on the same filesystem, including symlinks."""
     try:
         os.link(source, destination)
-    except FileExistsError:
-        raise FirmwareError("Output already exists; choose a new path") from None
+    except FileExistsError as exc:
+        raise FirmwareError("Output already exists; choose a new path") from exc
     source.unlink()
 
 
@@ -70,8 +70,8 @@ def fetch_stock(cache: Path, *, timeout: float = 300) -> Path:
                             raise FirmwareError("Firmware download exceeds the pinned size")
                         output.write(chunk)
                         digest.update(chunk)
-            except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
-                raise FirmwareError("Unable to download the pinned stock firmware") from None
+            except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+                raise FirmwareError(f"Unable to download the pinned stock firmware from {STOCK_URL}") from exc
             if length != STOCK_SIZE or digest.hexdigest() != STOCK_SHA256:
                 raise FirmwareError("Downloaded firmware failed size/SHA-256 verification")
             output.flush()

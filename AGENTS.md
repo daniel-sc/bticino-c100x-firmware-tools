@@ -32,6 +32,9 @@
 
 ## Development
 
+When cutting a release, follow `docs/RELEASING.md`, including the manual Homebrew
+tap version/checksum update after publication.
+
 Use mise-managed tools. `mise run test` runs the offline Python suite without a
 device or root. USB helper build/setup commands are in `docs/SOURCE.md`. Keep tests
 offline unless a hardware step is explicitly being undertaken.

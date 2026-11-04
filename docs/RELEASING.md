@@ -134,3 +134,21 @@ Check the downloaded README and guide links as well. Exercise real local firmwar
 builds separately; firmware stays outside GitHub CI. Record observed results in
 ACCEPTANCE.md before claiming validation, then update the online README's release
 link. Released documentation remains a snapshot; corrections ship in a new release.
+
+## Homebrew tap follow-up
+
+The public [daniel-sc/homebrew-tap](https://github.com/daniel-sc/homebrew-tap)
+repository contains `Casks/c100x.rb`, installing the
+existing signed DMG's complete bundle into `/Applications/C100X` and linking
+`c100x` onto PATH. Keep Apple Silicon/macOS 15+ requirements aligned with the
+release metadata. Install with:
+
+```sh
+brew install --cask daniel-sc/tap/c100x
+```
+
+After publishing and validating **each alpha release**, manually update the tap's
+cask version and DMG SHA-256 (and URL if needed), then commit and push the tap.
+Use the published DMG checksum, not a local candidate's. Verify Brew installation
+or upgrade and `c100x --version` before reporting the tap updated. Updates are
+manual; there is no cross-repository release automation.

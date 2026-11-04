@@ -201,6 +201,8 @@ class RecoveryIntegrationTests(unittest.TestCase):
         else:
             self.assertEqual(self.device.events.count("reboot-4"), 1)
         record = self.report()
+        self.assertIn("traceback", record["failure"])
+        self.assertIn("cause", record["failure"])
         self.assertEqual(record["update_sequence"], "stopped")
         self.assertEqual(record["raw_copies"], "removed")
         self.assertFalse(self.verifier.workspace.exists())

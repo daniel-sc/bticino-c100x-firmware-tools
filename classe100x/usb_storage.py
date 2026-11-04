@@ -6,6 +6,8 @@ import subprocess
 import sys
 import time
 
+from .diagnostics import format_failure, tool_error
+
 
 def unmount_usb_storage(*, warn=lambda text: print(text, file=sys.stderr)):
     """Ordinary unmount only, with a total 10-second budget; never eject USB."""
@@ -19,7 +21,8 @@ def unmount_usb_storage(*, warn=lambda text: print(text, file=sys.stderr)):
             raise subprocess.TimeoutExpired("USB storage preparation", 10)
         result = subprocess.run(command, capture_output=True, timeout=min(5, remaining))
         if result.returncode:
-            raise OSError("USB storage command failed")
+            raise tool_error(OSError("USB storage command failed"), command[0], result.returncode,
+                             result.stderr, stdout=result.stdout)
         return result.stdout
 
     def discover():
@@ -73,5 +76,6 @@ def unmount_usb_storage(*, warn=lambda text: print(text, file=sys.stderr)):
         if discover() != original:
             raise ValueError("USB storage changed during discovery")
         run(["/usr/sbin/diskutil", "unmountDisk", "/dev/" + disk])
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError, AttributeError):
-        warn("Warning: C100X USB storage unmount was skipped or failed; continuing the planned reboot")
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        warn("Warning: C100X USB storage unmount was skipped or failed; continuing the planned reboot\n"
+             + format_failure(exc))

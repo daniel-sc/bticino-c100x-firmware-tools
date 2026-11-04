@@ -13,12 +13,12 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(script).resolve().parent))
     sys.argv = [script, context]
     from classe100x.firmware import FirmwareError
+    from classe100x.diagnostics import format_failure, text
     try:
         runpy.run_path(script, run_name="__main__")
-    except FirmwareError as exc:
-        # Payload authors may deliberately provide a short, non-secret user error.
-        # Tracebacks, arbitrary exceptions and other stdout/stderr stay private.
-        message = str(exc)
-        if len(message) <= 300 and "\n" not in message and "\r" not in message:
+    except Exception as exc:
+        message = text(str(exc))
+        if isinstance(exc, FirmwareError) and len(message) <= 300 and "\n" not in message:
             print("Payload error: " + message, file=sys.stderr)
+        print(format_failure(exc, debug=True), file=sys.stderr)
         raise SystemExit(1) from None

@@ -5,24 +5,25 @@ Start with `README.md` in the downloaded `C100X` folder for installation and lin
 to the build/flash guides. [Current online overview](https://github.com/daniel-sc/bticino-c100x-firmware-tools#readme).
 No Homebrew, Python, Xcode or MyHOME setup is required.
 
-**New in alpha.4:** managed USB networking follows the device between normal-mode
-RNDIS (USB helper) and recovery-mode native ECM. This fixes a feth-only assumption
-that can stop alpha.3 at `entering recovery: rebooting` despite recovery booting.
-The old helper is stopped before ECM takes over; cancellation during that teardown
-finishes worker cleanup before returning. Reboot identity/uptime and route checks
-remain required, with no automatic device-write retries.
+**New in alpha.5:** richer failure diagnostics throughout SSH/recovery verification,
+USB networking, FTP/flashing, firmware validation/downloads and builder tools/hooks.
+Errors retain original causes, operation/stage, exit status and bounded tool output.
+`--debug` adds Python stack traces; unexpected programming errors show them directly.
+Recovery failure reports and explicitly requested build failure reports retain
+exception chains and stacks even without `--debug`. Existing reports are never
+overwritten; choose a new build-report path for another attempt.
 
-New `plan-recovery` and `recover` commands can explicitly install main firmware
-from matching idle recovery state after assessment of a stopped update. See
-`docs/FLASHING.md`; these are not generic resume or uncertain-write retry commands.
-Existing SSH verification and optional SSH/MQTT builder payloads remain available.
+SSH preflight identifies the failed prerequisite, and SSH/reboot readiness timeouts
+retain their final failure or observation. Managed USB failures include recent
+helper output. Paths, usernames and original messages remain useful; known secret
+values are removed. Review diagnostics before sharing. This release improves
+evidence capture but does not establish the cause of the previously reported live
+SSH preflight failures.
 
-Fixes #1: before planned reboots, a bounded best-effort `diskutil` unmount targets
-only storage identified beneath the C100X USB hardware. Ambiguous matches or
-failures warn without aborting the firmware sequence solely for that host step.
-No forced unmount/ejection or persistent host settings; preflight remains read-only.
-Notification suppression and preserved networking after idle unmount still need
-hardware confirmation.
+Includes alpha.4's ECM/RNDIS handover, explicit `plan-recovery`/`recover` commands,
+and best-effort storage unmount before planned reboots. Device-write ordering,
+reboot-proof checks and the no-uncertain-write-retry policy remain unchanged.
+See `docs/FLASHING.md` for usage; firmware is still built and flashed separately.
 
 **Experimental alpha:** release CI requires offline tests and relocated packaged
 smoke checks, including simulated USB handover and recovery installation. One

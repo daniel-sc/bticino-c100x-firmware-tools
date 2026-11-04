@@ -11,6 +11,58 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-04: Alpha.5 independent review and candidate checks
+
+- Two fresh, independent standards/spec reviewers found a USB worker regression:
+  a builder-doctor local named `text` shadowed the diagnostic formatter used by
+  the worker callback. An actual worker-entry regression reproduced the failure;
+  renaming the local fixed normal diagnostic/readiness and exception JSON output.
+- The spec reviewer also found that truncated SSH acquisition could hide the
+  process exit status. Failure annotations now retain the available status before
+  teardown; a fake SSH process confirms exit 7, short output and `dd` stderr all
+  survive together.
+- Both reviewers verified the fixes and reported no remaining actionable findings.
+  Each independently ran 32 CLI, SSH and diagnostics tests successfully. The full
+  native-MQTT-enabled suite passed **183 tests, no skips**. Packaged smoke includes
+  the shared diagnostics tests and actual worker-entry regression.
+- Alpha.5 notes and the existing Homebrew setup/release documentation were reviewed
+  against the implementation and public tap. Candidate/release publication and
+  downloaded-bundle verification are recorded separately after completion.
+- No hardware access or device-changing operation was performed during this review.
+
+## 2026-11-04: Failure diagnostics (offline)
+
+- Implemented shared cause/note/traceback diagnostics across CLI, SSH, recovery
+  verification, FTP/update polling, USB supervision/storage, downloads, archive
+  validation and builder tools/hooks. Recovery failure reports and explicitly
+  requested build failure reports retain stacks independently of `--debug`.
+- Added five focused tests for shared formatting, CLI traceback behavior and USB
+  diagnostic forwarding; extended existing SSH, FTP, build/report and recovery
+  tests to check retained details and known-password removal. The full offline
+  suite with the native MQTT fixture library passed **182 tests, no skips**.
+- Manually exercised source CLI failures with missing input paths, `--debug`
+  before/after the command, an unavailable localhost probe (observed timeout),
+  and an intentionally failing host-tool fixture. Confirmed its build failure
+  report contains stage/traceback, is mode 0600, creates no image, and cannot be
+  overwritten by a later attempt.
+- Executed the SSH prerequisite script through local `/bin/sh` with simulated
+  UID and firmware-copy reads; both failures retained exit 1 and named the exact
+  failed check. Temporary fixtures were removed. `git diff --check` passed.
+- No intercom access, firmware write, reboot or hardware acceptance was performed
+  for this change. The two earlier live SSH preflight failures remain undiagnosed;
+  their original stderr cannot be reconstructed from the old reports.
+
+## 2026-11-04: Homebrew cask installation and upgrade
+
+- Published `daniel-sc/homebrew-tap` with the alpha.4 signed-DMG cask.
+  Homebrew strict audit and cask style checks passed.
+- Installed through the public tap into a temporary application directory and
+  verified the PATH-linked `c100x --version`. Installed alpha.3, then successfully
+  upgraded through Brew to alpha.4; bundled `builder-doctor` checks and strict
+  launcher signature verification passed after the upgrade.
+- Validation used host-only commands. The existing `/Applications/C100X` manual
+  installation was preserved; no device connection, write or reboot was performed.
+
 ## 2026-11-03: Alpha.4 publication and downloaded-bundle validation
 
 - Pushed reviewed implementation at

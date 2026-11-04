@@ -7,12 +7,14 @@ import sys
 
 from .ext4 import Ext4
 from .firmware import FirmwareError, regular_file
+from .diagnostics import protect_inputs, remember_secret
 
 
 class Context:
     def __init__(self, path: Path | None = None):
         self.data = json.loads((path or Path(sys.argv[1])).read_text())
         self.inputs = self.data["inputs"]
+        protect_inputs(self.inputs)
         self.directory = Path(self.data["directory"])
         self.generated = self.directory / "generated"
         self.generated.mkdir(mode=0o700, exist_ok=True)
@@ -32,6 +34,8 @@ class Context:
             data = source.read(limit + 1)
         if len(data) > limit:
             raise FirmwareError("Payload input exceeds its size limit")
+        if name in ("password_file", "private_key_file"):
+            remember_secret(data.rstrip(b"\r\n"))
         return data
 
     def stock_file(self, path: str, expected_sha256: str) -> bytes:

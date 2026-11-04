@@ -48,10 +48,11 @@ LAN `en` interface is never accepted (ADR-015).
 | Module | Responsibility and boundary |
 | --- | --- |
 | `__main__.py` | Command selection, private user-password input, staging lifetime and user-facing errors |
+| `diagnostics.py` | Shared exception-chain/traceback rendering and JSON evidence; bounded notes/tool diagnostics and exact known-secret removal |
 | `firmware.py` | Fixed package profile, preserved component hashes, bounded archive validation/staging; expose `PreparedFirmware` and transfer payload metadata |
 | `download.py` | Fetch and cache the pinned original, verify size/hash, no-clobber publication |
 | `builder.py` | Private working copy, ordered trusted image payloads, repacking, final checks and publication |
-| `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback, bounded/redacted subprocess boundary |
+| `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback and bounded subprocess execution with failure diagnostics |
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
 | `payloads/ssh/` | Stock-specific SSH account/config/key preparation, raw image commands and verification |
 | `payloads/mqtt/` | Stock-runtime bridge, private broker configuration, startup integration and image readback checks |
@@ -76,6 +77,17 @@ verification imports the shared host-tool boundary and requires e2fsprogs; it
 does not import the builder or require 7zip, Dropbear keygen or OpenSSL.
 No native macOS frameworks are imported by the Python CLI; the USB supervisor's
 feth/helper execution remains macOS-specific.
+
+Diagnostics use existing exceptions, explicit chaining and Python exception notes;
+new scenarios can add context with `details()` or `tool_error()`. The CLI renders
+causes by default and stacks with `--debug` (always for unexpected exceptions).
+Recovery reports and requested build failure reports serialize the same chain,
+including stacks without local variables. Messages/tool output retain the last
+8,192 characters per field, marking truncation. SSH stderr and
+the managed USB helper's recent output survive failures; read-only readiness
+loops retain their final failure/observation rather than logging every poll.
+Known secret values are registered in memory and replaced exactly. Ordinary paths,
+usernames and diagnostic text are retained; reports need review before sharing.
 
 ## Domain vocabulary
 

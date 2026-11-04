@@ -8,10 +8,12 @@ import subprocess
 import sys
 import time
 
+from .diagnostics import details
+
 PAIR_READY = re.compile(r"virtual interface pair ready: system side (feth[0-9]+) <-> driver side feth[0-9]+")
 
 
-def run_usb(binary: Path, *, notify=None) -> None:
+def run_usb(binary: Path, *, notify=None, diagnostic=None) -> None:
     if os.geteuid() != 0:
         raise PermissionError("USB networking needs root; run the usb command with sudo")
     binary = binary.resolve(strict=True)
@@ -27,13 +29,13 @@ def run_usb(binary: Path, *, notify=None) -> None:
     try:
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             previous[sig] = signal.signal(sig, interrupt)
-        _supervise(binary, notify=notify)
+        _supervise(binary, notify=notify, diagnostic=diagnostic)
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
 
 
-def _supervise(binary: Path, *, notify=None) -> None:
+def _supervise(binary: Path, *, notify=None, diagnostic=None) -> None:
     while True:
         if notify:
             notify(None)
@@ -46,6 +48,8 @@ def _supervise(binary: Path, *, notify=None) -> None:
             for line in process.stdout:
                 if notify is None:
                     print(line.rstrip(), flush=True)
+                elif diagnostic:
+                    diagnostic(line.rstrip())
                 match = PAIR_READY.search(line)
                 if match:
                     interface = match.group(1)
@@ -58,6 +62,11 @@ def _supervise(binary: Path, *, notify=None) -> None:
                     else:
                         print(f"USB network ready on {interface}: 192.168.129.2/30", flush=True)
             process.wait()
+            if diagnostic:
+                diagnostic(f"USB helper exited with status {process.returncode}; waiting for reconnection")
+        except Exception as exc:
+            details(exc, operation="USB helper supervision", helper=binary)
+            raise
         finally:
             try:
                 if process.poll() is None:

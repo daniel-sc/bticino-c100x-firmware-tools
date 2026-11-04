@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from classe100x.ssh import SSHConnection, SSHError, STDERR_LIMIT, STDOUT_LIMIT
+from classe100x.diagnostics import format_failure
 
 
 ALGORITHM = b"ecdsa-sha2-nistp256"
@@ -135,6 +136,7 @@ class SSHTests(unittest.TestCase):
             ("os.write(1, b'x' * 20)", 21, "truncated"),
             ("os.write(1, b'x' * 20)", 19, "byte limit"),
             ("os.write(1, b'x' * 20); os.write(2, b'private server diagnostic'); sys.exit(7)", 20, "exit 7"),
+            ("os.write(1, b'x' * 20); os.write(2, b'dd: read error'); sys.exit(7)", 21, "truncated"),
             (f"os.write(2, b'x' * {STDERR_LIMIT + 1}); time.sleep(30)", 0, "byte limit"),
             ("os.write(1, b'x'); time.sleep(30)", 20, "timed out"),
         ]
@@ -143,20 +145,26 @@ class SSHTests(unittest.TestCase):
                 output = self.directory / "partial"
                 with self.assertRaisesRegex(SSHError, message) as error:
                     connection.run("read", output=output, expected_size=size, timeout=0.5)
-                self.assertNotIn("private server diagnostic", str(error.exception))
+                if message == "exit 7":
+                    self.assertIn("private server diagnostic", format_failure(error.exception))
+                if "dd: read error" in body:
+                    self.assertIn("dd: read error", format_failure(error.exception))
+                    self.assertIn("exit status: 7", format_failure(error.exception))
                 self.assertFalse(output.exists())
                 self.assertIsNotNone(self.children[-1].poll())
 
-    def test_capture_limit_and_no_raw_diagnostics(self):
+    def test_capture_limit_and_stderr_with_known_password_removed(self):
         with self.fake_ssh(f"os.write(1, b'x' * {STDOUT_LIMIT + 1}); time.sleep(30)"), \
                 SSHConnection("root2", warn=lambda _: None) as connection:
             with self.assertRaisesRegex(SSHError, "stdout exceeded"):
                 connection.run("read")
         with self.fake_ssh("os.write(2, b'credential server diagnostic'); sys.exit(255)"), \
-                SSHConnection("root2", warn=lambda _: None) as connection:
+                SSHConnection("root2", password="credential", warn=lambda _: None) as connection:
             with self.assertRaisesRegex(SSHError, "exit 255") as error:
                 connection.run("read")
-            self.assertNotIn("credential", str(error.exception))
+            output = format_failure(error.exception)
+            self.assertNotIn("credential", output)
+            self.assertIn("server diagnostic", output)
             self.assertEqual(len(connection.host_keys), 1)
 
     def test_missing_or_invalid_host_key_evidence_fails(self):

@@ -11,6 +11,8 @@ import re
 import socket
 import time
 
+from .diagnostics import details
+
 ACK = b"*#*1##"
 NACK = b"*#*0##"
 READ_QUERIES = {15: "device_type", 16: "firmware", 17: "hardware", 19: "uptime", 40: "update_status"}
@@ -98,7 +100,9 @@ class ReadOnlyClient(AbstractContextManager):
                     "the stock trusted address 192.168.129.2"
                 )
             return self
-        except BaseException:
+        except BaseException as exc:
+            details(exc, operation="OpenWebNet connection/session handshake",
+                    endpoint=f"{self.host}:{self.port}", timeout_seconds=self.timeout)
             self.close()
             raise
 
@@ -134,7 +138,9 @@ class ReadOnlyClient(AbstractContextManager):
             if self.stream.receive(deadline) != ACK:
                 raise ProtocolError(f"Missing final ACK for read-only query {dimension}")
             return tuple(values)
-        except BaseException:
+        except BaseException as exc:
+            details(exc, operation=f"OpenWebNet read {family}/{dimension}",
+                    endpoint=f"{self.host}:{self.port}", timeout_seconds=self.timeout)
             # A failed exchange loses framing/session confidence. Do not reuse it.
             self.close()
             raise

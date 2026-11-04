@@ -6,6 +6,7 @@ import re
 from classe100x.firmware import FirmwareError
 from classe100x.host import find_tool, run_tool
 from classe100x.payload import Context
+from classe100x.diagnostics import tool_error
 from common import HASHES, HOST_KEY, public_key
 
 c = Context()
@@ -46,11 +47,12 @@ for path in ("/etc/passwd", "/etc/shadow"):
 password_hash = b"*"
 if password is not None:
     # Stock shadow entries use SHA-512 crypt ($6$). stdin keeps the password out of argv.
-    status, out, _ = run_tool([find_tool("openssl", c.inputs.get("openssl")), "passwd", "-6", "-stdin"],
+    openssl = find_tool("openssl", c.inputs.get("openssl"))
+    status, out, err = run_tool([openssl, "passwd", "-6", "-stdin"],
                               input_data=password.encode() + b"\n", timeout=10)
     password_hash = out.strip()
     if status or not re.fullmatch(rb"\$6\$[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}", password_hash):
-        raise FirmwareError("Unable to produce the stock-supported password hash")
+        raise tool_error(FirmwareError("Unable to produce the stock-supported password hash"), openssl, status, err)
 
 c.write("passwd", original["/etc/passwd"].rstrip(b"\n") + b"\nroot2:x:0:0:root:/home/root:/bin/sh\n")
 c.write("shadow", original["/etc/shadow"].rstrip(b"\n") + b"\nroot2:" + password_hash + b":18033:0:99999:7:::\n")
@@ -66,10 +68,11 @@ c.write("dropbear.conf", config)
 c.write("authorized_keys", key)
 
 hostkey = c.generated / "host_key"
-status, _, _ = run_tool([find_tool("dropbearkey", c.inputs.get("dropbearkey")),
+dropbearkey = find_tool("dropbearkey", c.inputs.get("dropbearkey"))
+status, _, err = run_tool([dropbearkey,
                          "-t", "ecdsa", "-s", "256", "-f", str(hostkey)], timeout=30)
 if status or not hostkey.is_file():
-    raise FirmwareError("Unable to generate the SSH host key")
+    raise tool_error(FirmwareError("Unable to generate the SSH host key"), dropbearkey, status, err)
 hostkey.chmod(0o600)
 c.write("expected.json", json.dumps({"password_enabled": password is not None,
                                     "public_key_type": key_type}).encode())

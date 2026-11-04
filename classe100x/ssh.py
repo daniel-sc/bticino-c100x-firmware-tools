@@ -22,6 +22,8 @@ import sys
 import tempfile
 import time
 
+from .diagnostics import details, remember_secret
+
 
 STDOUT_LIMIT = 128 * 1024
 STDERR_LIMIT = 64 * 1024
@@ -76,6 +78,7 @@ class SSHConnection:
             key = Path(key).absolute()
         self.key = key
         self._password = password
+        remember_secret(password)
         self.check_transport = check_transport
         self.warn = warn
         self.host_keys: list[dict[str, str]] = []
@@ -118,7 +121,7 @@ class SSHConnection:
         except BaseException as error:
             self.close()
             if isinstance(error, OSError) and not isinstance(error, SSHError):
-                raise SSHError("Cannot prepare the private SSH transport") from None
+                raise SSHError("Cannot prepare the private SSH transport") from error
             raise
 
     def close(self):
@@ -131,8 +134,8 @@ class SSHConnection:
             directory, self._directory = self._directory, None
             try:
                 shutil.rmtree(directory)
-            except OSError:
-                raise SSHError("Cannot remove the private SSH workspace") from None
+            except OSError as exc:
+                raise SSHError("Cannot remove the private SSH workspace") from exc
 
     def _own(self, path):
         if os.geteuid() == 0:
@@ -221,6 +224,7 @@ class SSHConnection:
         process = None
         target = None
         created = False
+        stderr = bytearray()
         known_hosts = self._directory / "known_hosts"
         try:
             # Fresh each time: OpenSSH disables password auth for changed keys in
@@ -243,10 +247,10 @@ class SSHConnection:
                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, env=self._environment(),
                                        cwd=self._directory, start_new_session=True, **privileges)
-            result = self._receive(process, target, expected_size, deadline)
+            result = self._receive(process, target, expected_size, deadline, stderr)
             observed = self._observe_host_key(known_hosts)
             if process.returncode:
-                raise SSHError(f"SSH command failed (exit {process.returncode}); check authentication and USB readiness")
+                raise SSHError(f"SSH command failed (exit {process.returncode})")
             if not observed:
                 raise SSHError("SSH connection did not provide host-key evidence")
             if target is not None:
@@ -254,6 +258,9 @@ class SSHConnection:
                 target = None
             return result
         except BaseException as error:
+            details(error, operation="SSH read", endpoint=f"{self.user}@192.168.129.1:22",
+                    timeout_seconds=timeout, stderr=stderr,
+                    exit_status=process.poll() if process is not None else None)
             if process is not None:
                 # Kill the whole isolated group, including a blocked askpass or
                 # descendant holding a pipe open after the SSH process exits.
@@ -274,14 +281,14 @@ class SSHConnection:
             if created:
                 Path(output).unlink(missing_ok=True)
             if isinstance(error, OSError) and not isinstance(error, SSHError):
-                raise SSHError("SSH transport or local acquisition I/O failed") from None
+                raise SSHError("SSH transport or local acquisition I/O failed") from error
             raise
         finally:
             if process is not None:
                 process.stdout.close()
                 process.stderr.close()
 
-    def _receive(self, process, target, expected_size, deadline):
+    def _receive(self, process, target, expected_size, deadline, stderr):
         captured = bytearray()
         sizes = {"stdout": 0, "stderr": 0}
         password_sent = False
@@ -312,6 +319,10 @@ class SSHConnection:
                         pipes -= 1
                         continue
                     sizes[name] += len(chunk)
+                    if name == "stderr":
+                        # Keep the tail, including diagnostics preceding a timeout.
+                        stderr.extend(chunk)
+                        del stderr[:-STDERR_LIMIT]
                     limit = STDERR_LIMIT if name == "stderr" else (expected_size if target is not None else STDOUT_LIMIT)
                     if sizes[name] > limit:
                         raise SSHError(f"SSH {name} exceeded its byte limit")
@@ -322,5 +333,5 @@ class SSHConnection:
                             target.write(chunk)
             process.wait()
         if target is not None and sizes["stdout"] != expected_size:
-            raise SSHError("SSH acquisition was truncated")
+            raise SSHError(f"SSH acquisition was truncated: expected {expected_size} bytes, received {sizes['stdout']}")
         return bytes(captured)

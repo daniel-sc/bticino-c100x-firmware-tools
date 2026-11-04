@@ -10,6 +10,7 @@ import time
 
 from .firmware import FirmwareError
 from .resources import bundled_tool
+from .diagnostics import details, remember_secret
 
 
 def find_tool(name: str, override: str | None = None) -> str:
@@ -25,12 +26,15 @@ def find_tool(name: str, override: str | None = None) -> str:
     for candidate in candidates:
         if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
             return str(Path(candidate).resolve())
-    raise FirmwareError(f"Required builder tool not found: {name}; supply an explicit tool path")
+    raise details(FirmwareError(f"Required builder tool not found: {name}; supply an explicit tool path"),
+                  searched_paths=[path for path in candidates if path])
 
 
 def run_tool(arguments: list[str], *, cwd: Path | None = None, timeout: float = 120,
              limit: int = 2 * 1024**2, input_data: bytes | None = None) -> tuple[int, bytes, bytes]:
-    """Never include argv, stdin or tool output in exceptions (they can hold secrets)."""
+    """Bound execution/output; diagnose failures without dumping argv or stdin."""
+    if input_data:
+        remember_secret(input_data.rstrip(b"\r\n"))
     env = {**os.environ, "LC_ALL": "C", "LANG": "C", "PAGER": "/bin/cat",
            "DEBUGFS_PAGER": "/bin/cat", "PYTHONDONTWRITEBYTECODE": "1"}
     env.pop("E2FSPROGS_UNDO_DIR", None)
@@ -40,9 +44,13 @@ def run_tool(arguments: list[str], *, cwd: Path | None = None, timeout: float = 
         if input_data is not None:
             stdin.write(input_data)
             stdin.seek(0)
-        process = subprocess.Popen(arguments, cwd=cwd, env=env, stdin=stdin,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   start_new_session=True)
+        try:
+            process = subprocess.Popen(arguments, cwd=cwd, env=env, stdin=stdin,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       start_new_session=True)
+        except OSError as exc:
+            details(exc, tool=arguments[0], operation="start subprocess", cwd=cwd)
+            raise
         output = [bytearray(), bytearray()]
         deadline = time.monotonic() + timeout
         try:
@@ -66,8 +74,9 @@ def run_tool(arguments: list[str], *, cwd: Path | None = None, timeout: float = 
                     raise FirmwareError("Builder subprocess exceeded its time limit")
                 status = process.wait(timeout=remaining)
             return status, bytes(output[0]), bytes(output[1])
-        except subprocess.TimeoutExpired:
-            raise FirmwareError("Builder subprocess exceeded its time limit") from None
+        except (subprocess.TimeoutExpired, FirmwareError, OSError) as exc:
+            raise details(FirmwareError("Builder subprocess did not complete"), tool=arguments[0],
+                          timeout_seconds=timeout, cwd=cwd, stderr=output[1]) from exc
         finally:
             # Also stop children that retained pipes or outlived a hook.
             try:

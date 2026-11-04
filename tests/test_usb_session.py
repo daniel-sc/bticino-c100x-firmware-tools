@@ -44,6 +44,13 @@ class USBSessionTests(unittest.TestCase):
                 with self.assertRaisesRegex(USBError, "stopped"):
                     session.check(timeout=5)
 
+    def test_worker_diagnostic_survives_until_failure(self):
+        from classe100x.diagnostics import format_failure
+        session = Session(self.worker('print(\'{"diagnostic":"libusb open failed: access denied"}\')'))
+        with self.assertRaises(USBError) as error:
+            session.check(timeout=5)
+        self.assertIn("libusb open failed: access denied", format_failure(error.exception))
+
     def test_no_device_has_bounded_wait(self):
         session = Session(self.worker('import time; print(\'{"interface":null}\'); time.sleep(30)'))
         with self.assertRaisesRegex(USBError, "not ready"):

@@ -247,13 +247,15 @@ every possible interaction between installed services.
 
 The backend checks process status and rejects stderr other than the recognized
 debugfs version banner. A failing mutation can return 0 and the rest of its batch
-can run; such a batch is rejected before publication. Stdout/stderr are bounded
-and withheld from normal logs because commands/output can contain secrets.
-Hooks have bounded runtime/output and their process group is terminated on
-timeout/cancellation. Hook failure reports identify the payload and phase.
-Authors can raise `FirmwareError` with a short, explicitly non-secret user-facing
-message; only that deliberate error message is forwarded, not a traceback or
-arbitrary process output. Never include credentials in those messages.
+can run; such a batch is rejected before publication. Runtime/output are bounded;
+failure diagnostics include tool identity, exit status and stderr. Filesystem
+check and packaging failures also include their diagnostic stdout. Raw debugfs
+readback and hook stdout are not printed because they can contain file contents.
+Hook process groups are terminated on timeout/cancellation. Hook failures retain
+their payload/phase, original error and traceback, including for unexpected
+exceptions. Authors can still raise `FirmwareError` with a short user-facing
+summary. Never deliberately include credentials in error messages. The standard
+payload context registers explicit secret inputs for exact-value removal.
 
 Verification reads actual bytes and metadata, runs after each payload, after all
 payloads, and on the reopened output image. Bundled SSH checks pin expected stock
@@ -271,10 +273,15 @@ symlinks are rejected. The destination directory must exist. Allow at least
 resume or device cleanup. Unexplained baseline filesystem errors stop the build.
 
 Only a fully reopened/verified image is published, mode 0600, using a same-volume
-no-clobber operation. Reports are optional, redacted and tied to the final FWZ
+no-clobber operation. Successful reports are optional and tied to the final FWZ
 hash. Image publication precedes report publication; if the latter fails, the
-valid image remains and the CLI reports that distinction. Reports contain no
-credential values, per-secret hashes or user input paths.
+valid image remains and the CLI reports that distinction. Once a requested report
+path has been validated, build failures also try to publish a private no-clobber
+report with `status: failed`, the build stage, exception chain and stack traces.
+Failure-report publication errors do not replace the original build failure.
+Diagnostics retain paths and original tool messages; review reports before sharing.
+Known secret inputs are removed, and no locals, stdin or command arguments are
+collected. Existing reports are never overwritten, including on a later attempt.
 
 Handled cancellation (including SIGTERM/SIGHUP) removes unpublished workspaces.
 An uncatchable termination can leave a private `.classe100x-build-*` directory;

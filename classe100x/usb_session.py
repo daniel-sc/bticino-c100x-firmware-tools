@@ -13,6 +13,7 @@ import threading
 import time
 
 from .resources import child_command
+from .diagnostics import TEXT_LIMIT, details, text, tool_error
 
 
 class USBError(OSError):
@@ -25,13 +26,13 @@ def native_usb_interface():
         result = subprocess.run(["/usr/sbin/ioreg", "-a", "-r", "-c", "IOUSBHostDevice"],
                                 capture_output=True, timeout=5)
         if result.returncode:
-            raise USBError("Could not inspect native USB networking")
+            raise tool_error(USBError("Could not inspect native USB networking"), "ioreg", result.returncode, result.stderr)
         if not result.stdout.strip():
             return None
         devices = [node for node in plistlib.loads(result.stdout)
                    if node.get("idVendor") == 0x1da4 and node.get("idProduct") == 0x0056]
-    except (subprocess.TimeoutExpired, ValueError, TypeError, plistlib.InvalidFileException):
-        raise USBError("Could not inspect native USB networking") from None
+    except (subprocess.TimeoutExpired, ValueError, TypeError, plistlib.InvalidFileException) as exc:
+        raise USBError("Could not inspect native USB networking") from exc
     if len(devices) > 1:
         raise USBError("Connect only one C100X USB device")
     interfaces = set()
@@ -62,14 +63,17 @@ def check_native_usb(interface):
                                      "netmask", "255.255.255.252", "up"],
                                     capture_output=True, timeout=5)
             if result.returncode:
-                raise USBError("Could not configure the native C100X USB interface")
+                raise details(tool_error(USBError("Could not configure the native C100X USB interface"),
+                                         "ifconfig", result.returncode, result.stderr), interface=interface)
         route = subprocess.run(["/sbin/route", "-n", "get", "192.168.129.1"],
                                capture_output=True, text=True, timeout=5)
-    except subprocess.TimeoutExpired:
-        raise USBError("Native USB network check timed out") from None
+    except subprocess.TimeoutExpired as exc:
+        raise USBError("Native USB network check timed out") from exc
     match = re.search(r"^\s*interface:\s*(\S+)\s*$", route.stdout, re.MULTILINE)
     if route.returncode or not match or match[1] != interface:
-        raise USBError("Intercom route is not through the native C100X USB interface")
+        raise details(tool_error(USBError("Intercom route is not through the native C100X USB interface"),
+                                 "route", route.returncode, route.stderr, stdout=route.stdout),
+                      expected_interface=interface)
 
 
 @contextmanager
@@ -145,6 +149,8 @@ class Session:
         self.condition = threading.Condition()
         self.interface = None
         self.ended = False
+        self.diagnostic = ""
+        self.reader_error = None
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -152,16 +158,22 @@ class Session:
         try:
             while line := self.process.stdout.readline(4097):
                 if len(line) > 4096:
-                    break
+                    raise ValueError("USB worker message exceeds 4096 characters")
                 event = json.loads(line)
+                if "diagnostic" in event:
+                    if not isinstance(event["diagnostic"], str):
+                        raise ValueError("Invalid USB worker diagnostic")
+                    with self.condition:
+                        self.diagnostic = text(self.diagnostic + event["diagnostic"] + "\n", limit=TEXT_LIMIT)
+                    continue
                 interface = event["interface"]
                 if interface is not None and not re.fullmatch(r"feth[0-9]+", interface):
-                    break
+                    raise ValueError("Invalid USB worker interface")
                 with self.condition:
                     self.interface = interface
                     self.condition.notify_all()
-        except (OSError, ValueError, KeyError, TypeError):
-            pass
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.reader_error = exc
         finally:
             with self.condition:
                 self.ended = True
@@ -174,21 +186,25 @@ class Session:
             while self.interface is None and not self.ended:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise USBError("USB networking is not ready; check the cable and device power")
+                    raise details(USBError("USB networking is not ready; check the cable and device power"),
+                                  helper_output=self.diagnostic)
                 self.condition.wait(remaining)
             if self.ended or self.process.poll() is not None:
-                raise USBError("USB supervisor stopped; no update command was retried")
+                raise details(USBError("USB supervisor stopped; no update command was retried"),
+                              exit_status=self.process.poll(), helper_output=self.diagnostic) from self.reader_error
             interface = self.interface
         try:
             route = subprocess.run(["/sbin/route", "-n", "get", "192.168.129.1"],
                                    capture_output=True, text=True, timeout=5)
-        except subprocess.TimeoutExpired:
-            raise USBError("USB route verification timed out") from None
+        except subprocess.TimeoutExpired as exc:
+            raise USBError("USB route verification timed out") from exc
         match = re.search(r"^\s*interface:\s*(\S+)\s*$", route.stdout, re.MULTILINE)
         with self.condition:
             if (self.ended or self.interface != interface or route.returncode
                     or not match or match[1] != interface):
-                raise USBError("Intercom route is not through the managed USB interface")
+                raise details(tool_error(USBError("Intercom route is not through the managed USB interface"),
+                                         "route", route.returncode, route.stderr, stdout=route.stdout),
+                              expected_interface=interface, helper_output=self.diagnostic)
 
 
 @contextmanager

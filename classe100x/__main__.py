@@ -15,6 +15,7 @@ from .usb_session import usb_session
 from .usb_storage import unmount_usb_storage
 from .updater import NetworkDevice, UpdateError, check_identity, flash, flash_recovery
 from .vendor import C100X_PROFILE
+from .diagnostics import clear_secrets, failure, format_failure, text
 
 
 def recovery_verification(args, firmware, check_transport):
@@ -37,13 +38,19 @@ def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "_usb-worker":
         def notify(interface):
             print(json.dumps({"interface": interface}), flush=True)
+        def diagnostic(message):
+            print(json.dumps({"diagnostic": text(message, limit=2000)}, ensure_ascii=False), flush=True)
         try:
-            run_usb(Path(sys.argv[2]), notify=notify)
+            run_usb(Path(sys.argv[2]), notify=notify, diagnostic=diagnostic)
         except KeyboardInterrupt:
             return 130
+        except Exception as exc:
+            diagnostic(format_failure(exc, debug=True))
+            return 1
         return 0
     parser = argparse.ArgumentParser(description="Classe 100X native macOS firmware CLI")
     parser.add_argument("--version", action="version", version=f"c100x {version()}")
+    parser.add_argument("--debug", action="store_true", help="Include Python stack traces in error output")
     commands = parser.add_subparsers(dest="command", required=True)
     probe = commands.add_parser("probe", help="Read-only device identification and update status")
     probe.add_argument("--host", default="192.168.129.1")
@@ -65,7 +72,7 @@ def main() -> int:
     build.add_argument("--ssh-password", action="store_true", help="Prompt privately for the ssh payload login password")
     build.add_argument("--ssh-password-file", type=Path, help="Read ssh login password from a private file")
     build.add_argument("--output", type=Path, required=True)
-    build.add_argument("--report", type=Path, help="Optional redacted build report (must not already exist)")
+    build.add_argument("--report", type=Path, help="Optional build result/failure report (must not already exist)")
     for command in (build, doctor):
         command.add_argument("--debugfs", help="Explicit debugfs executable")
         command.add_argument("--e2fsck", help="Explicit e2fsck executable")
@@ -88,6 +95,9 @@ def main() -> int:
             auth = command.add_mutually_exclusive_group()
             auth.add_argument("--ssh-password", action="store_true", help="Prompt once for the existing SSH password; keep it only in memory")
             auth.add_argument("--ssh-key", type=Path, help="SSH identity file (encrypted keys must already be unlocked in your agent)")
+    for command in commands.choices.values():
+        command.add_argument("--debug", action="store_true", default=argparse.SUPPRESS,
+                             help="Include Python stack traces in error output")
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -115,17 +125,17 @@ def main() -> int:
                 try:
                     path = find_tool(name)
                     _, out, err = run_tool([path, *options], timeout=10)
-                    text = (out + err).decode(errors="replace").splitlines()
+                    lines = (out + err).decode(errors="replace").splitlines()
                     if name == "dropbearkey":
-                        help_text = "\n".join(text)
+                        help_text = "\n".join(lines)
                         result["ssh_tools"][name] = {"path": path, "version": "not reported by keygen",
                                                      "ecdsa_p256": "ecdsa" in help_text and "256" in help_text}
                     else:
                         _, out, err = run_tool([path, "passwd", "-help"], timeout=10)
-                        result["ssh_tools"][name] = {"path": path, "version": text[0][:200] if text else "unknown",
+                        result["ssh_tools"][name] = {"path": path, "version": lines[0][:200] if lines else "unknown",
                                                      "sha512_crypt": b"-6" in out + err}
-                except FirmwareError:
-                    result["ssh_tools"][name] = {"available": False}
+                except (FirmwareError, OSError) as exc:
+                    result["ssh_tools"][name] = {"available": False, "failure": failure(exc)}
             print(json.dumps(result, indent=2))
             print("Core builder tools found and versions checked.", file=sys.stderr)
             missing = [name for name, capability in (("dropbearkey", "ecdsa_p256"), ("openssl", "sha512_crypt"))
@@ -226,14 +236,15 @@ def main() -> int:
             elif args.command in ("plan", "plan-recovery"):
                 print("Preflight passed. All requested preflight checks passed. No firmware was written.", file=sys.stderr)
         return 0
-    except (FirmwareError, UpdateError, ProtocolError, OSError, ValueError) as exc:
-        print(f"{args.command} failed: {exc}", file=sys.stderr)
-        return 1
-    except subprocess.SubprocessError:
-        print(f"{args.command} failed: local helper did not complete successfully", file=sys.stderr)
+    except Exception as exc:
+        expected = isinstance(exc, (FirmwareError, UpdateError, ProtocolError, OSError,
+                                   ValueError, subprocess.SubprocessError))
+        print(f"{args.command} failed: {format_failure(exc, debug=args.debug or not expected)}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         return 130
+    finally:
+        clear_secrets()
 
 
 if __name__ == "__main__":

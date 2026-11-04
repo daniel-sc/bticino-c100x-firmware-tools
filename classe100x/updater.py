@@ -12,6 +12,7 @@ import time
 from .firmware import MAIN_FILES, RECOVERY_FILES, Payload, PreparedFirmware
 from .protocol import ACK, NACK, ProtocolError, ReadOnlyClient
 from .vendor import Credentials, VendorProfile
+from .diagnostics import details, format_failure, remember_secret
 
 
 class UpdateError(Exception):
@@ -28,8 +29,8 @@ def uptime_seconds(values: tuple[str, ...]) -> int:
         if days < 0 or not (0 <= hours < 24 and 0 <= minutes < 60 and 0 <= seconds < 60):
             raise ValueError
         return days * 86400 + hours * 3600 + minutes * 60 + seconds
-    except (TypeError, ValueError):
-        raise UpdateError("Invalid device uptime") from None
+    except (TypeError, ValueError) as exc:
+        raise details(UpdateError("Invalid device uptime"), received=values) from exc
 
 
 def check_identity(info: dict, expected_status: int) -> None:
@@ -41,10 +42,10 @@ def check_identity(info: dict, expected_status: int) -> None:
     for key, value in expected.items():
         try:
             actual = tuple(int(part) for part in info[key])
-        except (KeyError, TypeError, ValueError):
-            raise UpdateError(f"Missing or invalid {key} in device identity") from None
+        except (KeyError, TypeError, ValueError) as exc:
+            raise UpdateError(f"Missing or invalid {key} in device identity") from exc
         if actual != value:
-            raise UpdateError(f"Device {key} does not match the researched 1.5.8 update path")
+            raise UpdateError(f"Device {key} does not match the researched 1.5.8 update path: expected {value}, received {actual}")
 
 
 class UpdateClient(ReadOnlyClient):
@@ -55,9 +56,9 @@ class UpdateClient(ReadOnlyClient):
         try:
             self._send(frame, deadline)
             reply = self.stream.receive(deadline)
-        except (ProtocolError, OSError):
+        except (ProtocolError, OSError) as exc:
             self.close()
-            raise UncertainDelivery(f"Delivery of {label} is uncertain; command was not retried") from None
+            raise UncertainDelivery(f"Delivery of {label} is uncertain; command was not retried") from exc
         if reply != ACK:
             self.close()
             if reply == NACK:
@@ -106,23 +107,35 @@ class NetworkDevice:
         # FTP starts only after the explicit begin command. Each worker consumes
         # and deletes its input, so exactly one file must be present at commit.
         self.check_transport()
+        remember_secret(credentials.password)
+        operation = "connect"
         try:
             with ftplib.FTP(timeout=30) as ftp:
                 ftp.connect(self.host, 21)
+                operation = "login"
                 ftp.login(credentials.username, credentials.password)
+                operation = "inspect staging directory"
                 ftp.set_pasv(True)
                 if ftp.nlst():
                     raise UpdateError("FTP staging directory is not empty")
+                operation = "upload " + path.name
                 with path.open("rb") as source:
                     ftp.storbinary("STOR " + path.name, source, blocksize=65536)
+                operation = "check uploaded size"
                 ftp.voidcmd("TYPE I")
-                if ftp.size(path.name) != path.stat().st_size:
-                    raise UpdateError("FTP payload length mismatch")
+                actual, expected = ftp.size(path.name), path.stat().st_size
+                if actual != expected:
+                    raise UpdateError(f"FTP payload length mismatch: expected {expected}, received {actual}")
+                operation = "check uploaded directory"
                 if ftp.nlst() != [path.name]:
                     raise UpdateError("Unexpected files in FTP staging directory")
-        except ftplib.all_errors:
-            # Server replies and exception messages are not safe credential logs.
-            raise UpdateError("FTP transfer failed; payload write was not requested") from None
+                operation = "close FTP connection"
+        except UpdateError as exc:
+            details(exc, operation=operation, endpoint=f"{self.host}:21", payload=path.name)
+            raise
+        except ftplib.all_errors as exc:
+            raise details(UpdateError("FTP transfer failed; payload write was not requested"),
+                          operation=operation, endpoint=f"{self.host}:21", payload=path.name) from exc
 
     def wait_idle(self) -> None:
         deadline = time.monotonic() + self.write_timeout
@@ -131,7 +144,7 @@ class NetworkDevice:
             if self.client.idle():
                 return
             if time.monotonic() >= deadline:
-                raise UpdateError("Update worker is still busy; no reboot was requested")
+                raise UpdateError(f"Update worker is still busy after {self.write_timeout:g} seconds; no reboot was requested")
             time.sleep(5)
 
     def reboot_and_wait(self, status: int) -> dict:
@@ -147,25 +160,32 @@ class NetworkDevice:
         self.client.reboot()
         self.close()
         deadline = started + self.reboot_timeout
+        last_error = None
+        observation = None
         while time.monotonic() < deadline:
             time.sleep(1)
             try:
                 self.check_transport()
                 with ReadOnlyClient(self.host, self.port, timeout=2) as probe:
                     info = probe.inspect()
-            except (ProtocolError, OSError):
+            except (ProtocolError, OSError) as exc:
+                last_error = exc
                 continue
             elapsed = time.monotonic() - started
             after = uptime_seconds(info["uptime"])
             # The version remains 1.5.8 throughout. An uptime reset distinguishes
             # a reboot from a stale reply or a transient network interruption.
             if after > elapsed + 2 or before + elapsed - after < 5:
+                observation = f"uptime before={before}s, after={after}s, elapsed={elapsed:.1f}s; reset not established; status={info.get('update_status')}"
+                last_error = None
                 continue
             check_identity(info, status)
             info = self.connect()
             check_identity(info, status)
             return info
-        raise UpdateError("Reboot/reconnection was not verified; no command was retried")
+        raise details(UpdateError("Reboot/reconnection was not verified; no command was retried"),
+                      timeout_seconds=self.reboot_timeout, expected_status=(status, 0),
+                      last_observation=observation) from last_error
 
     def settle(self) -> None:
         # MyHOME waits 3 seconds after FTP close and 5 seconds before main reboot.
@@ -243,14 +263,18 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
             verification.update_result("completed", stage)
         report("Update sequence completed; verify calls, audio/video, door release and any enabled SSH/MQTT features")
         return info
-    except (UpdateError, ProtocolError, OSError) as exc:
+    except Exception as exc:
         if verification is not None:
             _record_stop(verification, stage, report)
-        raise UpdateError(f"Stopped at '{stage}': {exc}. Keep the device powered; no automatic retry or cleanup reboot.") from None
-    except KeyboardInterrupt:
+        if not isinstance(exc, (UpdateError, ProtocolError, OSError)):
+            details(exc, update_stage=stage,
+                    device_state="Keep the device powered; no automatic retry or cleanup reboot")
+            raise
+        raise UpdateError(f"Stopped at '{stage}': {exc}. Keep the device powered; no automatic retry or cleanup reboot.") from exc
+    except KeyboardInterrupt as exc:
         if verification is not None:
             _record_stop(verification, stage, report)
-        raise UpdateError(f"Interrupted at '{stage}'. Keep the device powered; no automatic retry or cleanup reboot.") from None
+        raise UpdateError(f"Interrupted at '{stage}'. Keep the device powered; no automatic retry or cleanup reboot.") from exc
     finally:
         device.close()
 
@@ -260,5 +284,5 @@ def _record_stop(verification, stage, report):
         # The device sequence may have completed even if final report publication
         # failed. Preserve that distinction from an interrupted device operation.
         verification.update_result("completed" if stage == "update sequence completed" else "stopped", stage)
-    except (OSError, UpdateError):
-        report("Warning: could not save update outcome in the verification report")
+    except (OSError, UpdateError) as exc:
+        report("Warning: could not save update outcome in the verification report\n" + format_failure(exc))

@@ -64,7 +64,7 @@ def main():
 
         # Exercise USB handover/recovery sequencing with simulated devices using
         # the shipped interpreter and modules, including isolated child workers.
-        for pattern in ("test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py"):
+        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py"):
             run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
                 "import sys, unittest; sys.path.insert(0, sys.argv[1]); "
                 "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern=sys.argv[3]); "

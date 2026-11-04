@@ -85,6 +85,10 @@ allowlisting excludes query 44 because it schedules a reboot. See
 
 ## ADR-005: Keep vendor secrets and private artifacts out of source control
 
+**Diagnostic-policy update, 2026-11-04:** The diagnostic amendment to ADR-008 below
+supersedes blanket suppression of original FTP/tool errors. Private credentials
+remain excluded; ordinary diagnostic context is retained for user review.
+
 **Status update, 2026-10-28:** ADR-007 bundles the public FWZ format password;
 ADR-010 supersedes runtime FTP-profile extraction with bundled public vendor
 settings. Private device/user credentials and artifacts remain excluded.
@@ -150,6 +154,22 @@ separately from hardware results.
 ## ADR-008: Trusted raw payloads and a small e2fsprogs process boundary
 
 **Accepted 2026-10-28.**
+
+**Diagnostic amendment, accepted 2026-11-04:** Troubleshooting takes priority over
+blanket withholding of original errors. Preserve exception causes and bounded
+stderr, identify failed operations, and retain final read-only polling failures.
+Use Python exception notes and one shared renderer/JSON serializer rather than a
+logging framework or new exception hierarchy. `--debug` adds terminal stacks;
+unexpected programming errors always show stacks. Persistent failure reports
+retain stacks regardless of that flag, and an explicitly requested build report
+may now be published on failure as well as success, without overwriting files.
+
+Keep ordinary paths, usernames and tool messages. Do not collect argv, stdin,
+local variables or raw image/hook stdout. Allow diagnostic stdout from fsck and
+packaging tools. Remove exact known secret values in memory; do not attempt a
+general-purpose sensitive-data classifier. Users review diagnostics before
+sharing. This supersedes the raw-log suppression below and FTP-error suppression
+in ADR-005/010, while retaining private credentials and artifacts outside Git.
 
 **Decision:** Use raw `apply.debugfs` command files and optional `prepare.py` and
 `verify.py` hooks, in explicit CLI order. Payloads are trusted host programs;
@@ -248,6 +268,13 @@ team credentials can sign this project but must be provided as this repository's
 secrets. Alpha publication precedes hardware validation; v1 requires successful
 native flashing and functional acceptance. Detailed design and credential setup
 are in [RELEASING.md](RELEASING.md).
+
+**Homebrew distribution decision, 2026-11-04:** Add a cask in the separate public
+`daniel-sc/homebrew-tap` repository, reusing the signed DMG. This gives users a
+one-command install without another build pipeline. Keep Apple Silicon/macOS 15+
+support, install the complete `/Applications/C100X` bundle and expose `c100x` on
+PATH. Track published alpha releases with manual version/checksum updates.
+See the release guide for the maintenance step.
 
 ## ADR-012: Optional SSH recovery integrity gate
 

@@ -228,12 +228,22 @@ class BuilderTests(unittest.TestCase):
         with firmware.prepare_firmware(self.output):
             pass
 
-    def test_hook_errors_do_not_expose_arbitrary_exception_text(self):
+    def test_hook_failure_retains_trace_and_report_without_known_password(self):
+        from classe100x.diagnostics import format_failure
         payload = self.payload()
-        (payload / "prepare.py").write_text("raise RuntimeError('private-input-must-not-leak')\n")
+        (payload / "prepare.py").write_text(
+            "from classe100x.payload import Context\n"
+            "raise RuntimeError('Original hook failure: ' + Context().inputs['password'])\n")
+        report = self.root / "failed-build.json"
         with self.assertRaises(FirmwareError) as error:
-            self.build(payloads=[payload])
-        self.assertNotIn("private-input-must-not-leak", str(error.exception))
+            self.build(payloads=[payload], inputs={"example": {"password": "synthetic-private-input"}},
+                       report_path=report)
+        diagnostic = format_failure(error.exception)
+        self.assertIn("Original hook failure", diagnostic)
+        self.assertIn("Traceback", diagnostic)
+        self.assertNotIn("synthetic-private-input", diagnostic + report.read_text())
+        self.assertEqual(json.loads(report.read_text())["status"], "failed")
+        self.assertFalse(self.output.exists())
         (payload / "prepare.py").write_text("from classe100x.firmware import FirmwareError\nraise FirmwareError('Missing required public-key input')\n")
         with self.assertRaisesRegex(FirmwareError, "Missing required public-key input"):
             self.build(payloads=[payload])

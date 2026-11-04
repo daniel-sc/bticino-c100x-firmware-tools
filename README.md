@@ -28,6 +28,18 @@ file on your Mac; flashing installs that file on the intercom.
 
 ## Installation
 
+With [Homebrew](https://brew.sh), install the signed Apple Silicon release:
+
+```sh
+brew install --cask daniel-sc/tap/c100x
+c100x --version
+```
+
+This installs the complete bundle into `/Applications/C100X` and puts `c100x` on
+PATH. Requires **macOS 15.0 or later**.
+
+### Direct download (no Homebrew required)
+
 Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
 per-user installation). The DMG includes an Applications shortcut for
@@ -37,7 +49,6 @@ together. The release includes Python and all required tools;
 [v0.1.0-alpha.4](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.4)
 is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
 Each release's `release.json` records its minimum macOS version.
-Homebrew installation of `c100x` is not available yet; use the DMG.
 
 Open Terminal and check the installed version:
 
@@ -61,12 +72,35 @@ flashing use `sudo`. Keep generated images private: they can contain credentials
 
 ## Updating the Mac tool
 
-Finish any running build or flash, download the newer DMG, and replace the entire
-installed `C100X` folder. Keep firmware and private settings outside that folder.
+Finish any running build or flash first. For a Homebrew installation:
+
+```sh
+brew upgrade --cask daniel-sc/tap/c100x
+```
+
+For a direct installation, download the newer DMG and replace the entire installed
+`C100X` folder. Keep firmware and private settings outside that folder.
 Check the version with `/Applications/C100X/c100x --version`.
 
 Updating the Mac tool leaves the intercom unchanged. To update its SSH/MQTT
 features, rebuild from stock with your settings and flash the new image.
+
+## Error diagnostics
+
+Failures include underlying errors, operation/stage context and bounded tool
+diagnostics. Add `--debug` before or after the command for Python stack traces:
+
+```sh
+c100x --debug inspect-fw custom.fwz
+```
+
+Unexpected programming errors show a traceback automatically. Recovery-verification
+reports and requested build failure reports retain exception chains and stack
+traces even without `--debug`. Paths, usernames and original tool messages are
+included; review terminal output and reports before sharing them. Known passwords
+are removed, and diagnostics do not collect command arguments, stdin or local
+variables. A failed build can create the requested `--report` file; use a new
+report path for the next attempt.
 
 ## Advanced use and development
 

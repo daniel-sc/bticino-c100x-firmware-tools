@@ -7,6 +7,7 @@ import tempfile
 
 from .firmware import FirmwareError
 from .host import find_tool, run_tool
+from .diagnostics import details, tool_error
 
 
 def quote(value: str | Path) -> str:
@@ -33,7 +34,8 @@ class Ext4:
         # Even failed write/mkdir commands can exit 0. Permit only the tool banner.
         if status or any(not re.fullmatch(r"debugfs \d+\.\d+(?:\.\d+)? \([^\r\n]+\)", line)
                          for line in lines if line.strip()):
-            raise FirmwareError("debugfs reported an operation error (raw diagnostics withheld)")
+            raise details(tool_error(FirmwareError("debugfs reported an operation error"),
+                                     self.debugfs, status, stderr), image=self.image)
         return stdout
 
     def command(self, command: str) -> bytes:
@@ -56,7 +58,7 @@ class Ext4:
     def require_absent(self, path: str) -> None:
         parent, name = path.rsplit("/", 1)
         if name in self.names(parent or "/"):
-            raise FirmwareError("Payload expected an absent destination")
+            raise FirmwareError(f"Payload expected an absent destination: {path}")
 
     def apply(self, commands: Path, cwd: Path) -> None:
         if commands.stat().st_size > 1024 * 1024:
@@ -68,9 +70,10 @@ class Ext4:
         self._run(["-w", "-f", str(commands.resolve())], cwd=cwd)
 
     def check(self) -> None:
-        status, _, _ = run_tool([self.e2fsck, "-f", "-n", str(self.image)], timeout=300)
+        status, out, err = run_tool([self.e2fsck, "-f", "-n", str(self.image)], timeout=300)
         if status != 0:
-            raise FirmwareError("Filesystem check failed; no automatic repair or vendor-error exception is enabled")
+            raise details(tool_error(FirmwareError("Filesystem check failed; no automatic repair or vendor-error exception is enabled"),
+                                     self.e2fsck, status, err, stdout=out), image=self.image)
 
     def read(self, path: str, *, limit: int = 1024 * 1024) -> bytes:
         info = self.stat(path)
@@ -86,7 +89,7 @@ class Ext4:
                     raise FirmwareError("Readback exceeded its size limit")
                 data = destination.read_bytes()
         if len(data) != info["size"]:
-            raise FirmwareError("Image file readback length mismatch")
+            raise FirmwareError(f"Image file readback length mismatch for {path}: expected {info['size']}, received {len(data)}")
         return data
 
     def stat(self, path: str) -> dict:
@@ -104,12 +107,14 @@ class Ext4:
     def require_file(self, path: str, data: bytes, *, mode: int, uid=0, gid=0) -> None:
         info = self.stat(path)
         if (info["type"], info["mode"], info["uid"], info["gid"]) != ("regular", mode, uid, gid):
-            raise FirmwareError("Payload file metadata verification failed")
+            raise details(FirmwareError(f"Payload file metadata verification failed: {path}"),
+                          expected=("regular", mode, uid, gid),
+                          actual=(info["type"], info["mode"], info["uid"], info["gid"]))
         if self.read(path, limit=max(len(data), 1)) != data:
-            raise FirmwareError("Payload file content verification failed")
+            raise FirmwareError(f"Payload file content verification failed: {path}")
 
     def require_symlink(self, path: str, target: str) -> None:
         info = self.stat(path)
         # Bundled startup links are short, stored inline. Long links require a separate reader.
         if info["type"] != "symlink" or f'Fast link dest: "{target}"' not in info["raw"]:
-            raise FirmwareError("Payload symlink verification failed")
+            raise FirmwareError(f"Payload symlink verification failed: {path}; expected target {target}")

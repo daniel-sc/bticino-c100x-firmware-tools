@@ -92,7 +92,10 @@ class USBStorageTests(unittest.TestCase):
                 self.run.reset_mock()
                 self.unmount()
                 self.assertEqual(self.run.call_count, index + 1)
-                self.assertNotIn("private diagnostic", self.warnings[-1])
+                if isinstance(error, OSError):
+                    self.assertIn("private diagnostic", self.warnings[-1])
+                else:
+                    self.assertIn("timed out", self.warnings[-1])
         self.run.side_effect = None
         for result in (subprocess.CompletedProcess([], 1, b"private diagnostic"),
                        subprocess.CompletedProcess([], 0, b"malformed")):

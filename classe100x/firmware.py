@@ -15,6 +15,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 import zlib
 
+from .diagnostics import details
+
 SELECTED_SHA256 = "67848425d6ec5a251ff8362394dad052737f42eb8326cdc8333038d7ede22abc"
 STOCK_SHA256 = "bca0dd7e407c2406d6f8c696f0a9e50bc1e795c8e4700c89e83f09ff96c3efb2"
 MAIN_FILES = ("btweb_only.ext4.gz", "uImage.zip")
@@ -157,8 +159,8 @@ def validate_manifest(data: bytes) -> None:
                 raise FirmwareError("Unsupported firmware action")
             if tuple(n.text for n in actions[0].findall("attr[@type='file']")) != expected:
                 raise FirmwareError("Unexpected filesystem/kernel payload ordering")
-    except ET.ParseError:
-        raise FirmwareError("Malformed firmware manifest") from None
+    except ET.ParseError as exc:
+        raise FirmwareError("Malformed firmware manifest") from exc
 
 
 def _validate_payload(path: Path, *, profile: bool = False) -> None:
@@ -210,6 +212,7 @@ def prepare_firmware(path: Path, archive_key: bytes = ARCHIVE_KEY, *, temporary_
         source.seek(0)
         with tempfile.TemporaryDirectory(prefix="classe100x-", dir=temporary_parent) as tmp:
             directory = Path(tmp)
+            component = "FWZ directory/manifest"
             try:
                 with zipfile.ZipFile(source) as archive:
                     files = archive.infolist()
@@ -242,6 +245,7 @@ def prepare_firmware(path: Path, archive_key: bytes = ARCHIVE_KEY, *, temporary_
                     (directory / "fwz.xml").write_bytes(manifest)
                     payloads = []
                     for name in dict.fromkeys((*RECOVERY_FILES, *MAIN_FILES)):
+                        component = name
                         destination = directory / name
                         with archive.open(name, pwd=archive_key) as src, destination.open("xb") as dst:
                             copied = 0
@@ -260,8 +264,10 @@ def prepare_firmware(path: Path, archive_key: bytes = ARCHIVE_KEY, *, temporary_
                 source.seek(0)
                 if hashlib.file_digest(source, "sha256").hexdigest() != digest:
                     raise FirmwareError("Firmware input changed during validation")
-            except (RuntimeError, zipfile.BadZipFile, gzip.BadGzipFile, EOFError, NotImplementedError, zlib.error):
-                # Archive-library exceptions can embed input-derived text. Keep
-                # credentials and package content out of CLI messages/logs.
-                raise FirmwareError("Unable to decrypt or validate firmware payloads") from None
+            except (RuntimeError, zipfile.BadZipFile, gzip.BadGzipFile, EOFError, NotImplementedError, zlib.error) as exc:
+                raise details(FirmwareError("Unable to decrypt or validate firmware payloads"),
+                              archive=path, component=component) from exc
+            except (FirmwareError, OSError) as exc:
+                details(exc, archive=path, component=component)
+                raise
             yield prepared

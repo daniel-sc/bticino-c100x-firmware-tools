@@ -19,6 +19,7 @@ from .firmware import FirmwareError, geometry
 from .host import find_tool, run_tool
 from .ssh import SSHError
 from .updater import UpdateError
+from .diagnostics import details, failure, format_failure, tool_error
 
 PARTITIONS = {"mmcblk2p2": 50 * 1024**2, "mmcblk2p3": 150 * 1024**2}
 ROOTFS_BYTES = 153600000
@@ -56,20 +57,30 @@ def digest(path, *, length=None, deadline=None):
 def inspection_command():
     # Constant shell program: never interpolate user input or filesystem paths.
     return """set -eu
+step=uid
+trap 'code=$?; if [ "$code" -ne 0 ]; then echo "Recovery inspection failed at $step (exit $code)" >&2; fi' 0
 test "$(id -u)" = 0
+step=running-firmware-copy
 test "$(cat /var/tmp/flags/RUNNING_FW_COPY)" = 1
+step=required-tool-dd
 command -v dd >/dev/null
+step=required-tool-sha256sum
 command -v sha256sum >/dev/null
 for p in mmcblk2p2 mmcblk2p3; do
+    step=$p-block-device
     test -b /dev/$p
+    step=$p-readable
     test -r /dev/$p
+    step=$p-holders
     test -z "$(ls -A /sys/class/block/$p/holders)"
+    step=$p-identity
     echo PARTITION:$p
     cat /sys/class/block/$p/size
     cat /sys/class/block/$p/dev
     stat -L -c '%t:%T' /dev/$p
     cat /sys/class/block/$p/partition
 done
+step=mount-info
 echo MOUNTS
 cat /proc/self/mountinfo
 """
@@ -87,24 +98,26 @@ def parse_inspection(data):
             if (label != f"PARTITION:{name}" or int(sectors) * 512 != size
                     or (major, minor) != (node_major, node_minor)
                     or int(number) != int(name[-1]) or major < 0 or minor < 0):
-                raise ValueError
+                raise ValueError(f"{name}: expected {size} bytes and matching device numbers; "
+                                 f"received label={label}, sectors={sectors}, sysfs={dev}, node={node}, partition={number}")
             devices[name] = {"device": f"{major}:{minor}", "bytes": size}
         if lines[10] != "MOUNTS" or not lines[11:]:
-            raise ValueError
+            raise ValueError("Missing recovery mount information")
         mounted = set()
         for line in lines[11:]:
             fields = line.split()
             if len(fields) < 10 or "-" not in fields or not re.fullmatch(r"\d+:\d+", fields[2]):
-                raise ValueError
+                raise ValueError("Malformed mountinfo entry")
             mounted.add(fields[2])
         numbers = {item["device"] for item in devices.values()}
         if len(numbers) != len(devices):
-            raise ValueError
+            raise ValueError("Recovery partitions have duplicate device numbers")
         if numbers & mounted:
-            raise VerificationError("A recovery partition is mounted; verification stopped")
+            raise details(VerificationError("A recovery partition is mounted; verification stopped"),
+                          mounted_device_numbers=sorted(numbers & mounted))
         return devices
-    except (UnicodeError, ValueError, IndexError):
-        raise VerificationError("Recovery partition identity or size could not be verified") from None
+    except (UnicodeError, ValueError, IndexError) as exc:
+        raise VerificationError("Recovery partition identity or size could not be verified") from exc
 
 
 class RecoveryVerifier:
@@ -169,8 +182,10 @@ class RecoveryVerifier:
         return parse_inspection(self.ssh.run(inspection_command(), timeout=timeout))
 
     def _space(self):
-        if shutil.disk_usage(self.workspace).free < FREE_BYTES:
-            raise VerificationError("Recovery verification needs at least 512 MiB of free host storage")
+        free = shutil.disk_usage(self.workspace).free
+        if free < FREE_BYTES:
+            raise details(VerificationError("Recovery verification needs at least 512 MiB of free host storage"),
+                          available_bytes=free, path=self.workspace)
 
     def _references(self):
         size, reference = 0, hashlib.sha256()
@@ -206,13 +221,18 @@ class RecoveryVerifier:
     def preflight(self):
         self._stage("preflight")
         try:
+            self._stage("preflight: host storage")
             self._space()
+            self._stage("preflight: host tools")
             self.tools = {name: find_tool(name) for name in ("debugfs", "e2fsck")}
             for name, option in (("debugfs", "-V"), ("e2fsck", "-V")):
-                status, _, _ = run_tool([self.tools[name], option], timeout=10)
+                status, out, err = run_tool([self.tools[name], option], timeout=10)
                 if status:
-                    raise VerificationError(f"Recovery verification tool could not start: {name}")
+                    raise tool_error(VerificationError(f"Recovery verification tool could not start: {name}"),
+                                     self.tools[name], status, err, stdout=out)
+            self._stage("preflight: preparing stock references")
             self._references()
+            self._stage("preflight: SSH partition inspection")
             self.initial_devices = self._inspect()
             self.record["preflight"] = "passed"
             self._save()
@@ -232,14 +252,17 @@ class RecoveryVerifier:
     def _tool(self, arguments, *, cwd=None):
         status, out, err = run_tool(arguments, cwd=cwd, timeout=remaining(self.deadline), limit=256 * 1024)
         if status:
-            raise VerificationError("Offline recovery filesystem tool failed; no repair was attempted")
+            raise tool_error(VerificationError("Offline recovery filesystem tool failed; no repair was attempted"),
+                             arguments[0], status, err,
+                             stdout=out if Path(arguments[0]).name == "e2fsck" else b"")
         return out, err
 
     def _debugfs(self, image, command, *, cwd=None):
         out, err = self._tool([self.tools["debugfs"], "-R", command, str(image)], cwd=cwd)
         if any(not re.fullmatch(r"debugfs \d+\.\d+(?:\.\d+)? \([^\r\n]+\)", line)
                for line in err.decode(errors="replace").splitlines() if line.strip()):
-            raise VerificationError("Offline recovery file inspection failed")
+            raise tool_error(VerificationError("Offline recovery file inspection failed"),
+                             self.tools["debugfs"], 0, err)
         return out
 
     def _kernel(self, image):
@@ -268,7 +291,8 @@ class RecoveryVerifier:
                 if (not destination.is_file() or destination.is_symlink()
                         or destination.stat().st_size != reference["bytes"]
                         or digest(destination, deadline=self.deadline) != reference["sha256"]):
-                    raise VerificationError("Installed recovery kernel/DTB content differs from stock")
+                    raise details(VerificationError("Installed recovery kernel/DTB content differs from stock"),
+                                  file=name, expected=reference)
             finally:
                 destination.unlink(missing_ok=True)
         self.record["kernel_files_match"] = True
@@ -281,12 +305,16 @@ class RecoveryVerifier:
         self._save()
         ready_deadline = time.monotonic() + 120
         try:
-            while True:
+            last_error = None
+            while time.monotonic() < ready_deadline:
                 try:
                     self.ssh.run("true", timeout=min(10, remaining(ready_deadline)))
                     break
-                except SSHError:
-                    time.sleep(min(2, remaining(ready_deadline)))
+                except SSHError as exc:
+                    last_error = exc
+                    time.sleep(min(2, max(0, ready_deadline - time.monotonic())))
+            else:
+                raise VerificationError("SSH was not ready within 120 seconds after normal reboot; last failure follows") from last_error
             self.deadline = time.monotonic() + 900
             self._space()
             for name, size in PARTITIONS.items():
@@ -334,6 +362,8 @@ class RecoveryVerifier:
     def __exit__(self, exc_type, exc, traceback):
         if exc_type is not None:
             self.record["failure_type"] = exc_type.__name__
+            details(exc, verification_stage=self.record["stage"], report=self.directory / "report.json")
+            self.record["failure"] = failure(exc)
             if self.record["preflight"] != "passed":
                 self.record["preflight"] = "failed"
             if self.record["verification"] == "in_progress":
@@ -343,9 +373,10 @@ class RecoveryVerifier:
                 shutil.rmtree(self.workspace)
                 self.record["raw_copies"] = "removed"
             self._save()
-        except OSError:
-            self.progress("Warning: evidence cleanup/publication failed; inspect the private evidence directory")
+        except OSError as cleanup_error:
+            self.progress("Warning: evidence cleanup/publication failed; inspect the private evidence directory\n"
+                          + format_failure(cleanup_error))
             if exc_type is None:
-                raise VerificationError("Recovery evidence cleanup/publication failed") from None
+                raise VerificationError("Recovery evidence cleanup/publication failed") from cleanup_error
         finally:
             self.ssh.close()

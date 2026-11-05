@@ -11,6 +11,19 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-05: USB storage discovery correction
+
+- Read-only host inspection found the C100X volume mounted, but the existing
+  `ioreg -a -r -c IOUSBHostDevice` output omitted child media's `Whole` and
+  `BSD Name` properties. A replay reproduced the helper silently skipping unmount.
+- Storage discovery now requests child properties with `-l`; incomplete media
+  identity warns rather than being treated as absent storage. Two regression tests
+  failed before the fix and pass afterward, including the observed whole-disk mount
+  layout and command-dependent property visibility.
+- `mise run test`: **189 tests, 186 passed, 3 optional MQTT native ABI tests skipped**.
+  No actual unmount, firmware write or reboot was performed. Preserved networking
+  after unmount and notification behavior across all three reboots remain pending.
+
 ## 2026-11-04: Alpha.6 publication and downloaded-bundle validation
 
 - Committed/pushed the independently reviewed changes as

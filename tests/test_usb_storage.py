@@ -40,6 +40,44 @@ class USBStorageTests(unittest.TestCase):
         self.assertEqual(self.warnings, [])
         self.assertTrue(all(0 < call.kwargs["timeout"] <= 5 for call in self.run.call_args_list))
 
+    def test_discovery_requests_child_properties_for_whole_disk_mount(self):
+        def run(command, **kwargs):
+            if command[0] == "/usr/sbin/ioreg":
+                node = device()
+                # Without -l, -c exposes USB properties but hides media properties.
+                if "-l" not in command:
+                    media = node["IORegistryEntryChildren"][0]
+                    del media["Whole"], media["BSD Name"]
+                value = [node]
+            elif command == ["/usr/sbin/diskutil", "list", "-plist", "/dev/disk7"]:
+                # The observed C100X filesystem is on the whole disk, not a partition.
+                value = {"AllDisksAndPartitions": [{"DeviceIdentifier": "disk7",
+                                                   "MountPoint": "/Volumes/C100X"}]}
+            else:
+                self.assertEqual(command, ["/usr/sbin/diskutil", "unmountDisk", "/dev/disk7"])
+                value = {}
+            return subprocess.CompletedProcess(command, 0, plistlib.dumps(value))
+
+        self.run.side_effect = run
+        self.unmount()
+        self.assertEqual(self.run.call_count, 4)
+        self.assertEqual(self.run.call_args.args[0],
+                         ["/usr/sbin/diskutil", "unmountDisk", "/dev/disk7"])
+        self.assertEqual(self.warnings, [])
+
+    def test_incomplete_media_properties_warn_instead_of_silent_absence(self):
+        for missing in ("Whole", "BSD Name"):
+            with self.subTest(missing=missing):
+                node = device()
+                del node["IORegistryEntryChildren"][0][missing]
+                self.responses([node])
+                self.run.reset_mock()
+                self.warnings.clear()
+                self.unmount()
+                self.assertEqual(self.run.call_count, 1)
+                self.assertEqual(len(self.warnings), 1)
+                self.assertIn("USB storage", self.warnings[0])
+
     def test_rediscover_changed_disk_number_on_each_reboot(self):
         for disk in ("disk7", "disk8", "disk12"):
             self.responses([device(disk)], listing(disk), [device(disk)], {})

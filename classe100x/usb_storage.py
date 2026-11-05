@@ -26,7 +26,8 @@ def unmount_usb_storage(*, warn=lambda text: print(text, file=sys.stderr)):
         return result.stdout
 
     def discover():
-        data = run(["/usr/sbin/ioreg", "-a", "-r", "-c", "IOUSBHostDevice"])
+        # -l includes child media properties, not just the matching USB device's.
+        data = run(["/usr/sbin/ioreg", "-a", "-l", "-r", "-c", "IOUSBHostDevice"])
         if not data.strip():
             return None
         devices = [node for node in plistlib.loads(data)
@@ -38,8 +39,11 @@ def unmount_usb_storage(*, warn=lambda text: print(text, file=sys.stderr)):
         media = []
 
         def visit(node):
-            if node.get("IOObjectClass") == "IOMedia" and node.get("Whole") is True:
-                media.append(node)
+            if node.get("IOObjectClass") == "IOMedia":
+                if not isinstance(node.get("Whole"), bool):
+                    raise ValueError("Unidentified USB storage: missing or invalid Whole property")
+                if node["Whole"]:
+                    media.append(node)
             for child in node.get("IORegistryEntryChildren", []):
                 visit(child)
 

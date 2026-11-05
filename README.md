@@ -3,11 +3,9 @@
 A command-line tool for building custom firmware images and flashing a
 **BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS.
 
-**Experimental:** image building, USB preflight, an uninterrupted alpha.6 flash
-and SSH access over USB/Wi-Fi after reboot with vendor SSH disabled have passed.
-Password login and SSH service restart also passed; the user confirmed MQTT and
-household functions working. See the [validation record](docs/ACCEPTANCE.md) for
-the tested scope and remaining acceptance work.
+Building, a full USB flash, SSH and MQTT/household functions have passed on the
+tested installation. See [validation and known limits](docs/ACCEPTANCE.md)
+for tested scope and follow-up coverage.
 
 ## What's included?
 
@@ -47,8 +45,7 @@ per-user installation). The DMG includes an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
 together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.
-[v0.1.0-alpha.6](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0-alpha.6)
-is signed and notarized and requires **macOS 15.0 or later** on Apple Silicon.
+Get [v0.1.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0).
 Each release's `release.json` records its minimum macOS version.
 
 Open Terminal and check the installed version:
@@ -88,20 +85,16 @@ features, rebuild from stock with your settings and flash the new image.
 
 ## Error diagnostics
 
-Failures include underlying errors, operation/stage context and bounded tool
-diagnostics. Add `--debug` before or after the command for Python stack traces:
+Errors identify the failed operation. Add `--debug` for a traceback:
 
 ```sh
 c100x --debug inspect-fw custom.fwz
 ```
 
-Unexpected programming errors show a traceback automatically. Recovery-verification
-reports and requested build failure reports retain exception chains and stack
-traces even without `--debug`. Paths, usernames and original tool messages are
-included; review terminal output and reports before sharing them. Known passwords
-are removed, and diagnostics do not collect command arguments, stdin or local
-variables. A failed build can create the requested `--report` file; use a new
-report path for the next attempt.
+Review output and reports before sharing: they retain paths, usernames and tool
+messages, with known passwords removed. A failed build can create the requested
+`--report` file; use a new report path for the next attempt. See the
+[diagnostic details](docs/BUILDER-REFERENCE.md#publication-and-failure-handling).
 
 ## Advanced use and development
 

@@ -175,7 +175,7 @@ vendor init script exits on `NO_START=1` before either start or stop. Persistent
 `abil_ssh` therefore cannot race with the selected service. No configuration-data
 write or flasher dependency is introduced. Shell lifecycle tests simulate process
 control; image checks verify installed assets, the vendor gate and boot links.
-Fresh-image hardware acceptance remains separate (ADR-017).
+Observed SSH-v2 hardware results are in [ACCEPTANCE.md](ACCEPTANCE.md) (ADR-017).
 
 The optional MQTT payload is self-contained: host hooks verify stock dependencies
 and install scripts/configuration. On-device, a lock-holding Python supervisor
@@ -195,11 +195,12 @@ reopens the final FWZ before no-clobber publication. No filesystem is mounted.
 Raw payloads have host permissions; their commands are not inferred into a change
 plan. Declared readback checks catch some composition conflicts, not all of them.
 
-Stock-image no-op and SSH builds have passed offline checks on macOS. Synthetic
-fixtures exercise failure, metadata and composition behavior without firmware or
-a device. Linux parity, MyHOME import and generated-image hardware acceptance
-remain pending. Fresh host keys and archive randomness rule out bit-identical
-reproducibility; semantic checks are the contract.
+Stock-image no-op, SSH and MQTT+SSH builds have passed offline checks on macOS;
+alpha.6's generated SSH+MQTT image passed the recorded hardware/household checks.
+Synthetic fixtures exercise failure, metadata and composition behavior without
+firmware or a device. Linux parity and MyHOME import remain unvalidated. Fresh
+host keys and archive randomness rule out bit-identical reproducibility;
+semantic checks are the contract.
 
 The sequence is tested with a simulated device implementing the operations
 `flash()` uses; no formal backend interface or plugin framework exists. Framing

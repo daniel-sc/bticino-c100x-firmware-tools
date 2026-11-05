@@ -5,6 +5,9 @@ discussion. All records below are **accepted**; acceptance describes the design
 choice, not successful hardware flashing. Keep these IDs stable and record a
 superseding decision if the approach changes.
 
+Hardware-status statements within individual records describe their recording
+date. Use [ACCEPTANCE.md](ACCEPTANCE.md) for current passed/open checks.
+
 ## ADR-001: Preserve the existing image and restrict compatibility
 
 **Status update, 2026-10-28:** firmware-creation scope and whole-archive admission
@@ -254,6 +257,21 @@ and backups remain private artifacts.
 
 **Accepted 2026-10-28**, following the short release-design interview.
 
+**Validation amendment, accepted 2026-11-05:** Carry forward observed hardware
+acceptance for unchanged device behavior. Documentation and small host-side fixes
+use appropriate offline and release-artifact checks; they do not require a fresh
+firmware flash for every release. Material changes to write sequencing, reboot/USB
+handover, compatibility or installed payload behavior need targeted validation
+of the affected path. Version labels alone do not determine hardware-test scope.
+
+The alpha.6 full flash and functional checks satisfy the original v1 milestone
+for the tested installation. Stock-to-modified remains a disclosed one-time
+coverage goal under ADR-006, not a prerequisite for every release or a claimed
+pass. The post-alpha.6 best-effort storage-discovery correction can ship after
+offline and packaged checks; live observations can join the next planned hardware
+session. This balances useful regression evidence with avoiding unnecessary
+household-device flashes. Current policy is in [RELEASING.md](RELEASING.md#validation-policy).
+
 **Decision:** Ship an Apple Silicon macOS DMG containing one CLI entry point and
 its support files. Build and Flash remain explicit independent commands. Bundle
 CPython, tools and payloads so end users install no prerequisites. Compile the
@@ -279,6 +297,14 @@ one-command install without another build pipeline. Keep Apple Silicon/macOS 15+
 support, install the complete `/Applications/C100X` bundle and expose `c100x` on
 PATH. Track published alpha releases with manual version/checksum updates.
 See the release guide for the maintenance step.
+
+**Stable publication, accepted 2026-11-05:** Publish `v<major>.<minor>.<patch>`
+tags as stable GitHub releases, starting with v0.1.0; retain `-alpha.<number>`
+for prereleases. Both use the same signed/notarized artifacts and validation
+pipeline. Stable releases become latest; alphas do not replace them. Maintain
+`packaging/RELEASE.md` with one or two user-facing sentences per change; the first
+stable release uses a short product introduction. Update the Homebrew cask after
+each published and validated release.
 
 ## ADR-012: Optional SSH recovery integrity gate
 

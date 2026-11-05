@@ -83,12 +83,13 @@ because the target filesystem was read-only; no such installation was completed.
 
 ## USB network and storage are separate functions
 
-Native control/transfer uses RNDIS, with a system-side feth address `.2/30`.
+Normal-mode control/transfer uses helper-backed RNDIS with a system-side feth
+address `.2/30`; recovery uses macOS native ECM through the same managed session.
 The device also exposes a roughly 52.4 MB `C100X` disk. Removing USB while this
 volume is mounted caused macOS's “disk not ejected properly” warning during the
 idle reconnect test. Eject the volume before future idle cable removal.
 
-Alpha.4 `flash`/`recover` automatically attempt an ordinary `diskutil unmountDisk`
+`flash`/`recover` automatically attempt an ordinary `diskutil unmountDisk`
 before each planned reboot. The helper discovers whole media beneath USB
 `1da4:0056`, checks current mount information and rechecks USB/media registry
 identity before unmounting. It never matches only a volume name or remembered
@@ -96,8 +97,9 @@ disk number. Ambiguous identification, timeout or command failure warns without
 aborting the update solely for that host-side failure. The total budget is ten
 seconds, with a command-session keepalive before the attempt. No forced unmount,
 whole-device ejection, automount setting or notification preference is changed.
-Read-only preflight does not invoke it. The idle-unmount/network check and
-notification behavior across a complete flash remain hardware acceptance work.
+Read-only preflight does not invoke it. The post-alpha.6 discovery correction
+adds `ioreg -l` to include child-media properties. The idle-unmount/network check
+and notification behavior across a complete flash remain hardware acceptance work.
 
 The updater does not copy firmware onto that disk. Disk and feth numbers are
 temporary OS assignments; do not hard-code the observed `disk7` or `feth0` into
@@ -110,7 +112,8 @@ an actual firmware update.
 
 The explicitly requested backup is at
 `research/backups/20261027T201641Z/`; sizes and verification results are in
-[ACCEPTANCE.md](ACCEPTANCE.md). The directory includes raw uncompressed images,
+[validation history](VALIDATION-HISTORY.md#2026-10-27-plain-partition-backups-completed).
+The directory includes raw uncompressed images,
 `manifest.json` and `SHA256SUMS`.
 
 | Partition | Observed use | Backup consistency evidence |
@@ -167,9 +170,9 @@ on-device changes but is a different artifact.
   record the offline checks and classified differences. Both kernel file sets
   match stock and all filesystem checks passed. These acquisitions have not been
   restore-tested and do not establish a supported restore command.
-- Start with [ACCEPTANCE.md](ACCEPTANCE.md) for the last observed results. As of
-  2026-10-27, native normal-mode probe/plan/reconnect/cleanup passed; FTP transfer,
-  recovery-mode networking and actual flashing remained unverified.
+- Start with [ACCEPTANCE.md](ACCEPTANCE.md) for current results and remaining work.
+  Alpha.6 passed the uninterrupted full USB sequence and recorded SSH/household
+  checks; stock-to-modified acceptance remains open.
 - Either direct re-flash or the stock-to-modified acceptance path is possible;
   understand the distinction in [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
 - Before another native check, reconnect USB as needed and run the managed
@@ -181,7 +184,7 @@ on-device changes but is a different artifact.
   not simply “flash successful” because the worker became idle.
 - On an unexpected stop, preserve the stage/error and stable device power. There
   is no validated automatic resume/restore procedure; select subsequent actions
-  based on observed state and protocol evidence. Alpha.4 `plan-recovery`/`recover`
+  based on observed state and protocol evidence. `plan-recovery`/`recover`
   support explicit main installation from matching idle recovery after assessment;
   see [FLASHING.md](FLASHING.md#finishing-from-an-already-running-recovery-environment).
 
@@ -201,6 +204,6 @@ The researched MyHOME installer came from the vendor's
 [download endpoint](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=MyHOME_Suite_030538.exe&fileId=58107.23188.60514.44282).
 Its profile member and decompiled reference locations are listed in
 [PROTOCOL.md](PROTOCOL.md). The TetherKit clone/revision is in
-[FLASHING.md](FLASHING.md); historical firmware paths are recorded above.
+[SOURCE.md](SOURCE.md#usb-helper-setup); historical firmware paths are recorded above.
 A research rebuild requires the relevant external inputs; the
 research files cited by path are not promised to exist there automatically.

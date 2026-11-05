@@ -1,4 +1,4 @@
-BTicino Classe 100X Firmware Tools — alpha
+BTicino Classe 100X Firmware Tools
 
 Start with README.md in this folder for installation, SSH/MQTT setup and updates.
 It is the same guide as the project's online README. Detailed instructions and

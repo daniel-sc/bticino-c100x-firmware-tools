@@ -55,13 +55,11 @@ Supply the `.pub` file to the builder; keep the matching private key on your Mac
 Ed25519 is unsupported by the stock SSH server. Legacy RSA login keys require
 `-o PubkeyAcceptedAlgorithms=+ssh-rsa` when connecting.
 
-Each build creates a new SSH host identity; it is intended to persist across
-reboots. Key-only builds disable password login. SSH payload version 2 selects an
-independent `c100x-ssh` service, so the vendor's persistent SSH-enable setting
-cannot disable it. Device configuration is preserved. Available in alpha.6;
-alpha.5 and earlier use the previous startup integration. Fresh-image startup,
-vendor start/stop isolation, service restart and reboot persistence with the vendor
-SSH setting absent passed on the tested device; see [acceptance](ACCEPTANCE.md).
+Each build creates a new SSH host identity that persists across reboots.
+Key-only builds disable password login. The independent `c100x-ssh` service
+enables SSH regardless of the vendor's SSH-enable setting, preserving device
+configuration. See the [SSH reference](BUILDER-REFERENCE.md#ssh-implementation)
+for service management and upgrading images built before alpha.6.
 
 <a id="optional-mqtt-bridge"></a>
 
@@ -117,9 +115,16 @@ for compatibility details.
 
 ## Build result and next step
 
-Run the template above with your chosen options. On success, `custom.fwz` is the
-checked firmware image and `custom.build.json` is a redacted report of offline
-checks. Neither proves that the image boots or its features work on hardware.
+For example, to combine password SSH access and the MQTT settings prepared above:
+
+```sh
+/Applications/C100X/c100x build-fw --stock c100x-1.5.8 \
+  --payload ssh --ssh-password --payload mqtt --inputs build.private.json \
+  --output custom.fwz --report custom.build.json
+```
+
+On success, `custom.fwz` is the checked firmware image and `custom.build.json` is
+a redacted report of offline checks. Check the installed features after flashing.
 
 Existing outputs are never overwritten: choose fresh output/report names for
 another build. Keep the FWZ private; it contains credentials and, with SSH, a

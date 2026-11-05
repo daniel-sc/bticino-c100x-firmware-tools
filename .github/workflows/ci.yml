@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    tags: ['v0.*-alpha.*']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -52,7 +52,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [[ "$REF_TYPE" == tag ]]; then
-            [[ "$REF_NAME" =~ ^v0\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]] || exit 1
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || exit 1
             echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
           else
             echo "version=0.1.0-alpha.ci${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
@@ -83,7 +83,7 @@ jobs:
         working-directory: .local/release
         run: |
           cp C100X/support/app/release.json release.json
-          shasum -a 256 *.dmg *-dependency-sources.tar.gz release.json > SHA256SUMS
+          shasum -a 256 ./*.dmg ./*-dependency-sources.tar.gz release.json > SHA256SUMS
       - uses: actions/upload-artifact@v7.0.2
         if: github.event_name != 'pull_request'
         with:
@@ -94,10 +94,14 @@ jobs:
             .local/release/SHA256SUMS
             .local/release/release.json
           if-no-files-found: error
-      - name: Publish alpha
+      - name: Publish release
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$RELEASE_VERSION" --verify-tag --prerelease --title "C100X $RELEASE_VERSION" --notes-file packaging/ALPHA.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/release.json
+          release_flags=(--latest)
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            release_flags=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_VERSION" --verify-tag "${release_flags[@]}" --title "C100X $RELEASE_VERSION" --notes-file packaging/RELEASE.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/release.json

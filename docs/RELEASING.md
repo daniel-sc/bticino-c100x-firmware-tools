@@ -1,5 +1,44 @@
 # Bundled CLI releases
 
+## Release checklist
+
+1. Review [ACCEPTANCE.md](ACCEPTANCE.md) against the changes being released;
+   apply the validation policy below.
+2. Update `packaging/RELEASE.md` and the README version link for the intended tag.
+   Keep release notes dense and user-facing: **one or two sentences per change**,
+   focused on its effect. Omit internal review logs and test inventories; link to
+   validation details when useful. The first stable release uses a brief product
+   introduction instead of an alpha-by-alpha changelog.
+3. Run main CI against the intended release commit, then tag it. Use
+   `v<major>.<minor>.<patch>` for stable releases or append `-alpha.<number>` for
+   prereleases. Stable releases become GitHub's latest release; alphas do not.
+4. Complete signing/notarization, downloaded-artifact checks and the manual
+   Homebrew tap update below. Record observed results in the validation history
+   and update the current acceptance summary.
+
+## Validation policy
+
+Validation follows **changed behavior**, not the version number. A release does
+not require another device flash merely because it contains changes or becomes
+stable. Existing hardware acceptance carries forward for unchanged behavior.
+
+| Change | Appropriate checks |
+| --- | --- |
+| Documentation | Accuracy, examples and links. |
+| Small host-only fixes, diagnostics or packaging | Relevant offline regressions; packaged CI and downloaded-artifact checks for the release. |
+| Material changes to firmware writes, reboot/USB handover, compatibility or device payload startup/runtime | Targeted hardware validation of the affected behavior before claiming it validated; combine flash-dependent checks into a planned hardware run. |
+
+A breaking CLI option can be verified offline; a small patch to write sequencing
+can need hardware validation. Major/breaking releases deserve a scope review, but
+the version label alone does not determine whether a flash is useful.
+
+The post-alpha.6 storage-discovery correction is a bounded best-effort host step:
+its regression and packaged checks suffice for release. Live unmount/network and
+notification observations can wait for convenient maintenance and the next
+otherwise-planned flash. Stock-to-modified, MQTT resilience and additional SSH-key
+coverage remain disclosed follow-ups, not recurring release gates. Do not turn
+deferred checks into claimed passes. See [ADR-011](DECISIONS.md#adr-011-distribute-one-self-contained-cli-through-alpha-releases).
+
 ## Agreed design
 
 - One Apple Silicon macOS CLI distribution for building, inspecting, planning and
@@ -18,8 +57,9 @@
   recovery-first sequence and never retries uncertain writes. Local cleanup does
   not send device commands. `--external-usb` is an advanced development escape hatch.
 - CI builds and publishes tagged **alpha prereleases** after offline tests and
-  packaged smoke checks. Hardware flashing is not required for an explicitly
-  experimental alpha; v1 waits for observed full flash and functional acceptance.
+  packaged smoke checks, and stable releases when tagged without the alpha suffix.
+  Alpha.6 met the full-flash and functional-acceptance milestone for the tested
+  installation; subsequent validation follows the policy above.
 - Release artifacts are Developer ID signed, notarized and stapled. Downloaded
   artifacts are checked locally too; no hardware writes are implied by that check.
 
@@ -73,12 +113,12 @@ Then export the P12 as above. The portal cannot recover an old private key.
 
 The `Test and package` workflow runs the offline suite on pull requests. Main
 pushes and manual runs also build the pinned USB helper and a self-contained
-candidate DMG. These ad-hoc-signed candidates are CI artifacts only. Tags matching
-`v0.<minor>.<patch>-alpha.<number>` additionally require all five signing secrets,
-sign all Mach-O files, test the signed bundle, notarize/staple the DMG, and publish
-a GitHub prerelease with sources, provenance and SHA-256 checksums.
+candidate DMG. These ad-hoc-signed candidates are CI artifacts only. Stable and
+alpha tags additionally require all five signing secrets, sign all Mach-O files,
+test the signed bundle, notarize/staple the DMG, and publish a GitHub release with
+sources, provenance and SHA-256 checksums. Only alpha tags use `--prerelease`.
 
-Choose a new tag matching `v0.<minor>.<patch>-alpha.<number>`. Use the same
+Choose a new stable or alpha tag as described above. Use the same
 `VERSION` below for the local build, tag and download; never reuse a published tag.
 Build locally with Command Line Tools, the pinned helper, and mise Python:
 
@@ -105,8 +145,9 @@ rejects missing arm64 slices, external libraries/symlinks and remaining rpaths.
 Before tagging, commit the documentation alongside the code:
 
 - Check README setup/update instructions and `docs/BUILDER.md` against the release.
-- Update `packaging/ALPHA.md` for the chosen version. Preserve dated validation
-  history; add new results to `docs/ACCEPTANCE.md` only after observing them.
+- Update `packaging/RELEASE.md` for the chosen version. Preserve dated evidence in
+  `docs/VALIDATION-HISTORY.md` and summarize current results in `docs/ACCEPTANCE.md`
+  only after observing them.
 - Check the candidate's `README.md`, short `README.txt` entry point and linked
   `docs/` files. The package copies the repository README directly.
 
@@ -147,7 +188,7 @@ release metadata. Install with:
 brew install --cask daniel-sc/tap/c100x
 ```
 
-After publishing and validating **each alpha release**, manually update the tap's
+After publishing and validating **each release**, manually update the tap's
 cask version and DMG SHA-256 (and URL if needed), then commit and push the tap.
 Use the published DMG checksum, not a local candidate's. Verify Brew installation
 or upgrade and `c100x --version` before reporting the tap updated. Updates are

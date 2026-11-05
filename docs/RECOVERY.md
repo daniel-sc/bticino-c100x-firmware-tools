@@ -277,7 +277,7 @@ stock startup script. Existing regular-file contents are unchanged. Its
 This is positive evidence about the present components' integrity. It is **not**
 a successful recovery boot, recovery USB test or guarantee about the copy written
 by a future flash. Detailed results are in
-[ACCEPTANCE.md](ACCEPTANCE.md#2026-10-29-installed-kernel-and-recovery-integrity--read-only);
+[validation history](VALIDATION-HISTORY.md#2026-10-29-installed-kernel-and-recovery-integrity--read-only);
 private acquisition and analysis artifacts are under
 `.local/recovery-integrity-20261029T204358Z/`.
 

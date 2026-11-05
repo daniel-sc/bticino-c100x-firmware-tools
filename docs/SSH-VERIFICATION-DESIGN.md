@@ -1,9 +1,11 @@
 # Optional SSH recovery verification — design interview
 
-**2026-10-29 — Design confirmed; implementation authorized.** This records the
-agreed optional verifier. It is not authorization to flash a device.
+**Historical design interview, 2026-10-29.** The verifier is implemented; open
+questions and pending statements below describe the design discussion at that
+time. Current usage is in [FLASHING.md](FLASHING.md#optional-recovery-verification-existing-ssh)
+and observed results are in [ACCEPTANCE.md](ACCEPTANCE.md).
 
-Terminology is in [../GLOSSARY.md](../GLOSSARY.md); existing behavior and research
+Terminology is in [ARCHITECTURE.md](ARCHITECTURE.md#domain-vocabulary); behavior and research
 evidence are in [PROTOCOL.md](PROTOCOL.md).
 
 ## Agreed: Q1–Q4

@@ -2,9 +2,8 @@
 
 Install using the [README](../README.md#installation), then use a compatible
 `.fwz` image, such as the one from [Build firmware](BUILDER.md). Stock devices
-do not need SSH. **Experimental:** an uninterrupted alpha.6 flash and SSH checks
-passed, with MQTT/household functions confirmed by the user. See the
-[hardware validation record](ACCEPTANCE.md) for scope and remaining work.
+do not need SSH. See [validation and known limits](ACCEPTANCE.md) for tested
+scope and follow-up coverage.
 
 ## Compatibility
 
@@ -51,15 +50,10 @@ transitions. On error, keep the device powered and record the stage and message.
 There is no automatic retry, resume, rollback or cleanup reboot.
 
 The intercom may also expose a `C100X` storage volume. Do not copy firmware onto
-it; flashing uses USB networking. Starting with alpha.4, before each planned reboot
-the flasher makes a best-effort ordinary unmount of storage identified beneath the
-C100X USB hardware. It rediscovers disk numbers each time and skips ambiguous
-matches. The host-side attempt has a 10-second total budget; failure warns and
-does not by itself abort flashing. It never forces an unmount or ejects the USB
-device. `plan`/`plan-recovery` do not unmount storage. This is intended to reduce
-macOS's “disk not ejected properly” notification; elimination across all reboot
-boundaries still needs hardware confirmation. Eject any mounted C100X volume
-before disconnecting after the operation has finished.
+it; flashing uses USB networking. Before planned reboots, the flasher attempts an
+ordinary unmount; failure warns and permits flashing to continue. macOS may still
+show “disk not ejected properly”; the latest discovery fix awaits hardware
+validation. Eject any mounted C100X volume before disconnecting after completion.
 
 ## 3. Check the result
 
@@ -78,41 +72,6 @@ video and door release, plus whichever features you selected:
   delivery or household behavior. The [topic table](BUILDER.md#mqtt-bridge)
   describes the interface.
 
-### SSH lifecycle verification (alpha.6-built images)
-
-After flashing an image built with SSH payload v2, log in and confirm:
-
-```sh
-cat /etc/default/c100x-ssh
-tail -n 1 /etc/default/dropbear
-/etc/init.d/c100x-ssh status
-```
-
-Expect `PASSWORD_AUTH=0` for key-only or `1` for password-enabled builds,
-`NO_START=1` in the vendor defaults, and `c100x-ssh: running`. These checks establish
-that the new service is installed before exercising the former failure path.
-
-Invoke the exact vendor stop entry point, then check the owned service:
-
-```sh
-/etc/init.d/dropbear stop
-/etc/init.d/c100x-ssh status
-```
-
-Open a **new** SSH connection over Wi-Fi and USB; an existing session alone does
-not prove the listener survived. Repeat after `/etc/init.d/dropbear start`.
-The vendor commands should return successfully without affecting `c100x-ssh`.
-
-For a full reproduction of the original boot condition, use a fresh verified
-configuration export and change only `configuratore/setup/servizi/abil_ssh` to
-zero (or remove that field) through the evidenced vendor configuration flow.
-This is a separate persistent-configuration write, not part of flashing or the
-supported CLI. A maintainer-assisted test should verify saved/runtime readback,
-then perform a deliberate normal reboot and confirm new SSH logins on both
-interfaces with the same host key. Preserve the current configuration when making
-that one-field change; the older backup is historical evidence, not test input.
-Also check selected password/key authentication, MQTT and household functions.
-
 ## Optional recovery verification (existing SSH)
 
 If the **currently installed firmware** already has SSH enabled, add these options
@@ -128,8 +87,8 @@ check runs **after writing recovery and rebooting normally, before clearing the
 main kernel**. It compares the recovery filesystem and kernel/DTB contents with
 stock and checks the copied filesystems offline. Failure or uncertainty stops
 the update. This verifies integrity, not recovery bootability or household
-functions. The first hardware run passed this integrity gate; an uninterrupted
-full flash with alpha.4 and functional validation remain pending.
+functions. This gate passed on hardware in the earlier stopped alpha.3 run;
+alpha.6's uninterrupted flash used the ordinary path. See [validation](ACCEPTANCE.md).
 
 - Allow several extra minutes and **512 MiB** of free space. SSH readiness is
   limited to two minutes; readback/analysis to fifteen minutes. Failed acquisitions
@@ -153,12 +112,6 @@ Release bundles include the required filesystem tools.
 
 ## Troubleshooting
 
-- **Alpha.3 stops at `entering recovery: rebooting`:** recovery may have booted
-  successfully while macOS switched to native ECM networking. Assess read-only
-  identity/status first. Alpha.4 supports both ECM and helper RNDIS during
-  ordinary flashing; installed alpha.3 does not contain this fix. The recovery-entry
-  commands below were used to complete one such stopped installation.
-
 - **Image rejected:** use a profile-compatible image; version 1.5.8 alone is not
   enough. Building requires original stock; flashing accepts compatible custom images.
 - **USB preflight fails:** check device power and a data-capable cable. Keep the
@@ -175,8 +128,8 @@ the separate [source and USB-helper setup](SOURCE.md#usb-helper-setup).
 
 ## Finishing from an already running recovery environment
 
-**Available starting with v0.1.0-alpha.4.** Use this after assessing
-a stopped update that reached recovery before starting the main installation.
+Use this after assessing a stopped update that reached recovery before starting
+the main installation.
 It is not a retry procedure for an uncertain main-filesystem/kernel write.
 
 `plan-recovery` validates the full image and requires matching C100X 1.5.8 identity,
@@ -185,7 +138,7 @@ those checks, installs the main filesystem and kernel through the vendor updater
 and requests one reboot, requiring normal state `4*0` and reset uptime afterward.
 It does not need SSH. The original recovery-verification report remains unchanged.
 
-With alpha.4 or newer installed, adjust the image path to your working folder:
+Adjust the image path to your working folder:
 
 ```sh
 sudo /Applications/C100X/c100x plan-recovery ~/C100X-firmware/custom.fwz

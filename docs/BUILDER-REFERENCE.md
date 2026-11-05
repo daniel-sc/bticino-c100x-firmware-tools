@@ -36,8 +36,9 @@ Our service does not read that file. The persistent configuration partition is
 not edited, and its SSH switch no longer controls this service. See
 [ADR-017](DECISIONS.md#adr-017-the-selected-ssh-payload-owns-its-service-lifecycle).
 Available in alpha.6; rebuild and flash to install it. Older released
-payloads use the vendor-controlled service. Fresh-image lifecycle acceptance
-remains pending.
+payloads use the vendor-controlled service. Alpha.6 hardware checks passed startup,
+vendor start/stop isolation, service restart, RSA-key/password login and reboot
+identity persistence with `abil_ssh` absent; see [acceptance](ACCEPTANCE.md).
 
 ## MQTT limits and diagnostics
 
@@ -68,8 +69,9 @@ rotate across two files totaling at most 1 MiB under
 `/var/volatile/tmp/c100x-mqtt/`; reboot removes them. If SSH was selected separately,
 `/etc/init.d/c100x-mqtt status` checks the supervisor, not broker readiness;
 `stop`, `start` and `restart` manage this service. Readiness is reported via MQTT
-and private logs. Fresh-image boot, target ABI and household behavior still need
-hardware acceptance; offline build verification establishes installed bytes only.
+and private logs. The user confirmed MQTT/household operation after the alpha.6
+SSH+MQTT build was flashed and rebooted. Broader disconnect/reconnect testing remains
+pending; offline build verification alone establishes installed bytes only.
 
 ## Downloads and package policy
 

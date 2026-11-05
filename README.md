@@ -3,10 +3,11 @@
 A command-line tool for building custom firmware images and flashing a
 **BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS.
 
-**Experimental:** image building, USB preflight and one recovery-assisted native
-installation have passed. An uninterrupted full flash with the latest transport
-fix and detailed SSH/MQTT/household checks remain pending. See the
-[validation record](docs/ACCEPTANCE.md).
+**Experimental:** image building, USB preflight, an uninterrupted alpha.6 flash
+and SSH access over USB/Wi-Fi after reboot with vendor SSH disabled have passed.
+Password login and SSH service restart also passed; the user confirmed MQTT and
+household functions working. See the [validation record](docs/ACCEPTANCE.md) for
+the tested scope and remaining acceptance work.
 
 ## What's included?
 

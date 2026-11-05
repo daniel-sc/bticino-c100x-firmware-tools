@@ -59,8 +59,9 @@ Each build creates a new SSH host identity; it is intended to persist across
 reboots. Key-only builds disable password login. SSH payload version 2 selects an
 independent `c100x-ssh` service, so the vendor's persistent SSH-enable setting
 cannot disable it. Device configuration is preserved. Available in alpha.6;
-alpha.5 and earlier use the previous startup integration. The new
-service's fresh-image startup and reboot persistence still need hardware validation.
+alpha.5 and earlier use the previous startup integration. Fresh-image startup,
+vendor start/stop isolation, service restart and reboot persistence with the vendor
+SSH setting absent passed on the tested device; see [acceptance](ACCEPTANCE.md).
 
 <a id="optional-mqtt-bridge"></a>
 

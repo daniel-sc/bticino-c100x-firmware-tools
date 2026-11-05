@@ -2,8 +2,9 @@
 
 Install using the [README](../README.md#installation), then use a compatible
 `.fwz` image, such as the one from [Build firmware](BUILDER.md). Stock devices
-do not need SSH. **Experimental:** full native flashing and generated-image
-behavior still need [hardware validation](ACCEPTANCE.md).
+do not need SSH. **Experimental:** an uninterrupted alpha.6 flash and SSH checks
+passed, with MQTT/household functions confirmed by the user. See the
+[hardware validation record](ACCEPTANCE.md) for scope and remaining work.
 
 ## Compatibility
 

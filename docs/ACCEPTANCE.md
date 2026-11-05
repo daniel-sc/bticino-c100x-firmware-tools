@@ -1,11 +1,13 @@
 # Hardware acceptance record
 
-**Status through 2026-11-03:** offline builds, packaged-tool checks and native
-read-only USB checks have passed. A hardware flash passed recovery integrity
-verification but stopped at recovery-reboot verification. Subsequent recovery-entry
-installation completed the main filesystem/kernel update and verified normal boot.
-An uninterrupted full flash with the unified USB-session fix and detailed
-SSH/MQTT/household functional acceptance remain pending.
+**Status through 2026-11-05:** alpha.6 completed an uninterrupted full native USB
+flash with RNDIS → ECM → RNDIS handover. The new SSH-v2 service accepts RSA-key
+logins over Wi-Fi and survives vendor start/stop calls, including fresh connections
+afterward. Fresh USB and Wi-Fi SSH logins also passed after removing the vendor
+SSH-enable setting and rebooting, with unchanged host identity. Password-only
+authentication and own-service restart also passed. The user confirmed the
+MQTT/household checklist working. This validates the tested modified-to-modified
+installation; stock-device acceptance and broader resilience checks remain separate.
 
 The entries below are dated evidence and maintainer test plans, not current setup
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
@@ -23,6 +25,60 @@ for the current one.
 - `mise run test`: **189 tests, 186 passed, 3 optional MQTT native ABI tests skipped**.
   No actual unmount, firmware write or reboot was performed. Preserved networking
   after unmount and notification behavior across all three reboots remain pending.
+
+## 2026-11-05: Alpha.6 full flash, SSH failure-condition test and functional checks
+
+- User supplied alpha.6 build/preflight/flash output for `custom-alpha6.fwz`,
+  SHA-256 `11c16ecac3c160126832914dfca3141ef7e872f553f984156a6efd8bfb99b48e`.
+  SSH payload v2 and MQTT payload v1 passed final offline verification.
+- Preflight reported expected hardware/model, normal state `4*0`, matching image
+  hash and no firmware writes. Ordinary flash (without optional SSH recovery
+  verification) completed all four transfers and three reboot boundaries, with
+  helper `feth0` → native ECM `en7` → helper `feth0` handover and final sequence
+  completion. This establishes uninterrupted protocol completion, not full
+  installed-filesystem readback or household acceptance.
+- Wi-Fi login as `root2` reported UID/GID 0. Installed defaults report
+  `PASSWORD_AUTH=1`, vendor `NO_START=1`, and `c100x-ssh` status reports running.
+- Vendor `/etc/init.d/dropbear stop` and `start` both left the independent service
+  running. After each call, a fresh batch-mode RSA-key SSH connection succeeded
+  with strict checking against the newly recorded host key. Observed fingerprint:
+  `SHA256:5NzBl4hqMriVNAsu2Mx+Kk1mCVckZp23VnY1a87ihJU`.
+- The initial observations above are user-provided terminal output. This was
+  modified-to-modified flashing, not stock-device acceptance.
+- Subsequent maintainer checks authenticated over USB with the same strictly
+  checked host key. A fresh checksum-verified export contained `abil_ssh=1` and
+  exactly matched runtime XML. Prepared/readback-verified a configuration archive
+  removing only that field, preserving every other XML byte, and applied it once
+  through the evidenced vendor flow. Begin/apply/normal-close all ACKed.
+- The immediate post-apply export still contained the old setting; after the
+  application persisted the change, a subsequent verified export exactly matched
+  the prepared XML with `abil_ssh` absent. Runtime XML also matched, and fresh
+  RSA-key logins on USB and Wi-Fi still reported `c100x-ssh: running` with the same
+  host key and unchanged boot ID. No full reboot was sent during this step.
+  Private backups, prepared archive, one-shot journal and readback evidence are
+  under `.local/ssh-diagnosis-20261104/absent-ssh-policy-6cohq2g7/`; final saved
+  export is `live-config-2f3bm08r/` beside it.
+- User then requested a normal reboot and reported a successful strict-host-key
+  RSA login over Wi-Fi with service running and uptime 89.45 seconds. Boot ID
+  changed from `e2033585-c416-41f9-b0e5-a8bfb00bc02a` to
+  `82a2cefc-4efe-413a-a08b-95536cf9d0d3`.
+- Independent fresh RSA-key connections over USB and Wi-Fi confirmed the same
+  new boot ID, running service and unchanged host key. Post-reboot runtime XML
+  exactly matches the prepared configuration with `abil_ssh` absent. This passes
+  the original disabled-policy boot-condition test and host-identity persistence
+  for this image. Private results are in `after-reboot.json` in the prepared
+  directory above.
+- User verified password-only authentication with public-key authentication
+  disabled and strict host-key checking: UID/GID 0 and service running. A key-
+  authenticated invocation of `/etc/init.d/c100x-ssh restart` reported the old
+  listener stopped and service running afterward. A subsequent fresh password-
+  only login again succeeded, establishing listener availability after restart.
+- In response to the final checklist (doorbell/ringing and usual notification,
+  answering/video/two-way audio, door release, fresh MQTT events and existing MQTT
+  door control where used), the user reported **"its all working"**. Record this
+  as user-confirmed functional acceptance of this installation; no separate MQTT
+  capture or per-action timestamps were collected. Broader MQTT disconnect/reconnect
+  behavior and stock-to-modified acceptance were not exercised in this walkthrough.
 
 ## 2026-11-04: Alpha.6 publication and downloaded-bundle validation
 

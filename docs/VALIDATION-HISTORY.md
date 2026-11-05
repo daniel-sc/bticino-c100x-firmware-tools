@@ -18,6 +18,38 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-05: Version 0.1.0 publication and validation
+
+- Committed/pushed the release candidate as
+  `3ab8d8a79eecf90812be07367d2a814d5ce1b325`. Main CI `42027498480` passed
+  **189 Python tests with no skips**, **23 USB-helper tests**, package assembly
+  and relocated smoke checks. Tagged that commit as **v0.1.0**.
+- Release CI `42028343253` passed signing, notarization, stapling and publication
+  at **12:42:10 UTC**. GitHub reports v0.1.0 as the latest release with
+  `prerelease: false`. Release notes give a brief first-release introduction.
+- Downloaded all published assets and verified their SHA-256 checksums. DMG hash:
+  `ac729533976a06b44e83c6ecd42cc54ccfa87ef05f865da4c532f3328c34ba2b`.
+  Gatekeeper accepted Notarized Developer ID and the stapled ticket validated.
+  Copied the bundle from a read-only DMG and detached it.
+- All **84 native files** passed strict Developer ID signature/team checks.
+  Provenance matches the release commit, arm64 and minimum macOS **15.0**;
+  modules, payload assets and guides match source. CLI reports `c100x v0.1.0`.
+  The downloaded copy passed relocated `packaging/smoke.py`.
+- With system-only PATH, the downloaded CLI built a real pinned-stock SSH-v2 +
+  MQTT-v1 image using disposable test credentials. Filesystem, payload and reopened
+  archive checks passed; an independent output reread matched the report. FWZ hash:
+  `1c9105933c5832a11b10ee19be67bf581f20b40c0878d65b2cfacba2719690d3`.
+  Image/report are mode 0600, private under `.local/v0.1.0-release-validation/`.
+  Downloaded assets and bundle are under `.local/downloaded-v0.1.0/`.
+- Updated/pushed the Homebrew tap version/checksum in commit `d0335af`.
+  Strict cask audit/style passed. A temporary renamed smoke cask installed the
+  published DMG into a separate app directory; PATH-linked version, builder-doctor,
+  launcher signature, provenance and storage-fix inclusion passed. Removed the
+  temporary install/cask; the user's alpha.6 installation was preserved.
+- Validation was host-only. No intercom/broker connection, live USB unmount,
+  firmware write or reboot was performed. Existing hardware acceptance carries
+  forward under ADR-011; follow-up coverage remains in [ACCEPTANCE.md](ACCEPTANCE.md).
+
 ## 2026-11-05: Version 0.1.0 release preparation
 
 - Added stable tag publication alongside alpha prereleases. Stable tags select

@@ -12,6 +12,7 @@ acceptance for unchanged device behavior.
 | --- | --- |
 | Distribution | v0.1.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware build and Homebrew installation checked. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
+| OTA prevention (unreleased, offline only) | `no-ota` v1 builds passed standalone and with SSH/MQTT in both tested orders. Independent whole-image comparison, staged-state fixtures and conflict checks passed; hardware acceptance remains pending. |
 | USB flashing | Alpha.6 completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
 | SSH payload v2 | Fresh RSA-key logins over USB/Wi-Fi, password-only login, service restart and vendor start/stop isolation passed. Reboot with vendor `abil_ssh` absent preserved access and host identity. |
 | Household functions | User confirmed ringing/notification, answering, video, two-way audio, door release, MQTT events and existing MQTT door control working after the alpha.6 installation. |
@@ -68,6 +69,18 @@ Never deliberately interrupt a firmware write. Record results only after observa
 
 ## Remaining limits and deferred work
 
+- Manufacturer OTA updates remain enabled in v0.1.0 and builds without `no-ota`,
+  and can replace the custom installation.
+  Offline comparison confirmed the stock updater/configuration in the v0.1.0
+  SSH+MQTT image. Read-only SSH on 2026-11-05 confirmed stock updater components,
+  enabled settings and no packages at the two known persistent staging paths.
+  Missing-installer branches passed 33 isolated ARM-emulation cases; no live OTA
+  overwrite or prevention test was performed. `no-ota` v1 (ADR-018) is implemented
+  and checked offline, but not released or installed on the device. Boot,
+  vendor app notifications, remote answering, commissioning/reconnection,
+  household functions and explicit USB flashing with this payload still require
+  hardware validation. Stock recovery and installation transitions are excluded.
+  See [OTA investigation](OTA.md) and [offline validation](VALIDATION-HISTORY.md#2026-11-05-no-ota-implementation-and-offline-validation).
 - Linux/WSL parity and Windows/MyHOME import of generated images are unvalidated;
   the distributed tool targets Apple Silicon macOS 15+.
 - An uninterrupted full run combining the optional SSH gate with the fixed USB

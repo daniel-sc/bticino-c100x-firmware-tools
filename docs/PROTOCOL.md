@@ -45,6 +45,11 @@ with stock. Recovery `bt_device`, `openserver` and `bt_daemon` are byte-identica
 to the corresponding main binaries. This supports the command interpretation
 but does not replace a native hardware flash test.
 
+The separate manufacturer cloud OTA path remains enabled in SSH/MQTT images
+unless `no-ota` is selected. That payload suppresses the researched normal-firmware
+launch paths while preserving these explicit update handlers. Its configuration,
+cloud-to-installer flow and limits are documented in the [OTA investigation](OTA.md).
+
 ## Transport and authentication
 
 Stock main and recovery `/etc/init.d/bt-networking.sh` configure USB gadget

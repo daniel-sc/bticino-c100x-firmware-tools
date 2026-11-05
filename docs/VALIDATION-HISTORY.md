@@ -18,6 +18,58 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-05: no-ota implementation and offline validation
+
+- Implemented the independently selectable `no-ota` v1 payload (ADR-018): remove
+  the updater's process entry, renumber the camera entry, set cloud `FwUpdate=0`,
+  remove the rcS installer link, and verify the daemon route stays disabled.
+  Configuration ownership/modes remain `1000:1000`, `0664`. Installer files stay
+  intact. MQTT accepts the exact stock or `no-ota` startup XML, in either order.
+- Full real-stock builds passed filesystem, payload and reopened-FWZ checks for
+  `no-ota`, `ssh → mqtt → no-ota`, and `no-ota → mqtt → ssh`, using disposable
+  fixture credentials. Recovery, kernel and manifest remained profile-verified.
+  All three artifacts passed the final verifier again after the review correction.
+  The standalone FWZ SHA-256 is
+  `6d46e6f790dc235858cec459f4acbf4af83624404d883e05aa00d11636c061c9`.
+- An independent comparison of the complete installed namespace found only two
+  regular-file content changes (`stack_open.xml`, `bt_eliot`) and the missing
+  `S96-dedrifu.sh` link. Remaining file bytes, links, modes and owners matched
+  stock. XML/INI parsing independently confirmed unchanged remaining process
+  definitions, contiguous numbering, disabled daemon installer settings in both
+  variants, and only the intended cloud setting change.
+- Direct-image SSH/no-ota and MQTT/no-ota combinations passed in both orders,
+  including retained fixture packages at both staging paths and update-marker
+  files. A finite model of the researched process-list traversal checked initial
+  startup, stack relaunch, mode transitions and heartbeat selection. This checks
+  configuration-driven behavior, not a target OS boot or actual persistent-state
+  recovery. No installer executable was run.
+- Fifteen final-image conflict cases were rejected: restored manager/cloud
+  dependency, enabled daemon route, changed reduced XML, malformed XML, broken
+  numbering, restored/renamed/alternate-runlevel/direct updater links, regular or
+  dangling daemon INI, changed installer and wrong configuration ownership.
+  A complete build with a later payload restoring the boot link failed before
+  publishing firmware. Preparation separately rejected unknown inputs, changed
+  stock XML, daemon overrides and a wrong boot-link target.
+- `mise run test` with the local native libmosquitto fixture passed all **189
+  tests, no skips**. Relocated `packaging/smoke.py` passed with current Python
+  source/payloads overlaid on a private copy of v0.1.0's bundled native runtime;
+  that CLI also completed a real-stock standalone `no-ota` build with final
+  archive verification. This is a runtime compatibility check, not a new signed
+  release.
+- Two fresh independent reviewers assessed the implementation. The first found
+  that a renamed boot link could bypass verification; direct updater-link checks
+  and manual conflict coverage were added. Its re-review and the second fresh
+  review reported no remaining actionable findings.
+- Private reproduction scripts, fixture images, build reports and manual results
+  are under `.local/no-ota-validation-20261105/` (`builds.py`, `manual.py`,
+  `preconditions.py`, `reopen.py`). All image mutations occurred on private copies.
+  Earlier caller inventory, 33 ARM failure-branch cases and read-only device
+  observations are described in [OTA.md](OTA.md).
+- No firmware write, reboot, live OTA request or device configuration change was
+  performed. Prevention and vendor app/household behavior with this payload still
+  need hardware acceptance. Stock recovery and installation-transition windows
+  remain excluded. No tag or release was created.
+
 ## 2026-11-05: Version 0.1.0 publication and validation
 
 - Committed/pushed the release candidate as

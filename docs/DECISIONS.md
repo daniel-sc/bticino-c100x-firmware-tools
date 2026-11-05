@@ -521,3 +521,46 @@ authentication modes and failed startup/shutdown. Image readback checks must
 reject later payloads that break ownership. Flashing and fresh-image hardware
 acceptance remain separate, explicitly authorized work; the live configuration
 repair does not validate the new service.
+
+## ADR-018: Opt-in OTA prevention through coordinated startup configuration
+
+**Accepted 2026-11-05**, following the OTA investigation and design discussion.
+Implemented as `no-ota` v1; hardware validation is pending.
+
+**Context:** Stock cloud and early-boot paths can replace the custom installation.
+Deleting the dedicated installer rejects fresh requests, but persisted resume
+state causes repeated launch attempts and can obstruct cloud startup. An
+executable error stub can leave the manager waiting for status flags. No single
+inspected configuration switch disables every normal-firmware OTA path.
+
+**Decision:** Provide an independently selected `no-ota` image payload through
+the existing builder. In the private main-filesystem copy:
+
+- Remove `fw_manager` from the vendor application's configured process list,
+  preserving other processes and contiguous XML numbering. Verify all selectable
+  XML variants and optional daemon INI inputs against reintroducing it.
+- Set `[Application Parameters] FwUpdate=0` in `cfg/bt_eliot`, allowing cloud
+  startup without waiting for the absent updater service.
+- Remove `/etc/rcS.d/S96-dedrifu.sh`, suppressing its early-boot invocation.
+- Keep and verify `root/sw/dedrifu/enable=0` in both startup XML variants,
+  suppressing the daemon's separate invocation.
+
+Retain the installer binaries and init script. The payload does not delete or
+rewrite staged packages or persistent update metadata. Preserve the cloud client,
+ordinary household functions and explicit USB flashing. SSH and MQTT remain
+independent. Update prompts may remain; download suppression is not a separate
+first-version requirement. Stock/no-payload builds retain vendor behavior.
+
+Protection covers manufacturer-initiated installation, including app-approved
+and already-staged updates, while the protected normal firmware runs. Preserve
+stock recovery: recovery boots and the old-main/recovery phases of initial
+installation are outside the guarantee. Re-enabling OTA requires rebuilding
+without `no-ota` and explicitly USB-flashing; no runtime toggle is provided.
+Retained packages may become actionable in recovery or after removing prevention.
+
+**Consequences:** Guard stock inputs and verify final image configuration so
+payload composition cannot silently restore an installation path. Offline image
+checks and simulated lifecycle/staged-state scenarios precede separately
+authorized hardware checks of boot, cloud/app functions and USB flashing. The
+accepted policy is not evidence of a validated prevention feature. Detailed
+research, boundaries and implementation checks are in [OTA.md](OTA.md).

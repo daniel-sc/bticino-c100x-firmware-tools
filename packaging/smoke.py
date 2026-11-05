@@ -46,6 +46,10 @@ def main():
         for name in ("payload.json", "prepare.py", "verify.py", "common.py", "apply.debugfs",
                      "files/bridge.py", "files/init.sh"):
             assert (mqtt / name).read_bytes() == (source_mqtt / name).read_bytes()
+        no_ota = bundle / "support/app/payloads/no-ota"
+        source_no_ota = Path(__file__).resolve().parent.parent / "payloads/no-ota"
+        for name in ("payload.json", "prepare.py", "verify.py", "common.py", "apply.debugfs"):
+            assert (no_ota / name).read_bytes() == (source_no_ota / name).read_bytes()
         run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
             "import sys, runpy; sys.path.insert(0, sys.argv[1]); "
             "config = runpy.run_path(sys.argv[2])['configuration']; "

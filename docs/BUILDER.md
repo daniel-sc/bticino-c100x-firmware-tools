@@ -1,8 +1,13 @@
 # Build firmware
 
-Build a new C100X Door Entry **1.5.8** image with SSH, MQTT or both. The original
-firmware is preserved; building does not contact or change the intercom.
+Build a new C100X Door Entry **1.5.8** image with optional SSH, MQTT and OTA
+prevention. The original firmware is preserved; building does not contact or
+change the intercom.
 Install the tool using the [README](../README.md#installation) first.
+
+SSH/MQTT alone retain manufacturer OTA updates, which can replace the custom
+installation. The optional `no-ota` payload is currently available from source;
+it is not included in the published v0.1.0. See [OTA prevention](#ota-prevention).
 
 ## Prepare and choose features
 
@@ -23,8 +28,8 @@ template, replacing `FEATURE_OPTIONS` with the options from the sections below:
   FEATURE_OPTIONS --output custom.fwz --report custom.build.json
 ```
 
-**Choose either feature or combine their options in the same command.** Neither
-requires the other. The CLI calls these features *payloads*.
+**Choose features independently or combine their options in the same command.**
+The CLI calls these features *payloads*.
 
 Stock firmware is downloaded and verified automatically. For an offline build,
 replace `--stock c100x-1.5.8` with the path to your original stock `.fwz` file;
@@ -112,6 +117,32 @@ work; uncertain commands are not retried. Undetected stalls can delay in-flight
 data. Physical-button reporting and administrative JSON/shell commands are not
 provided. See [limits and diagnostics](BUILDER-REFERENCE.md#mqtt-limits-and-diagnostics)
 for compatibility details.
+
+## OTA prevention
+
+Build option: `--payload no-ota`. No inputs, SSH or MQTT are required. For this
+unreleased feature, follow [source setup](SOURCE.md), then run:
+
+```sh
+mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
+  --payload no-ota --output .local/no-ota.fwz --report .local/no-ota.build.json
+```
+
+Add `--payload no-ota` to an SSH/MQTT source build to combine them, in either order.
+The payload removes `fw_manager` from the vendor process list, sets the cloud
+client's `FwUpdate=0`, and removes the early-boot installer link. It verifies the
+daemon's separate installer setting stays disabled. Installer files remain intact.
+
+Protection applies to **normal firmware only**, including app-approved and
+previously staged updates. Stock recovery and installation-transition windows
+remain outside its scope. Staged packages and persistent update metadata are
+left untouched; update prompts/downloads may remain. Re-enable OTA by rebuilding
+from stock without `no-ota` and explicitly USB-flashing; retained packages may
+then become actionable. There is no runtime toggle.
+
+The implementation has offline image verification; **hardware validation of
+prevention, vendor app/calling behavior and USB flashing with this payload remains
+pending**. See [OTA evidence](OTA.md) and [validation status](ACCEPTANCE.md).
 
 ## Build result and next step
 

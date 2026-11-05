@@ -37,7 +37,12 @@ STARTUP = {"/etc/rc5.d/S99c100x-mqtt": "../init.d/c100x-mqtt",
 def prerequisites(image):
     for path, expected in HASHES.items():
         data = image.read(path, limit=4 * 1024**2)
-        if hashlib.sha256(data).hexdigest() != expected:
+        accepted = {expected}
+        if path == "/home/bticino/cfg/stack_open.xml":
+            # Exact no-ota v1 output: only fw_manager removed and p9 renumbered.
+            # Accept either order of bundled payloads without loosening other pins.
+            accepted.add("43f1b13b600cb8381532c75e373c7e8d1e71fa8af1d8c132ee9d81388472e52f")
+        if hashlib.sha256(data).hexdigest() not in accepted:
             raise FirmwareError("MQTT stock prerequisite changed")
     for path, target in LINKS.items():
         image.require_symlink(path, target)

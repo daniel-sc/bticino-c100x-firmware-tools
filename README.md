@@ -15,6 +15,8 @@ for tested scope and follow-up coverage.
   a password, or both.
 - **MQTT bridge:** publish intercom events to your MQTT broker and receive raw
   OpenWebNet commands, with broker settings supplied when building.
+- **Optional OTA prevention:** `no-ota` disables vendor update launch paths in
+  normal firmware (source builds; hardware validation pending).
 - **Device flasher:** inspect an image, check the connected device, and explicitly
   start an update over USB. The stock-device flashing workflow does not require SSH.
 
@@ -22,8 +24,12 @@ The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
 
-SSH and MQTT are independently optional and can be combined. Building creates a
-file on your Mac; flashing installs that file on the intercom.
+SSH, MQTT and `no-ota` are independently optional and can be combined. Building
+creates a file on your Mac; flashing installs that file on the intercom.
+
+**Manufacturer OTA updates remain enabled unless `no-ota` is selected** and can
+overwrite the custom installation. The published v0.1.0 does not include `no-ota`;
+see [source-build usage and limits](docs/BUILDER.md#ota-prevention).
 
 ## Installation
 
@@ -60,7 +66,8 @@ firmware and private settings outside the installation folder.
 ## Build and install firmware
 
 1. [Build firmware](docs/BUILDER.md): choose [SSH access](docs/BUILDER.md#ssh-access),
-   [MQTT](docs/BUILDER.md#mqtt-bridge), or both, and create a checked `.fwz` image.
+   [MQTT](docs/BUILDER.md#mqtt-bridge), and/or
+   [OTA prevention](docs/BUILDER.md#ota-prevention), and create a checked `.fwz` image.
 2. [Flash firmware](docs/FLASHING.md): connect by USB, run read-only preflight,
    explicitly flash, then check the intercom's functions.
 

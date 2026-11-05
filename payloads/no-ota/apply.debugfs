@@ -1,0 +1,11 @@
+rm /home/bticino/cfg/stack_open.xml
+write generated/stack_open.xml /home/bticino/cfg/stack_open.xml
+set_inode_field /home/bticino/cfg/stack_open.xml uid 1000
+set_inode_field /home/bticino/cfg/stack_open.xml gid 1000
+set_inode_field /home/bticino/cfg/stack_open.xml mode 0100664
+rm /home/bticino/cfg/bt_eliot
+write generated/bt_eliot /home/bticino/cfg/bt_eliot
+set_inode_field /home/bticino/cfg/bt_eliot uid 1000
+set_inode_field /home/bticino/cfg/bt_eliot gid 1000
+set_inode_field /home/bticino/cfg/bt_eliot mode 0100664
+rm /etc/rcS.d/S96-dedrifu.sh

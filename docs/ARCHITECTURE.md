@@ -56,6 +56,7 @@ LAN `en` interface is never accepted (ADR-015).
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
 | `payloads/ssh/` | Stock-specific SSH account/key preparation, independently owned init service, vendor-control disablement and image verification |
 | `payloads/mqtt/` | Stock-runtime bridge, private broker configuration, startup integration and image readback checks |
+| `payloads/no-ota/` | Optional main-firmware updater startup suppression and pinned final policy checks |
 | `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
@@ -187,6 +188,15 @@ event framing and command progress. A dead supervisor causes its worker to exit.
 No vendor process, updater or SSH service is managed by this payload. See
 [ADR-013](DECISIONS.md#adr-013-optional-stock-runtime-mqtt-payload) and
 [builder reference](BUILDER-REFERENCE.md#mqtt-limits-and-diagnostics) for the compatibility contract.
+
+The optional `no-ota` payload removes the manager from the vendor process list
+and disables the independent boot installer link. `FwUpdate=0` bypasses the cloud
+client's startup dependency on that manager; both selectable XML variants retain
+the disabled daemon installer setting. Exact image checks reject conflicting
+configuration and optional daemon INI overrides. MQTT accepts the stock or exact
+`no-ota` XML. No runtime component is added; installer files and persistent update
+data remain intact. Hardware acceptance is pending; stock recovery and initial
+installation transitions are outside this policy (ADR-018, [OTA.md](OTA.md)).
 
 The builder's lifecycle and trust contract are detailed in [BUILDER-REFERENCE.md](BUILDER-REFERENCE.md).
 It starts from pinned stock, edits only a private main-filesystem copy, checks

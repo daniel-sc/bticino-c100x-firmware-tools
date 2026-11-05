@@ -1,6 +1,6 @@
 # Advanced builder reference
 
-For ordinary SSH/MQTT setup, use [Build firmware](BUILDER.md). This page covers
+For ordinary payload setup, use [Build firmware](BUILDER.md). This page covers
 implementation details and custom payload authoring; source setup and tests are
 in [SOURCE.md](SOURCE.md).
 
@@ -109,6 +109,29 @@ The builder fails verification for that packaging variant rather than weakening
 the profile. The real stock and SSH round trips passed with mise's 7zip 26.05.
 Windows/MyHOME import compatibility is a target, still awaiting an actual import
 test; matching ZIP properties is not that acceptance test.
+
+## OTA prevention implementation
+
+`payloads/no-ota/` is a host-only, input-free payload (ADR-018). It makes exactly
+three filesystem changes: rewrite `cfg/stack_open.xml` without `fw_manager` and
+renumber the following process, rewrite `cfg/bt_eliot` with `FwUpdate=0`, and
+remove `/etc/rcS.d/S96-dedrifu.sh`. Both configuration files retain vendor mode
+`0664` and ownership `1000:1000`. No runtime service or configuration-data write
+is added.
+
+Preparation requires byte-pinned stock configuration. Mandatory verification
+checks exact output hashes, metadata, the absent boot link, direct updater links
+under other runlevel names, unchanged reduced XML and researched
+launcher/installer/cloud/USB binaries and scripts. The two pinned
+XML variants keep the daemon's Dedrifu setting disabled. The optional
+`cfg/bt_daemon` INI must remain absent; arbitrary overrides are unsupported.
+These checks run immediately, after all payloads and after reopening the FWZ.
+
+MQTT accepts exactly the stock startup XML or the `no-ota` v1 output, so the
+bundled payloads compose in either order without accepting arbitrary XML edits.
+Custom payloads remain trusted host code: these readback checks detect conflicts
+with the researched policy, not arbitrary new launchers or privileged code.
+See [OTA.md](OTA.md) for the evidence, normal-firmware scope and hardware limits.
 
 <a id="authoring-trusted-payloads"></a>
 

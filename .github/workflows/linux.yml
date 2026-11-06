@@ -1,0 +1,28 @@
+name: Linux offline tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.2.4
+        with:
+          install: false
+      - name: Prepare Linux development dependencies
+        run: mise run setup-linux
+      - name: Check builder tools
+        run: mise exec -- python -m classe100x builder-doctor
+      - name: Offline suite including builder and native MQTT
+        env:
+          MISE_AUTO_INSTALL: 'false'
+        run: mise run test-linux

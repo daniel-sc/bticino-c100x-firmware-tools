@@ -1,10 +1,18 @@
 [tools]
 python = "3.14.9"
-java = "temurin-25.0.5+8.0.LTS"
-"github:NationalSecurityAgency/ghidra" = "Ghidra_12.2_build"
 cmake = "4.3.3"
 7zip = "26.05"
-dotnet = "10.0.403"
+
+# Opt into the decompilation toolchain with MISE_ENV=research.
+
+[tasks.setup-linux]
+description = "Provision internal Ubuntu/Debian builder and native test dependencies (uses sudo)"
+run = "bash scripts/setup-linux.sh"
+
+[tasks.test-linux]
+description = "Run all offline tests with builder and native MQTT coverage required"
+env = { CLASSE100X_REQUIRE_BUILDER_TOOLS = "1", CLASSE100X_MQTT_LIBRARY = "{{ config_root }}/.local/mqtt-native/mosquitto-1.4.14/lib/libmosquitto.so.1" }
+run = "python -m unittest discover -s tests -v"
 
 [tasks.research-setup]
 description = "Install offline firmware analysis Python dependencies"

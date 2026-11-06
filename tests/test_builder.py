@@ -395,6 +395,8 @@ class BuilderTests(unittest.TestCase):
             find_tool("openssl")
             keygen = find_tool("ssh-keygen")
         except FirmwareError as exc:
+            if os.environ.get("CLASSE100X_REQUIRE_BUILDER_TOOLS"):
+                raise
             self.skipTest(str(exc))
         # Vendor-free stock-shaped files; substitute only their hashes in a private
         # copy of the payload. Exercise the real preparation/apply/verification code.

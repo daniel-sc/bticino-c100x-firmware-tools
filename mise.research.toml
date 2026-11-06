@@ -1,0 +1,5 @@
+# Internal reverse-engineering tools; not needed to build firmware or run tests.
+[tools]
+java = "temurin-25.0.5+8.0.LTS"
+"github:NationalSecurityAgency/ghidra" = "Ghidra_12.2_build"
+dotnet = "10.0.403"

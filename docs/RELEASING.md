@@ -22,6 +22,12 @@ Validation follows **changed behavior**, not the version number. A release does
 not require another device flash merely because it contains changes or becomes
 stable. Existing hardware acceptance carries forward for unchanged behavior.
 
+Maintain acceptance by capability and tested conditions. Keep exact versions,
+commits and configurations as provenance in the validation history. A structural,
+incompatible or other material change reopens only the affected checks; it does
+not reset the project's acceptance record. Packaging, signatures and installation
+remain checks of each newly published artifact.
+
 | Change | Appropriate checks |
 | --- | --- |
 | Documentation | Accuracy, examples and links. |
@@ -35,8 +41,9 @@ the version label alone does not determine whether a flash is useful.
 The post-alpha.6 storage-discovery correction is a bounded best-effort host step:
 its regression and packaged checks suffice for release. Live unmount/network and
 notification observations can wait for convenient maintenance and the next
-otherwise-planned flash. Stock-to-modified, MQTT resilience and additional SSH-key
-coverage remain disclosed follow-ups, not recurring release gates. Do not turn
+otherwise-planned flash. Stock-to-modified now has community-reported coverage
+on `02*07*0`. MQTT resilience and
+additional SSH-key coverage remain disclosed follow-ups, not recurring release gates. Do not turn
 deferred checks into claimed passes. See [ADR-011](DECISIONS.md#adr-011-distribute-one-self-contained-cli-through-alpha-releases).
 
 ## Agreed design

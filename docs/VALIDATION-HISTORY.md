@@ -18,6 +18,35 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: community-reported Car-7 stock-to-modified acceptance
+
+Source: [andreadiotta's issue #6 report](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6#issuecomment-6710515771),
+posted **2026-11-07 at 17:14 UTC**. These are reporter observations, not a
+maintainer-run test or independently inspected acquisition.
+
+- **Baseline:** the original issue identifies a stock, previously unmodified
+  C100X Door Entry 1.5.8, hardware `02*07*0`, with Apple Silicon/macOS 15.7.7
+  and working USB RNDIS. The installation therefore adds the first recorded
+  stock-to-modified case.
+- **Exact software:** SSH+MQTT firmware built with **v0.1.0**, installed using
+  the **v0.1.0 flasher with only `fd819ba`'s hardware check backported**. This
+  exercises the broader hardware admission with the released USB workflow and
+  main-only SSH image; it is not a v0.2.0-alpha.1 or dual-image installation.
+- **Reported result:** `plan` passed and `flash` completed in about **six minutes**.
+  Display, outdoor video, door release, the Door Entry app, call audio, SSH and
+  MQTT all work. No per-stage transfer/reboot transcript, separate audio-direction
+  checks or detailed SSH/MQTT test capture accompanied the comment.
+- **Post-install storage evidence:** the reporter made a full eMMC backup over
+  SSH and reports matching `mmcblk2` partitions p1–p7 and sizes. They report
+  boot0 SHA-256 `35d51fbd…cd4f`, identical to the full hash in [RECOVERY.md](RECOVERY.md#static-binary-evidence).
+  No raw backup, partition table or full hash output was supplied in the comment.
+  This does not establish backup restoration or equality of the separately
+  stored boot environment.
+- **Coverage:** community-reported hardware acceptance on Car-7 and successful
+  stock-to-modified USB installation. The reporter explicitly plans to try
+  v0.2.0 later; wireless transport, dual-image SSH and OTA prevention remain
+  pending hardware acceptance.
+
 ## 2026-11-07: separate Homebrew stable and preview channels
 
 - Tap commit `3a1d959` restores `c100x` to v0.1.0 and adds `c100x@preview` for

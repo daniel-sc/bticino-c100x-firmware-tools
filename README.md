@@ -28,9 +28,9 @@ There is no GUI or Home Assistant configuration/discovery integration.
 
 Version **v0.2.0-alpha.1** and source builds accept hardware family **`02.*.*`**,
 following the vendor updater's compatibility rule for C100X 1.5.8.
-Hardware flashing and household functions have
-been tested on **`02*06*0`**; other revisions, including `02*07*0`, have not yet
-been flash-validated here. Published v0.1.0 still requires `02*06*0`.
+Hardware results cover **`02*06*0`** and a community-reported stock-to-modified
+installation on **`02*07*0`**. Evidence carries forward for unchanged behavior.
+Published, unmodified v0.1.0 still requires `02*06*0`.
 
 SSH and MQTT are optional. Prerelease SSH provisions both main and recovery;
 MQTT applies only to main. Manufacturer-update policy is independent of SSH and

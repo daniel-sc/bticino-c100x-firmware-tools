@@ -186,11 +186,17 @@ Evidence reviewed for [issue #6](https://github.com/daniel-sc/bticino-c100x-firm
   table rather than a Car-6/Car-7 comparison.
 - The previously acquired local device evidence associates OpenWebNet `02*06*0`
   with CPU revision `0206`, model `Dig-2/Car-6`, and bootloader variables
-  `hw_vers_dig=2`, `hw_vers_car=6`. The issue reports a stock `02*07*0` device;
-  its partition layout and boot environment have not been acquired here.
+  `hw_vers_dig=2`, `hw_vers_car=6`.
+- In a [subsequent issue #6 report](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6#issuecomment-6710515771),
+  the owner successfully flashed stock `02*07*0` using v0.1.0 with only the
+  hardware-check backport. After installation they report matching `mmcblk2`
+  p1–p7 layout/sizes and a boot0 SHA-256 identical to our documented image.
+  These are community observations; the partition table, backup and boot
+  environment were not independently acquired here.
 
 These establish the compatibility policy, not successful flashing on every
-revision. Recorded hardware acceptance remains on `02*06*0`. Stock USB identity
+revision. Recorded hardware results cover `02*06*0` and the community-reported
+v0.1.0/backport installation on `02*07*0`. Stock USB identity
 queries do not expose partition layout or provide full recovery readback. Optional
 SSH recovery verification retains its separate partition-node/size prerequisites.
 

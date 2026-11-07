@@ -15,8 +15,9 @@ require the stock manifest/kernel and supported main/recovery filesystem profile
 Passing these checks does not prove bootability.
 
 **Supported versus tested:** hardware `02*06*0` has passed the recorded flash and
-household checks. Other family-02 revisions, including `02*07*0`, are supported by
-the compatibility rule but have no recorded hardware flash acceptance yet. See
+household checks. A community report adds successful stock-to-modified flashing
+and functional checks on `02*07*0`. These results carry forward for unchanged
+behavior; other family-02 revisions have no recorded hardware flash acceptance yet. See
 [protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) and
 [validation](ACCEPTANCE.md). **Stable v0.1.0 still requires `02*06*0`; broader
 admission starts with v0.2.0-alpha.1.**

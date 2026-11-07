@@ -44,6 +44,17 @@ Private acquisition files and manifests are under
 must stay outside Git. These small region copies supplement the older main/data
 backups; they are **not a full-device backup or a tested restore image**.
 
+## Community Car-7 storage report — 2026-11-07
+
+After a successful stock-to-modified USB installation on `02*07*0`,
+[andreadiotta reports](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6#issuecomment-6710515771)
+a full eMMC backup over SSH, matching `mmcblk2` p1–p7 layout/sizes, and boot0
+SHA-256 `35d51fbd…cd4f`, stated to match the full hash documented below.
+The comment does not include the acquisition files or full hash output; this is
+community-reported corroboration. Identical boot0 does not establish identical
+saved boot environments, and the backup has no reported restore validation.
+The boot-selection analysis below remains based on the local Car-6 acquisition.
+
 ## Installed boot selection
 
 The following is a paraphrase of the CRC-verified environment, not commands to

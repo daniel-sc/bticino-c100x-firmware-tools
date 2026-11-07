@@ -289,6 +289,14 @@ offline and packaged checks; live observations can join the next planned hardwar
 session. This balances useful regression evidence with avoiding unnecessary
 household-device flashes. Current policy is in [RELEASING.md](RELEASING.md#validation-policy).
 
+**Evidence carry-forward clarification, 2026-11-07:** organize current acceptance
+by capability and tested conditions, with exact versions/commits retained as
+dated provenance. Maintainer and attributed community results carry forward
+unless structural, incompatible or other material changes affect the behavior
+or assumptions they establish. Reopen only affected checks. New tool versions
+alone do not require renewed hardware acceptance; newly published artifacts
+still receive packaging, signature and installation checks.
+
 **Decision:** Ship an Apple Silicon macOS DMG containing one CLI entry point and
 its support files. Build and Flash remain explicit independent commands. Bundle
 CPython, tools and payloads so end users install no prerequisites. Compile the

@@ -172,7 +172,8 @@ on-device changes but is a different artifact.
   restore-tested and do not establish a supported restore command.
 - Start with [ACCEPTANCE.md](ACCEPTANCE.md) for current results and remaining work.
   Alpha.6 passed the uninterrupted full USB sequence and recorded SSH/household
-  checks; stock-to-modified acceptance remains open.
+  checks. Issue #6 subsequently added community-reported stock-to-modified
+  acceptance on `02*07*0`; results carry forward for unchanged behavior.
 - Either direct re-flash or the stock-to-modified acceptance path is possible;
   understand the distinction in [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
 - Before another native check, reconnect USB as needed and run the managed

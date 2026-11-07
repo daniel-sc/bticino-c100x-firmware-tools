@@ -240,7 +240,7 @@ Raw payloads have host permissions; their commands are not inferred into a chang
 plan. Declared readback checks catch some composition conflicts, not all of them.
 
 Stock-image no-op, SSH and MQTT+SSH builds have passed offline checks on macOS;
-alpha.6's generated SSH+MQTT image passed the recorded hardware/household checks.
+main-system SSH+MQTT has passed the recorded hardware/household checks.
 Synthetic fixtures exercise failure, metadata and composition behavior without
 firmware or a device. Linux parity and MyHOME import remain unvalidated. Fresh
 host keys and archive randomness rule out bit-identical reproducibility;
@@ -256,13 +256,15 @@ firmware update. Successful idle reconnect does not establish recovery-mode USB
 behavior. Likewise, a prepared archive or idle worker does not prove installed
 bytes. The remaining hardware checks are recorded in [ACCEPTANCE.md](ACCEPTANCE.md).
 
-Support for a new model or release requires new protocol/profile evidence,
+Support for a new device model or vendor firmware release requires new protocol/profile evidence,
 payload validation and identity criteria, then simulations and hardware acceptance.
 Within C100X 1.5.8, source tools accept hardware family `02.*.*` using the vendor's
 first-component rule at every identity check. Revision-specific observed hardware
-results are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md); only `02*06*0`
-has recorded flash/household acceptance. See the
+results are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md): maintainer
+coverage on `02*06*0` and a community stock-to-modified report on `02*07*0`
+with evidence carried forward for unchanged behavior. See the
 [hardware-policy amendment](DECISIONS.md#adr-001-preserve-the-existing-image-and-restrict-compatibility).
 New images within this fixed profile do not require adding an archive hash;
-they still require independent package/device checks and functional acceptance.
+they still require independent package/device checks and targeted functional
+acceptance for material changes. A new tool version alone does not reset evidence.
 The current CLI is intentionally not a general manifest execution engine.

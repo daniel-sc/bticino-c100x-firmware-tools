@@ -18,6 +18,39 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: v0.2.0-alpha.2 publication and validation
+
+- Published [v0.2.0-alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
+  from `885c5c5c7918110746adfb95b401a018d2d0d143`, following two fresh independent
+  GPT-6.1 Terra reviews and verification of their fixes. The release adds FTP
+  greeting readiness, post-upload command-session refresh and SSH readiness
+  corrections. Existing firmware images need no rebuild. GitHub marks it as a
+  prerelease; v0.1.0 remains latest stable.
+- Local tests and candidate macOS [run 42410610209](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42410610209)
+  and Linux [run 42410610220](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42410610220)
+  each passed all **228 tests**, including native MQTT coverage. macOS also passed
+  **23 USB-helper tests** and packaged smoke. Tagged
+  [run 42411059261](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42411059261)
+  completed testing, signing, notarization/stapling and publication.
+- Downloaded release assets passed published checksums and version/commit
+  provenance checks. DMG SHA-256:
+  `1bea5f8a000107f59133cbbe4b758fca82cff77e3fbcea24ea44c46f8ba0cdfb`.
+  Gatekeeper DMG assessment and stapled-ticket validation passed. All **84**
+  native signatures passed strict verification; arm64 and minimum macOS **15.0**
+  were confirmed. Packaged source/assets and documentation matched the tagged
+  snapshot; relocated packaged smoke passed.
+- The downloaded CLI built a real pinned-stock SSH+MQTT image with disposable
+  credentials and default dual-image OTA prevention. Both key and password
+  authentication admission passed for both filesystems. Private artifacts and
+  results remain under `.local/v0.2.0-alpha.2-release-validation/`.
+- Published preview cask version/checksum update in tap commit `38613d5`.
+  Homebrew parsed the cask; actual
+  `brew upgrade --cask daniel-sc/tap/c100x@preview` succeeded from alpha.1.
+  Both Brew and `c100x --version` report **v0.2.0-alpha.2**.
+- Publication checks were host-only. The transfer-start-only greeting evidence
+  below validates that boundary; full wireless installation, recovery networking
+  and household acceptance under the new startup policy remain pending.
+
 ## 2026-11-07: wireless FTP startup race
 
 - Two user-run v0.2.0-alpha.1 wireless flashes stopped at

@@ -6,19 +6,21 @@ macOS. **Version 0.1.0 is published and validated**, including its signed downlo
 and Homebrew installation. It carries forward alpha.6's full-flash and functional
 acceptance for unchanged device behavior.
 
-**v0.2.0-alpha.1 prerelease candidate:** broader hardware-family admission,
-dual-image SSH, default manufacturer-update prevention and explicit wireless
-transport are implemented. Five private pinned-stock build
-cases and their applicable destination-access checks passed offline. Relocated
-packaged smoke passed using current source/assets and existing native dependencies.
-This is not a newly signed release or hardware wireless acceptance.
-The latest offline suite ran **216 tests: OK, with three optional native-MQTT
-tests skipped**. See the [dated wireless validation record](VALIDATION-HISTORY.md#2026-11-07-dual-image-policy-and-wireless-implementation-offline-validation)
-and [hardware-family regression checks](VALIDATION-HISTORY.md#2026-11-07-hardware-family-compatibility-offline-validation).
+**v0.2.0-alpha.1 is published:** broader hardware-family admission, dual-image
+SSH, default manufacturer-update prevention and explicit wireless transport are
+included. The signed/notarized download passed checksum/signature checks,
+relocated packaged smoke, a real SSH+MQTT build and dual-image authentication
+admission. Homebrew was updated and an actual upgrade reports the new version.
+Both macOS and Linux candidate CI passed **all 216 tests**, including native MQTT;
+tagged release CI also passed. These are host/offline results; hardware acceptance
+of wireless, dual-image changes and additional revisions remains pending. See the
+[publication record](VALIDATION-HISTORY.md#2026-11-07-v020-alpha1-publication-and-validation),
+[wireless validation](VALIDATION-HISTORY.md#2026-11-07-dual-image-policy-and-wireless-implementation-offline-validation)
+and [hardware-family checks](VALIDATION-HISTORY.md#2026-11-07-hardware-family-compatibility-offline-validation).
 
 ## Supported hardware versus tested hardware
 
-The v0.2.0-alpha.1 candidate and source tools support C100X Door Entry **1.5.8**,
+The v0.2.0-alpha.1 prerelease and source tools support C100X Door Entry **1.5.8**,
 model **`1.0.99`**, hardware family
 **`02.*.*`**, using the vendor updater's first-component hardware comparison.
 Published **v0.1.0 still restricts hardware to `02*06*0`**. The
@@ -37,14 +39,14 @@ remains open.
 
 | Area | Observed result |
 | --- | --- |
-| Distribution | v0.1.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware build and Homebrew installation checked. |
+| Distribution | v0.1.0 and v0.2.0-alpha.1 signed/notarized downloads, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware builds and Homebrew installation/upgrade checked. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
 | Dual-image policy/access (prerelease, offline only) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
 | USB flashing | Alpha.6 completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
 | SSH payload v2 | Fresh RSA-key logins over USB/Wi-Fi, password-only login, service restart and vendor start/stop isolation passed. Reboot with vendor `abil_ssh` absent preserved access and host identity. |
 | Household functions | User confirmed ringing/notification, answering, video, two-way audio, door release, MQTT events and existing MQTT door control working after the alpha.6 installation. |
 | Optional recovery verification | Alpha.3 passed fresh-write SSH readback, stock-content comparison and filesystem checks before its later transport stop. Explicit recovery installation subsequently completed. |
-| Offline checks | v0.1.0 candidate CI passed all 189 Python tests with native MQTT enabled, all 23 USB-helper tests and packaged smoke checks. Tagged release CI also passed. |
+| Offline checks | v0.2.0-alpha.1 candidate CI passed all 216 Python tests on macOS/Linux with native MQTT enabled; macOS also passed all 23 USB-helper tests and packaged smoke. Tagged release CI passed. |
 
 The full flash was **modified-to-modified on one installation**. Household
 acceptance is user-reported; no separate MQTT capture or per-action timestamps
@@ -62,7 +64,10 @@ and [optional recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-fla
       [RELEASING.md](RELEASING.md#release-checklist).
 - [x] **Publication checks:** intended commit and downloaded signed artifact
       validated; Homebrew tap updated and installation checked.
-- [x] **Current candidate checks:** USB-storage child-media discovery correction
+- [x] **v0.2.0-alpha.1 checks:** intended commit `1ac1140`, signed download and
+      real offline build/admission validated. Tap commit `deb3df9` published;
+      `brew upgrade --cask daniel-sc/tap/c100x` and `c100x --version` passed.
+- [x] **v0.1.0 checks:** USB-storage child-media discovery correction
       `4ce6b56` is included in v0.1.0 and passed regression, packaged CI and
       downloaded-artifact checks. This bounded, best-effort host-side correction
       did not require another firmware flash for release.

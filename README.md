@@ -44,7 +44,8 @@ see [builder policy](docs/BUILDER.md#ota-prevention) and
 
 ## Installation
 
-With [Homebrew](https://brew.sh), install the signed Apple Silicon release:
+With [Homebrew](https://brew.sh), install the signed Apple Silicon prerelease
+(the cask currently tracks **v0.2.0-alpha.1**):
 
 ```sh
 brew install --cask daniel-sc/tap/c100x

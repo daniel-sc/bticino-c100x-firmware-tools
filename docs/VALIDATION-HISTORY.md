@@ -18,6 +18,37 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: v0.2.0-alpha.1 publication and validation
+
+- Published [v0.2.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+  from `1ac11401d26393ce21ab71cafaf0c9b5197488c1`, including issue #6's
+  hardware-family fix, wireless transport, dual-image SSH and default OTA
+  prevention. GitHub marks it as a prerelease; v0.1.0 remains latest stable.
+- Candidate macOS [run 42374941864](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42374941864)
+  and Linux [run 42374941897](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42374941897)
+  each passed all **216 tests** with native MQTT enabled. macOS also passed
+  **23 USB-helper tests** and packaged smoke. Tagged
+  [run 42375617540](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42375617540)
+  completed testing, signing, notarization/stapling and publication.
+- Downloaded all release assets and verified their published checksums and
+  version/commit provenance. DMG SHA-256:
+  `cce7107311f61e29b2c86095730e86a1dab6680e6672d55ea61fa6c0aa39ae9e`.
+  Gatekeeper DMG assessment and stapled-ticket validation passed. All **84**
+  native files passed strict Developer ID signature checks; arm64 and minimum
+  macOS **15.0** were confirmed. Packaged code/assets and documentation matched
+  the tagged source snapshot, and relocated packaged smoke passed.
+- The downloaded CLI built a real pinned-stock SSH+MQTT image using disposable
+  credentials and default dual-image OTA prevention. Its packaged admission
+  checks passed with both key and password authentication. Artifacts and the
+  verification record remain private under
+  `.local/v0.2.0-alpha.1-release-validation/`.
+- Updated the public Homebrew cask and prerelease notice in tap commit `deb3df9`.
+  Actual `brew upgrade --cask daniel-sc/tap/c100x` succeeded from installed
+  alpha.6; both Brew and `c100x --version` report **v0.2.0-alpha.1**.
+- Issue #6 is linked to fix commit `fd819ba`. No device access or firmware writes
+  were performed during publication; new-revision, dual-image and wireless
+  hardware acceptance remains pending.
+
 ## 2026-11-07: hardware-family compatibility, offline validation
 
 - Reviewed issue #6 against the local vendor decompilation and pinned stock

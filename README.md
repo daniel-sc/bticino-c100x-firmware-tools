@@ -15,7 +15,7 @@ for tested scope and follow-up coverage.
   a password, or both.
 - **MQTT bridge:** publish intercom events to your MQTT broker and receive raw
   OpenWebNet commands, with broker settings supplied when building.
-- **OTA prevention:** v0.2.0-alpha.1 builds block manufacturer installation in main
+- **OTA prevention:** v0.2.0-alpha.2 builds block manufacturer installation in main
   and recovery by default; `--allow-vendor-updates` opts out (hardware validation pending).
 - **Device flasher:** inspect an image, check the connected device, and explicitly
   start an update over USB. The prerelease also provides explicit SSH wireless
@@ -26,7 +26,7 @@ The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
 
-Version **v0.2.0-alpha.1** and source builds accept hardware family **`02.*.*`**,
+Version **v0.2.0-alpha.2** and source builds accept hardware family **`02.*.*`**,
 following the vendor updater's compatibility rule for C100X 1.5.8.
 Hardware results cover **`02*06*0`** and a community-reported stock-to-modified
 installation on **`02*07*0`**. Evidence carries forward for unchanged behavior.
@@ -37,7 +37,7 @@ MQTT applies only to main. Manufacturer-update policy is independent of SSH and
 transport. Building creates a file; flashing installs it on the intercom.
 
 **Stable v0.1.0 retains manufacturer updates and main-only SSH.** The
-v0.2.0-alpha.1 prerelease includes the new default policy, dual-image SSH and
+v0.2.0-alpha.2 prerelease includes the new default policy, dual-image SSH and
 wireless transport;
 see [builder policy](docs/BUILDER.md#ota-prevention) and
 [wireless usage](docs/FLASHING.md#wireless-updates-prerelease).
@@ -64,7 +64,7 @@ per-user installation). The DMG includes an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
 together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.
-Get the [v0.2.0-alpha.1 prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+Get the [v0.2.0-alpha.2 prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
 for the features documented here, or [stable v0.1.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.1.0)
 for the previously validated USB-only feature set. New prerelease hardware coverage
 is described in [validation and known limits](docs/ACCEPTANCE.md).

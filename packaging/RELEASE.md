@@ -1,17 +1,14 @@
 Prerelease for **C100X Door Entry 1.5.8**, on Apple Silicon Macs running macOS 15
-or later. Changes since v0.1.0:
+or later. Changes since v0.2.0-alpha.1:
 
-- **Broader hardware compatibility:** accepts hardware family `02.*.*`, including
-  `02*07*0`, following the vendor updater's rule ([#6](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6)).
-  USB flash and household results cover `02*06*0` and community-reported `02*07*0`.
-- **Wireless updates:** `plan` and `flash --transport ssh` use existing
-  administrative SSH access, with phase-specific host identity checks and mandatory
-  recovery integrity verification. First installation on a stock device still uses USB.
-- **SSH in main and recovery:** selecting the SSH payload now provisions both
-  environments with shared owner credentials and a persistent host identity.
-- **Manufacturer updates blocked by default:** new builds apply OTA prevention in
-  main and recovery, including builds with no optional payloads. Add
-  `--allow-vendor-updates` to retain manufacturer updates.
+- **FTP startup:** fixes the early `EOFError` when wireless flashing connects before
+  the device's FTP server is ready. Connection setup now waits for its greeting.
+- **Slow uploads:** refreshes the command connection after each upload so the
+  device's idle timeout does not break the following firmware-write request.
+- **SSH reconnection:** transient local SSH-control check timeouts now participate
+  in readiness polling instead of immediately aborting a planned reboot transition.
+
+These are Mac-tool fixes; existing firmware images do not need rebuilding.
 
 Established USB and main-system functional evidence carries forward for unchanged
 behavior. Wireless transport, customized recovery and OTA prevention still need

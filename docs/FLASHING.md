@@ -126,7 +126,7 @@ Release bundles include the required filesystem tools.
 
 **Implemented for offline validation; recovery networking and a full wireless
 flash still require hardware acceptance.** Stable v0.1.0 is USB-only. Use
-[v0.2.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+[v0.2.0-alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
 or [source setup](SOURCE.md), and a newly built dual-image SSH package.
 
 The existing main firmware must already provide administrative SSH and the supported
@@ -192,6 +192,17 @@ an unambiguous target.
 - **SSH verification fails:** confirm that SSH already works on the installed
   firmware and that you supplied its current credentials. A failed integrity check
   needs investigation; it is not a reason to resume without verification.
+- **v0.2.0-alpha.1 wireless FTP `EOFError` at `operation: connect`:** a confirmed
+  startup race connects before the device's background-launched FTP server is
+  ready. v0.2.0-alpha.2 includes a pre-login readiness wait; alpha.1
+  does not. Use the corrected tool for this failure; rebuilding the firmware is
+  unnecessary. A stop at the first recovery upload before login has requested no
+  payload write. Failures at later stages require their own assessment. See the
+  [diagnosis and validation](VALIDATION-HISTORY.md#2026-11-07-wireless-ftp-startup-race).
+- **Slow-upload and reboot-readiness fixes (v0.2.0-alpha.2):** the command session is
+  refreshed after upload so its 30-second idle timeout does not invalidate the
+  subsequent commit. Transient local SSH-control check timeouts are handled by
+  readiness polling. These fixes are not included in published v0.2.0-alpha.1.
 - **Flash fails:** preserve power and the stage/error output for investigation.
   Do not rerun an uncertain write. There is no validated general rescue procedure;
   [recovery evidence](RECOVERY.md) documents the limits.

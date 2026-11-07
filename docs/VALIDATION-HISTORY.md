@@ -18,6 +18,74 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: wireless FTP startup race
+
+- Two user-run v0.2.0-alpha.1 wireless flashes stopped at
+  `recovery: uploading btweb_only_recovery.ext4.gz`, with `EOFError` from the
+  initial `ftplib.connect()` welcome read. Private reports timestamped
+  `175223Z` and `175818Z` show passed verifier preflight and no recovery
+  verification started. Neither attempt reached FTP login, payload upload or
+  a payload-write request.
+- Read-only checks observed matching `02*06*0` / 1.5.8 / model `1.0.99`, normal
+  state `4*0`, an idle worker and over two days of uptime. Both device-local and
+  tunneled FTP greetings worked when checked after the failure; this did not
+  exercise the immediate post-start boundary.
+- With explicit authorization, four transfer-start-only diagnostics used the
+  documented recovery-transfer start frame and tested only greetings. They
+  performed no upload, commit, kernel invalidation, transfer-close command or
+  reboot. Original behavior reproduced EOF at 11 ms after ACK; the next run
+  reproduced it at 9 ms, then received `220 (vsFTPd 3.0.3)` at 108 ms through the
+  same tunnel. SSH diagnostics recorded a channel-open connection failure.
+- Root cause: the stock handler's ACK follows `/etc/init.d/vsftpd start`, whose
+  `start-stop-daemon -S -b` backgrounds the server without waiting for readiness.
+  The client's immediate connection races that startup. Vendor/device references
+  are in [PROTOCOL.md](PROTOCOL.md#ftp-startup-readiness-2026-11-07).
+- Source correction polls only connection/greeting readiness with a ten-second
+  polling budget, closes failed sockets and checks transport, preserving single-attempt
+  login/upload/write behavior. Diagnostics now report the actual forwarded local
+  FTP port instead of a hard-coded `21`.
+- The corrected greeting boundary passed twice on the device: at 65 ms, and
+  after an observed initial EOF at 25 ms followed by success at 333 ms. Both
+  post-checks found normal state `4*0` and an idle worker. Full wireless transfer,
+  recovery boot/networking and functional acceptance remain untested here.
+- An offline socket regression exercised real `ftplib` EOF handling through
+  `NetworkDevice.upload()`: it failed before the fix and passed afterward.
+  Targeted updater/wireless tests passed all 59 cases, including bounded timeout,
+  transport loss, single upload and no retries after greeting.
+- `mise run test`: 221 tests completed, 218 passed and three native MQTT ABI
+  tests skipped because `CLASSE100X_MQTT_LIBRARY` was not selected.
+
+### Review follow-up: command lifetime and SSH readiness (offline)
+
+- Independent reviews identified that FTP readiness uses a polling budget rather
+  than a strict total deadline. The owner selected simpler polling semantics;
+  documentation now allows in-flight operations to extend the budget.
+- An offline replay of the documented 30-second OpenWebNet idle timeout completed
+  with short uploads but stopped at commit after a simulated 31-second upload.
+  Vendor `FTPTransfer` disconnects/reconnects around FTP. Source now replaces the
+  command session after each successful upload and before commit. Reconnection
+  failure stops before any commit request; no upload or transfer-start is repeated.
+- A simulated local `ssh -O check` timeout escaped the tunnel startup and reboot
+  readiness loops. Source now polls this transient observation during startup;
+  exhaustion raises `SSHError` retaining its cause, allowing the existing
+  planned-reboot poll to continue. Strict identity failure behavior is unchanged.
+- Regression tests first failed for expired command sessions in both full-flash
+  and recovery-entry paths, and for transient/persistent control-check timeouts.
+  They pass after the corrections. A socket-level check verifies that command
+  refresh sends the handshake followed by one commit, without restarting transfer.
+  These follow-up changes have offline coverage only; no hardware write or reboot
+  was performed for this review/fix.
+- `mise run test`: 226 tests completed, 223 passed and the same three native MQTT
+  ABI tests skipped because `CLASSE100X_MQTT_LIBRARY` was not selected.
+- Final independent review caught two SSH readiness edge cases: an earlier
+  timeout could mask a later nonzero control-check result, and a worker identity
+  failure arriving during the final probe could be downgraded to a retryable
+  readiness error. Source retains the final bounded/redacted diagnostic and
+  rechecks worker errors before reporting readiness or exhaustion. Both new
+  regressions failed before correction; all 26 wireless tests pass afterward.
+- Both independent final reviews cleared after verification of their findings.
+  The final local suite passed all 228 tests with native MQTT ABI coverage enabled.
+
 ## 2026-11-07: community-reported Car-7 stock-to-modified acceptance
 
 Source: [andreadiotta's issue #6 report](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6#issuecomment-6710515771),

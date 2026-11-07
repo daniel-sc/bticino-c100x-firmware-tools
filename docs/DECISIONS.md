@@ -99,6 +99,30 @@ injects failures; actual writes are never intentionally interrupted. Read-only
 allowlisting excludes query 44 because it schedules a reboot. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for lifecycle and testing boundaries.
 
+**FTP-readiness amendment, 2026-11-07:** the vendor start-transfer ACK precedes
+readiness of its background-launched FTP server. Live transfer-start-only
+diagnostics reproduced pre-banner EOF through SSH, followed by a successful
+greeting through the same tunnel. Permit bounded connection/greeting polling
+before FTP authentication: a ten-second polling budget, socket timeouts of up to
+two seconds and 100 ms between attempts, with failed sockets closed and transport
+rechecked. The budget is checked between attempts; in-flight transport checks,
+connection establishment and greeting reads can extend it. Exact wall-clock
+enforcement is not a protocol requirement.
+Only EOF, connection refusal/reset and timeout at this boundary are repeatable.
+Do not repeat start-transfer, login, upload or firmware-write commands. A timeout
+retains the last cause and stops the sequence. This is service-readiness polling,
+not an uncertain-write retry; the original delivery policy remains applicable.
+
+**Command-session and SSH-readiness amendment, 2026-11-07:** replace the
+OpenWebNet command session after each successful FTP upload and before its first
+commit, following the vendor's post-FTP reconnection. Uploads can exceed the
+server's 30-second command idle timeout. Recheck transport and perform the command
+handshake; do not restart transfer or impose boot-state checks between filesystem
+and kernel writes. A failed reconnection stops before commit. During SSH tunnel
+startup, a local control-check timeout is a not-ready observation; exhaust the
+existing startup polling budget before raising `SSHError` with the timeout cause.
+Planned-reboot polling can then continue. Host-identity failures remain fatal.
+
 ## ADR-005: Keep vendor secrets and private artifacts out of source control
 
 **Diagnostic-policy update, 2026-11-04:** The diagnostic amendment to ADR-008 below

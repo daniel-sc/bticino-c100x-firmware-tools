@@ -202,7 +202,13 @@ SSH recovery verification retains its separate partition-node/size prerequisites
 
 ## Write sequence
 
-Each stage starts with an idle-worker check and uses a single command session.
+Each stage starts with an idle-worker check. After each FTP upload, replace the
+command session before committing the file: stock OpenWebNet closes idle command
+sessions after 30 seconds, which a wireless upload can exceed. This repeats only
+the command handshake, not the start-transfer request. Vendor evidence:
+`EthernetProtocolUtility.cs:1008,1147–1150` disconnects around FTP and reconnects
+afterward. A reconnect failure stops before the commit request. Boot-state checks
+remain at entry and reboot boundaries, not between filesystem and kernel writes.
 
 | Operation | Exact frame |
 | --- | --- |
@@ -242,6 +248,30 @@ SSH identities at each phase. Details are in [ARCHITECTURE.md](ARCHITECTURE.md)
 and the [wireless design](WIRELESS-UPDATE-PLAN.md). Hardware wireless acceptance
 remains pending.
 
+### FTP startup readiness (2026-11-07)
+
+The start-transfer ACK does not establish FTP listener readiness. The handler at
+`bt_device.c:7105–7120` stops FTP, clears staging, starts FTP and acknowledges.
+`liblghal.so.0.0.c:9305–9350` invokes `/etc/init.d/vsftpd start`; the observed
+stock init script uses `start-stop-daemon -S -b`, launching the daemon in the
+background without waiting for its listener. An SSH forward can accept the local
+connection while its remote connection fails, exposing EOF to `ftplib.connect()`.
+
+On the tested device, a transfer-start-only diagnostic reproduced EOF 9 ms after
+ACK and obtained a welcome banner through the same tunnel at 108 ms. A corrected
+run observed EOF at 25 ms and obtained the banner at 333 ms. No diagnostic uploaded
+or committed a payload. See the [validation record](VALIDATION-HISTORY.md#2026-11-07-wireless-ftp-startup-race).
+
+Source now waits for the initial FTP greeting with a ten-second readiness budget,
+socket timeouts of up to two seconds and 100 ms between attempts. This is a polling
+budget checked between attempts, not a strict total deadline: in-flight transport
+checks, TCP connection establishment and greeting reads can extend it. Only
+pre-login EOF, refusal, reset and timeout are retried, closing the failed socket
+and rechecking transport. FTP protocol errors and transport-check failures stop;
+login, staging inspection, upload, commit and transfer-start commands are never
+retried. Successful greeting restores the normal 30-second FTP socket timeout.
+Published v0.2.0-alpha.1 lacks this readiness wait.
+
 ## Completion, timeouts and errors
 
 - Query 42 ACK means the upgrade child is absent. It **does not report the
@@ -269,6 +299,11 @@ Failure diagnostics retain transport causes, the final read-only reboot-poll
 failure and last stale-uptime observation. SSH prerequisite inspection labels its
 current read-only substep on stderr when the script fails. These diagnostics do
 not change update frames, alter reboot-proof criteria or authorize a write retry.
+
+Local `ssh -O check` timeouts during tunnel startup are treated as not-ready
+observations within its existing polling budget. Exhaustion raises `SSHError`
+with the timeout cause so planned-reboot polling can continue; host-identity
+failures still stop immediately.
 
 ### Explicit recovery entry (2026-11-03)
 

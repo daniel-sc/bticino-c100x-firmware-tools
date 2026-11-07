@@ -18,6 +18,7 @@ import time
 
 from .firmware import FirmwareError, regular_file
 from .host import run_tool
+from .diagnostics import tool_error
 from .ssh import SSHConnection, SSHError, HostIdentityError, _invoking_user
 from .wireless_image import facts, pipe_tool, public_identity
 
@@ -246,15 +247,25 @@ class Tunnel(SSHConnection):
         self.thread = threading.Thread(target=worker, name="c100x-ssh-forward", daemon=True)
         self.thread.start()
         deadline = time.monotonic() + 12
+        last_error = None
         while time.monotonic() < deadline:
             self.check()
             if (self._directory / "m").exists():
-                result = subprocess.run(["/usr/bin/ssh", "-F", "/dev/null", "-S", str(self._directory / "m"),
-                                         "-O", "check", self.host], capture_output=True, timeout=2)
-                if result.returncode == 0:
-                    return
+                try:
+                    result = subprocess.run(["/usr/bin/ssh", "-F", "/dev/null", "-S", str(self._directory / "m"),
+                                             "-O", "check", self.host], capture_output=True, timeout=2)
+                except subprocess.TimeoutExpired as exc:
+                    last_error = exc
+                else:
+                    if result.returncode == 0:
+                        self.check()
+                        return
+                    last_error = tool_error(SSHError("SSH control readiness check failed"),
+                                            "ssh", result.returncode, result.stderr)
             time.sleep(0.05)
-        raise SSHError("Authenticated SSH forwarding did not become ready")
+        # A worker failure arriving during the last control probe stays fatal.
+        self.check()
+        raise SSHError("Authenticated SSH forwarding did not become ready") from last_error
 
     def check(self):
         if self.error is not None:

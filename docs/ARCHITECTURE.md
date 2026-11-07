@@ -142,7 +142,19 @@ validate all local inputs -> inspect compatible device in state 4
 Credentials are selected by the **currently running environment**: normal
 credentials write the recovery payloads; recovery credentials write the main
 payloads. One FTP connection uploads/checks each file. The OpenWebNet connection
-is replaced after each verified reboot.
+is replaced after each successful FTP upload, before commit, as well as after
+each verified reboot. A slow upload can outlast the command session's 30-second
+idle timeout. Post-upload reconnection performs only transport checks and the
+command handshake; it does not repeat start-transfer or query intermediate boot
+state between filesystem and kernel writes.
+
+The start-transfer ACK precedes readiness of the background-launched FTP server.
+Before authentication, connection/greeting polling uses a ten-second budget
+(in-flight socket/transport checks may extend it),
+closing failed sockets and checking transport between attempts. Only transient
+connection/greeting errors are repeatable; login and subsequent transfer actions
+are single attempts. The same readiness boundary handles direct refusal and EOF
+from an SSH forward whose remote listener is not ready (ADR-004 amendment).
 
 Every error stops subsequent actions. The stage label is reported to the user;
 there is no persistent resume journal, automatic rollback or write retry.
@@ -179,6 +191,8 @@ and credentials apply in recovery and final main. Expected keys never become a
 permissive union: a known preceding environment is only not-ready during a planned
 transition, and an unexpected identity is fatal. Read-only polling can recreate
 forwards during planned reboots; an unexpected active-stage tunnel loss stops.
+Local SSH-control readiness timeouts are polled during tunnel startup; exhaustion
+becomes an SSH readiness error handled by the planned-reboot loop.
 Final normal reboot/state and SSH are required before promoting destination trust.
 Trust records are invoking-user-owned and separate from general SSH settings.
 On the trusted-home network model, existing-main SSH is admitted by working

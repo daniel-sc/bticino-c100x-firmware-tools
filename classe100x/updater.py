@@ -120,16 +120,41 @@ class NetworkDevice:
             self.host, self.port, self.ftp_port, self.data_port = self.transport.endpoints()
 
     def connect(self) -> dict:
+        self.reconnect()
+        return self.client.inspect()
+
+    def reconnect(self) -> None:
+        """Replace the command session without restarting the device transfer."""
         self.close()
         self._transport_ready()
         client = UpdateClient(self.host, self.port, self.timeout)
         self.client = client.__enter__()
-        return self.client.inspect()
 
     def close(self) -> None:
         if self.client is not None:
             self.client.close()
             self.client = None
+
+    def _connect_ftp(self, ftp):
+        # The vendor start-transfer ACK follows a background vsftpd launch,
+        # not listener readiness. An SSH forward reports remote refusal as EOF.
+        # Only connect/banner reads are repeatable; never retry login or upload.
+        # This is a polling budget; in-flight socket/transport checks may overrun.
+        deadline = time.monotonic() + 10
+        last_error = None
+        while (remaining := deadline - time.monotonic()) > 0:
+            self._transport_ready()
+            try:
+                greeting = ftp.connect(self.host, self.ftp_port, timeout=min(2, remaining))
+            except (EOFError, ConnectionRefusedError, ConnectionResetError, TimeoutError) as exc:
+                last_error = exc
+                ftp.close()
+                time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+                continue
+            ftp.timeout = 30
+            ftp.sock.settimeout(30)
+            return greeting
+        raise UpdateError("FTP greeting readiness budget exhausted (10 seconds); payload write was not requested") from last_error
 
     def upload(self, path: Path, credentials: Credentials) -> None:
         # FTP starts only after the explicit begin command. Each worker consumes
@@ -142,7 +167,7 @@ class NetworkDevice:
             with factory(timeout=30) as ftp:
                 if self.data_port is not None:
                     ftp.data_port = self.data_port
-                ftp.connect(self.host, self.ftp_port)
+                self._connect_ftp(ftp)
                 operation = "login"
                 ftp.login(credentials.username, credentials.password)
                 operation = "inspect staging directory"
@@ -162,11 +187,11 @@ class NetworkDevice:
                     raise UpdateError("Unexpected files in FTP staging directory")
                 operation = "close FTP connection"
         except UpdateError as exc:
-            details(exc, operation=operation, endpoint=f"{self.host}:21", payload=path.name)
+            details(exc, operation=operation, endpoint=f"{self.host}:{self.ftp_port}", payload=path.name)
             raise
         except ftplib.all_errors as exc:
             raise details(UpdateError("FTP transfer failed; payload write was not requested"),
-                          operation=operation, endpoint=f"{self.host}:21", payload=path.name) from exc
+                           operation=operation, endpoint=f"{self.host}:{self.ftp_port}", payload=path.name) from exc
 
     def wait_idle(self) -> None:
         deadline = time.monotonic() + self.write_timeout
@@ -274,6 +299,11 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
                 stage = f"{target}: uploading {name}"
                 report(stage)
                 device.upload(firmware.directory / name, credentials)
+                # Like the vendor updater, use a fresh command session after FTP:
+                # an upload can outlast openserver's 30-second idle timeout.
+                stage = f"{target}: reconnecting before writing {name}"
+                report(stage)
+                device.reconnect()
                 stage = f"{target}: writing {name}"
                 report(stage)
                 device.client.commit(payload)

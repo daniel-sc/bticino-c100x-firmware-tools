@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from classe100x.firmware import Payload, PreparedFirmware, SELECTED_SHA256
 from classe100x.protocol import ACK, FrameStream, ProtocolError
-from classe100x.updater import NetworkDevice, UpdateClient, UpdateError, UncertainDelivery, check_identity, flash, flash_recovery, uptime_seconds
+from classe100x.updater import ForwardedFTP, NetworkDevice, UpdateClient, UpdateError, UncertainDelivery, check_identity, flash, flash_recovery, uptime_seconds
 from classe100x.vendor import Credentials, VendorProfile
 
 
@@ -34,6 +34,9 @@ class SimulatedDevice:
     def connect(self):
         self.event("connect")
         return self.initial
+
+    def reconnect(self):
+        self.event("reconnect")
 
     def close(self):
         self.events.append("close")
@@ -157,6 +160,44 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(observed, [b"*#13**#35*100*0*123##", b""])
         self.assertIsNone(client.stream)
 
+    def test_slow_uploads_cannot_leave_commit_on_an_expired_session(self):
+        class ExpiringDevice(SimulatedDevice):
+            live = True
+
+            def upload(self, path, credentials):
+                super().upload(path, credentials)
+                # Replay an upload exceeding the vendor's 30-second idle timer.
+                self.live = False
+
+            def reconnect(self):
+                super().reconnect()
+                self.live = True
+
+            def commit(self, payload):
+                if not self.live:
+                    raise UncertainDelivery("command connection expired during FTP upload")
+                super().commit(payload)
+
+        for recovery_entry in (False, True):
+            with self.subTest(recovery_entry=recovery_entry):
+                device = ExpiringDevice(initial=identity(1 if recovery_entry else 4))
+                run = flash_recovery if recovery_entry else flash
+                run(self.firmware, device, self.profile, report=lambda _: None)
+                commits = [event for event in device.events if event.startswith("commit-")]
+                self.assertEqual(len(commits), 2 if recovery_entry else 4)
+                self.assertEqual(device.events.count("reconnect"), len(commits))
+                self.assertEqual(device.events.count("begin-main"), 1)
+                self.assertEqual(device.events.count("begin-recovery"), 0 if recovery_entry else 1)
+
+    def test_failed_post_upload_reconnect_cannot_request_a_write(self):
+        device = SimulatedDevice(fail="reconnect")
+        with self.assertRaisesRegex(UpdateError, "reconnecting before writing"):
+            self.run_update(device)
+        self.assertEqual(device.events, [
+            "connect", "idle", "begin-recovery", "upload-btweb_only_recovery.ext4.gz",
+            "reconnect", "close",
+        ])
+
 
 class RecoveryUpdateTests(unittest.TestCase):
     setUp = UpdaterTests.setUp
@@ -173,8 +214,8 @@ class RecoveryUpdateTests(unittest.TestCase):
                 self.assertEqual(result, identity(4, hardware=hardware))
                 self.assertEqual(device.events, [
                     "connect", "check-idle", "begin-main", "upload-btweb_only.ext4.gz",
-                    "commit-btweb_only.ext4.gz", "idle", "upload-uImage.zip",
-                    "commit-uImage.zip", "idle", "finish", "settle", "reboot-4", "close",
+                    "reconnect", "commit-btweb_only.ext4.gz", "idle", "upload-uImage.zip",
+                    "reconnect", "commit-uImage.zip", "idle", "finish", "settle", "reboot-4", "close",
                 ])
                 self.assertTrue(all(call.args[1] is self.profile.recovery for call in upload.call_args_list))
 
@@ -357,6 +398,20 @@ class NetworkWaitTests(unittest.TestCase):
     def sleep(self, seconds):
         self.clock += seconds
 
+    def test_post_upload_reconnect_replaces_only_the_command_session(self):
+        sock, peer = socket.socketpair()
+        self.addCleanup(sock.close)
+        self.addCleanup(peer.close)
+        self.addCleanup(self.device.close)
+        peer.settimeout(1)
+        peer.sendall(ACK + ACK + ACK)
+        with patch("classe100x.protocol.socket.create_connection", return_value=sock):
+            self.device.reconnect()
+            self.client.close.assert_called_once()
+            self.assertEqual(peer.recv(4096), b"*99*0##")
+            self.device.client.commit(Payload("uImage.zip", 100, "unused", 123))
+            self.assertEqual(peer.recv(4096), b"*#13**#35*100*0*123##")
+
     def test_busy_worker_timeout_does_not_reboot(self):
         self.client.idle.return_value = False
         with self.assertRaisesRegex(UpdateError, "still busy"):
@@ -469,6 +524,50 @@ class FTPTests(unittest.TestCase):
         self.ftp.voidcmd.assert_called_once_with("TYPE I")
         self.ftp.size.assert_called_once_with("uImage.zip")
 
+    def test_greeting_readiness_retries_only_connection_setup(self):
+        self.ftp.connect.side_effect = [ConnectionRefusedError(), ConnectionResetError(), TimeoutError(), "220 ready"]
+        with patch("classe100x.updater.time.sleep"):
+            self.device.upload(self.path, self.credentials)
+        self.assertEqual(self.ftp.connect.call_count, 4)
+        self.assertEqual(self.ftp.close.call_count, 3)
+        self.ftp.login.assert_called_once()
+        self.ftp.storbinary.assert_called_once()
+
+    def test_greeting_timeout_preserves_cause_and_actual_endpoint(self):
+        self.device.ftp_port = 23001
+        error = EOFError()
+        self.ftp.connect.side_effect = error
+        with patch("classe100x.updater.time.monotonic", side_effect=[0, 0, 10, 10]), \
+                self.assertRaisesRegex(UpdateError, "FTP greeting.*10 seconds") as caught:
+            self.device.upload(self.path, self.credentials)
+        self.assertIs(caught.exception.__cause__, error)
+        self.assertIn("endpoint: unused:23001", caught.exception.__notes__)
+        self.ftp.login.assert_not_called()
+        self.ftp.storbinary.assert_not_called()
+        self.ftp.close.assert_called_once()
+
+    def test_transport_loss_during_readiness_stops_before_login(self):
+        self.ftp.connect.side_effect = EOFError()
+        self.device.check_transport = MagicMock(side_effect=[None, None, OSError("tunnel lost")])
+        with patch("classe100x.updater.time.sleep"), self.assertRaises(UpdateError) as caught:
+            self.device.upload(self.path, self.credentials)
+        self.assertEqual(str(caught.exception.__cause__), "tunnel lost")
+        self.ftp.connect.assert_called_once()
+        self.ftp.login.assert_not_called()
+
+    def test_post_greeting_disconnects_are_never_retried(self):
+        for operation in ("login", "nlst", "storbinary", "voidcmd", "size"):
+            with self.subTest(operation=operation):
+                self.ftp.reset_mock()
+                self.ftp.nlst.side_effect = [[], [self.path.name]]
+                method = getattr(self.ftp, operation)
+                method.side_effect = EOFError()
+                with self.assertRaises(UpdateError):
+                    self.device.upload(self.path, self.credentials)
+                self.ftp.connect.assert_called_once()
+                method.assert_called_once()
+                method.side_effect = None
+
     def test_existing_file_prevents_upload(self):
         self.ftp.nlst.side_effect = [["previous-file"]]
         with self.assertRaisesRegex(UpdateError, "not empty"):
@@ -497,3 +596,36 @@ class FTPTests(unittest.TestCase):
                 self.assertIn("fixture-user", output)
                 self.assertIn("operation:", output)
                 method.side_effect = None
+
+
+class ForwardedFTPReadinessTests(unittest.TestCase):
+    def test_forward_eof_before_greeting_then_ready_uploads_once(self):
+        # A live SSH listener can accept locally while the remote FTP listener
+        # is still starting. That first forwarded socket closes without a banner.
+        # Exercise real ftplib greeting reads, including its actual EOFError.
+        first, first_peer = socket.socketpair()
+        ready, ready_peer = socket.socketpair()
+        for sock in (first, first_peer, ready, ready_peer):
+            self.addCleanup(sock.close)
+        first_peer.close()
+        ready_peer.sendall(b"220 ready\r\n221 goodbye\r\n")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "uImage.zip"
+            path.write_bytes(b"fixture")
+            transport = MagicMock()
+            transport.endpoints.return_value = ("127.0.0.1", 23000, 23001, 23002)
+            device = NetworkDevice("unused", transport=transport)
+            with patch("socket.create_connection", side_effect=[first, ready]) as connect, \
+                    patch.object(ForwardedFTP, "login") as login, \
+                    patch.object(ForwardedFTP, "nlst", side_effect=[[], [path.name]]), \
+                    patch.object(ForwardedFTP, "storbinary") as store, \
+                    patch.object(ForwardedFTP, "voidcmd"), \
+                    patch.object(ForwardedFTP, "size", return_value=path.stat().st_size), \
+                    patch("classe100x.updater.time.sleep"):
+                device.upload(path, Credentials("fixture-user", "fixture-secret"))
+            self.assertEqual(connect.call_count, 2)
+            self.assertTrue(all(call.args[0] == ("127.0.0.1", 23001) for call in connect.call_args_list))
+            login.assert_called_once()
+            store.assert_called_once()
+            self.assertEqual(first.fileno(), -1)
+            self.assertEqual(ready.fileno(), -1)

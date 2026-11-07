@@ -5,11 +5,11 @@ The original firmware is preserved; building does not contact or
 change the intercom.
 Install the tool using the [README](../README.md#installation) first.
 
-Version **v0.2.0-alpha.1 and source builds block manufacturer updates in both main
+Version **v0.2.0-alpha.2 and source builds block manufacturer updates in both main
 and recovery by default**, including builds with no optional features. `--allow-vendor-updates`
 opts out. SSH builds provision both filesystems. These changes are not in
 stable v0.1.0, which retains manufacturer updates and main-only SSH. Install the
-[prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+[prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
 for the behavior documented here, or use [source setup](SOURCE.md).
 
 ## Prepare and choose features

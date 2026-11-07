@@ -391,6 +391,135 @@ while True: time.sleep(1)
         self.assertTrue(all(p.poll() is not None for p in children))
         self.assertFalse(directory.exists())
 
+    def test_tunnel_readiness_tolerates_a_transient_control_timeout(self):
+        tunnel = wireless.Tunnel(wireless.Credentials("root2"), "192.0.2.1", OLD)
+        tunnel._directory = self.root
+        (self.root / "m").touch()
+        timeout = subprocess.TimeoutExpired("ssh -O check", 2)
+        with patch.object(tunnel, "open"), patch.object(wireless.threading, "Thread"), \
+                patch.object(wireless.subprocess, "run", side_effect=[timeout, Mock(returncode=0)]) as check, \
+                patch.object(wireless.time, "sleep"):
+            tunnel.start()
+        self.assertEqual(check.call_count, 2)
+
+    def test_tunnel_readiness_reports_final_control_failure_after_timeout(self):
+        from classe100x.diagnostics import format_failure
+        tunnel = wireless.Tunnel(wireless.Credentials("root2", password="fixture-private"), "192.0.2.1", OLD)
+        tunnel._directory = self.root
+        (self.root / "m").touch()
+        clock = [0.0]
+        attempts = [0]
+
+        def check(*args, **kwargs):
+            clock[0] += 4
+            attempts[0] += 1
+            if attempts[0] == 1:
+                raise subprocess.TimeoutExpired("ssh -O check", 2)
+            return Mock(returncode=255, stderr=b"control socket unavailable fixture-private")
+
+        with patch.object(tunnel, "open"), patch.object(wireless.threading, "Thread"), \
+                patch.object(wireless.subprocess, "run", side_effect=check), \
+                patch.object(wireless.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(wireless.time, "sleep"), self.assertRaises(SSHError) as caught:
+            tunnel.start()
+        output = format_failure(caught.exception)
+        self.assertIn("exit status: 255", output)
+        self.assertIn("control socket unavailable", output)
+        self.assertNotIn("fixture-private", output)
+
+    def test_identity_failure_during_final_control_check_stops_reboot_polling(self):
+        for control_succeeds in (False, True):
+            with self.subTest(control_succeeds=control_succeeds):
+                transport = self.transport()
+                tunnel = wireless.Tunnel(transport.existing, "192.0.2.1", OLD)
+                tunnel._directory = self.root
+                (self.root / "m").touch()
+                clock = [0.0]
+                identity_error = HostIdentityError("phase key changed")
+
+                def control_check(*args, **kwargs):
+                    # Worker failure arrives after the loop's initial check,
+                    # while the final local control probe is in flight.
+                    tunnel.error = identity_error
+                    clock[0] += 20
+                    if control_succeeds:
+                        return Mock(returncode=0)
+                    raise subprocess.TimeoutExpired("ssh -O check", 2)
+
+                device = NetworkDevice("unused", transport=transport)
+                client = device.client = Mock()
+                client.query.return_value = ("0", "0", "2", "0")
+                with patch.object(wireless, "Tunnel", return_value=tunnel) as factory, \
+                        patch.object(wireless, "resolve", return_value="192.0.2.1"), \
+                        patch.object(wireless, "scan_keys", return_value={OLD}), \
+                        patch.object(wireless.Credentials, "connection") as connection, \
+                        patch("classe100x.updater.ReadOnlyClient"), \
+                        patch.object(tunnel, "open"), patch.object(tunnel, "close"), \
+                        patch.object(wireless.threading, "Thread"), \
+                        patch.object(wireless.subprocess, "run", side_effect=control_check), \
+                        patch.object(wireless.time, "monotonic", side_effect=lambda: clock[0]), \
+                        patch.object(wireless.time, "sleep"), \
+                        patch.object(transport, "arrived") as arrived, \
+                        self.assertRaises(HostIdentityError) as caught:
+                    device.reboot_and_wait(4)
+                self.assertIs(caught.exception, identity_error)
+                factory.assert_called_once()
+                client.reboot.assert_called_once()
+                arrived.assert_not_called()
+                connection.assert_not_called()
+
+    def test_control_timeout_exhaustion_allows_reboot_polling_to_continue(self):
+        # Exercise the real Tunnel.start -> reboot readiness exception boundary.
+        clock = [0.0]
+        timeout = subprocess.TimeoutExpired("ssh -O check", 2)
+        tunnels = []
+        errors = []
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        def control_check(*args, **kwargs):
+            if len(tunnels) == 1:
+                sleep(2)
+                raise timeout
+            return Mock(returncode=0)
+
+        def endpoints():
+            tunnel = wireless.Tunnel(wireless.Credentials("root2"), "192.0.2.1", OLD)
+            tunnel._directory = self.root
+            tunnels.append(tunnel)
+            with patch.object(tunnel, "open"):
+                try:
+                    tunnel.start()
+                except SSHError as exc:
+                    errors.append(exc)
+                    raise
+            return ("127.0.0.1", *tunnel.ports)
+
+        (self.root / "m").touch()
+        transport = Mock()
+        transport.endpoints.side_effect = endpoints
+        device = NetworkDevice("unused", transport=transport)
+        client = device.client = Mock()
+        client.query.return_value = ("0", "0", "2", "0")
+        info = {"device_type": ("200",), "firmware": ("1", "5", "8"),
+                "hardware": ("02", "06", "0"), "object_model": ("1", "0", "99"),
+                "update_status": ("1", "0"), "uptime": ("0", "0", "0", "1")}
+        with patch.object(wireless.threading, "Thread"), \
+                patch.object(wireless.subprocess, "run", side_effect=control_check), \
+                patch.object(wireless.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(wireless.time, "sleep", side_effect=sleep), \
+                patch("classe100x.updater.ReadOnlyClient") as probe, \
+                patch.object(device, "connect", return_value=info):
+            probe.return_value.__enter__.return_value.inspect.return_value = info
+            self.assertEqual(device.reboot_and_wait(1), info)
+        self.assertEqual(len(tunnels), 2)
+        self.assertEqual(len(errors), 1)
+        self.assertIs(errors[0].__cause__, timeout)
+        client.reboot.assert_called_once()
+        transport.rebooting.assert_called_once_with(1)
+        transport.arrived.assert_called_once_with(1)
+
     def test_sleep_assertion_released_on_error(self):
         process = Mock()
         process.poll.return_value = None

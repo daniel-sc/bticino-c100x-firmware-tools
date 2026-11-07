@@ -17,7 +17,14 @@ working display, outdoor video, door release, Door Entry app, call audio, SSH an
 MQTT. This adds stock-to-modified coverage; see the
 [attributed record](VALIDATION-HISTORY.md#2026-11-07-community-reported-car-7-stock-to-modified-acceptance).
 
-**v0.2.0-alpha.1 is published:** broader hardware-family admission, dual-image
+**v0.2.0-alpha.2 candidate:** adds FTP greeting readiness, command-session refresh
+after uploads and transient SSH-control timeout handling. The FTP greeting fix
+passed authorized transfer-start-only hardware checks; follow-up fixes passed
+offline regressions. Final local testing passed all 228 tests, including native
+MQTT ABI coverage. Release CI and downloaded-artifact validation are pending.
+Full wireless installation remains pending hardware acceptance.
+
+**v0.2.0-alpha.1 publication evidence:** broader hardware-family admission, dual-image
 SSH, default manufacturer-update prevention and explicit wireless transport are
 included. The signed/notarized download passed checksum/signature checks,
 relocated packaged smoke, a real SSH+MQTT build and dual-image authentication
@@ -34,7 +41,7 @@ and [hardware-family checks](VALIDATION-HISTORY.md#2026-11-07-hardware-family-co
 
 ## Supported hardware versus tested hardware
 
-The v0.2.0-alpha.1 prerelease and source tools support C100X Door Entry **1.5.8**,
+The v0.2.0 prereleases and source tools support C100X Door Entry **1.5.8**,
 model **`1.0.99`**, hardware family
 **`02.*.*`**, using the vendor updater's first-component hardware comparison.
 Published **v0.1.0 still restricts hardware to `02*06*0`**. The
@@ -90,6 +97,19 @@ and [optional recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-fla
       did not require another firmware flash for release.
 
 ## Wireless and dual-image hardware acceptance (pending)
+
+**2026-11-07 FTP startup diagnosis:** two v0.2.0-alpha.1 wireless attempts stopped
+at the first FTP greeting, before login/upload or any payload-write request.
+Authorized transfer-start-only diagnostics reproduced an FTP-readiness race and
+verified the source correction through a successful greeting after initial EOF.
+The device remained in normal state with an idle worker. This validates the
+greeting fix, not firmware transfer or the full wireless sequence. The published
+alpha lacks the correction. See the [diagnosis record](VALIDATION-HISTORY.md#2026-11-07-wireless-ftp-startup-race).
+
+Source also refreshes the command session after FTP uploads and tolerates
+transient local SSH-control readiness timeouts. Their follow-up regression checks
+are offline; hardware coverage of long uploads and reboot-time SSH polling remains
+pending.
 
 Customizing recovery, adding wireless transport and suppressing vendor-update
 startup paths materially change the installation. Targeted hardware validation

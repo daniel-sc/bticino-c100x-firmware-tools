@@ -12,7 +12,7 @@ Key-only builds set Dropbear `-s`; password builds enable daemon-wide password
 authentication while preserving vendor accounts. The added `root2` account has
 UID/GID 0 and home `/home/root`.
 
-The host key is newly generated once for each source build and installed in both
+The host key is newly generated once for each SSH build and installed in both
 main and recovery at
 `/etc/dropbear/classe100x_ecdsa_host_key`. The payload-owned `c100x-ssh` init script
 passes that path directly to stock Dropbear's `-r` option. No boot-time key
@@ -37,8 +37,7 @@ vendor daemon cannot undo the selected SSH payload through its `abil_ssh` policy
 Our service does not read that file. The persistent configuration partition is
 not edited, and its SSH switch no longer controls this service. See
 [ADR-017](DECISIONS.md#adr-017-the-selected-ssh-payload-owns-its-service-lifecycle).
-Available in alpha.6; rebuild and flash to install it. Older released
-payloads use the vendor-controlled service. Alpha.6 hardware checks passed startup,
+Rebuild and flash to install this service. Hardware checks passed startup,
 vendor start/stop isolation, service restart, RSA-key/password login and reboot
 identity persistence with `abil_ssh` absent; see [acceptance](ACCEPTANCE.md).
 
@@ -78,7 +77,7 @@ rotate across two files totaling at most 1 MiB under
 `/var/volatile/tmp/c100x-mqtt/`; reboot removes them. If SSH was selected separately,
 `/etc/init.d/c100x-mqtt status` checks the supervisor, not broker readiness;
 `stop`, `start` and `restart` manage this service. Readiness is reported via MQTT
-and private logs. The user confirmed MQTT/household operation after the alpha.6
+and private logs. The user confirmed MQTT/household operation after the recorded
 SSH+MQTT build was flashed and rebooted. Broader disconnect/reconnect testing remains
 pending; offline build verification alone establishes installed bytes only.
 

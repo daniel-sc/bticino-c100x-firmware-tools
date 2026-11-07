@@ -18,6 +18,73 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: v0.2.0 release preparation
+
+- Prepared stable release notes highlighting owner OTA/SSH flashing, default
+  vendor-update blocking, dual-image SSH and hardware-family compatibility.
+  Current-facing guides describe v0.2.0; earlier versions remain dated provenance.
+- Local `mise run test` passed **all 228 tests**, with builder tools required and
+  native MQTT ABI coverage enabled. Changed-document local links/anchors and
+  `git diff --check` passed. Workflow version selection produced `v0.2.0` for the
+  stable tag and the updated `0.2.0-alpha.ci` series for main candidates.
+- Preparation does not establish stable publication: release-commit CI, tagging,
+  signed/notarized artifact checks and the stable Homebrew cask update remain
+  listed in [ACCEPTANCE.md](ACCEPTANCE.md#v020-release-checks).
+
+## 2026-11-07: complete wireless SSH flash
+
+Source: user-supplied terminal transcript and report of successful flashing.
+`c100x --version` reports **v0.2.0-alpha.2**. The input filename is
+`custom-0.2.0-alpha.1.fwz`; its builder version is not independently established
+by the filename. The transcript identifies this exact archive and payloads:
+
+| Artifact | Bytes | SHA-256 | POSIX cksum |
+| --- | --- | --- | --- |
+| FWZ | Not supplied | `4052c303a348c7f47504d540526dadc5623b6ede5c73d2aec4f9e764b1202197` | — |
+| `btweb_only_recovery.ext4.gz` | 25147447 | `1fedd776384d92cda1374c8c8dc5a74f3b0ffd4dfabe111e05d9f4b973d539ac` | 2038621634 |
+| `uImage.zip` | 3516352 | `b06b75e3a956fb26578788293db449f5f188b0502a70cd24f91719ad1dffda3d` | 3238374593 |
+| `btweb_only.ext4.gz` | 79446775 | `06c2382031f21237ae1587a9832f657f57301d16637030285306db4a6fcdc9db` | 851661076 |
+
+Commands, run without sudo from `~/klingel-fw`:
+
+```sh
+c100x plan --transport ssh --verify-recovery-ssh --ssh-key ~/.ssh/id_rsa ./custom-0.2.0-alpha.1.fwz
+c100x flash --transport ssh --verify-recovery-ssh --ssh-key ~/.ssh/id_rsa ./custom-0.2.0-alpha.1.fwz
+```
+
+- **Read-only preflight:** passed in **52s** after host storage/tools, reference
+  preparation and SSH partition inspection. Target `Bticino-Classe100X.local`
+  reported device type `200`, firmware `1*5*8`, hardware `02*06*0`, extended
+  identity `99*6*1*0`, model `1.0.99`, normal state `4*0` and uptime `2*8*46*46`.
+  JSON reported `transport: ssh`, `vendor_updates: blocked` and
+  `device_writes: false`.
+- **Full flash:** completed in **10m36s**. Recovery filesystem and kernel uploads
+  each reached post-upload command reconnection and write, followed by the normal
+  reboot. SSH recovery verification read `mmcblk2p2` and `mmcblk2p3`, independently
+  hashed both and checked both filesystems. The gate reported
+  `passed; saving evidence before main-kernel clear` before recovery entry.
+- **Recovery and final main:** main-kernel clear/reboot was followed by main
+  filesystem and kernel uploads, reconnections and writes through SSH. The final
+  reboot and `final destination SSH verification` completed, ending with
+  `Update sequence completed`. The implemented completion gates require expected
+  state/identity and reset uptime at all three reboot boundaries. This establishes
+  working customized-recovery LAN SSH and tunneled vendor transfers for this run.
+- **Private report locations:** under `~/klingel-fw/`, preflight evidence is
+  `c100x-verification-20261107T204306Z-kbij39xu/report.json`; flash evidence is
+  `c100x-verification-20261107T204407Z-g228bj7w/report.json`. These files were named
+  by the transcript, not independently inspected for this documentation update.
+- **Scope:** successful modified-to-modified owner OTA/SSH installation with the
+  destination admitted as vendor-update-blocked, mandatory installed recovery
+  verification and authenticated final SSH. The default hostname worked through
+  the sequence; separate DHCP/address-change tests were not supplied. No live
+  manufacturer-blocking test, USB operation with customized recovery or
+  changed-credential scenario accompanies this log.
+- **Functional acceptance:** in the same documentation session, the user
+  explicitly confirmed: “I did the household tests, so this is fully working.”
+  This adds user-confirmed post-flash household acceptance with the new dual-image
+  SSH/vendor-update-blocking policy installed. No separate per-function transcript
+  or commissioning/reconnection test was supplied.
+
 ## 2026-11-07: v0.2.0-alpha.2 publication and validation
 
 - Published [v0.2.0-alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)

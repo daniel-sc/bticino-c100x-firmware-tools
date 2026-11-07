@@ -8,8 +8,8 @@ packages over Wi-Fi unchanged. The main obstacle is authorized update execution
 in recovery, rather than transferring a file over Wi-Fi.
 
 This preserves the dated research findings. The subsequently approved design is
-in [WIRELESS-UPDATE-PLAN.md](WIRELESS-UPDATE-PLAN.md), source usage in
-[FLASHING.md](FLASHING.md#wireless-updates-source-builds), and observed validation
+in [WIRELESS-UPDATE-PLAN.md](WIRELESS-UPDATE-PLAN.md), current usage in
+[FLASHING.md](FLASHING.md#wireless-updates-over-ssh), and observed validation
 in [ACCEPTANCE.md](ACCEPTANCE.md). It complements [manufacturer OTA prevention](OTA.md),
 [the USB protocol](PROTOCOL.md) and [boot/recovery limitations](RECOVERY.md).
 
@@ -18,7 +18,10 @@ filesystem customization for this feature (ADR-019). Stock recovery preservation
 below is a researched alternative, not a continuing hard design requirement.
 The [design interview](WIRELESS-UPDATE-DESIGN.md) concluded with approval on
 2026-11-07. Source implementation now provisions recovery SSH and supports explicit
-wireless transport; hardware acceptance remains pending.
+wireless transport. A subsequent complete SSH flash and user-confirmed household
+tests passed on 2026-11-07; see the
+[hardware record](VALIDATION-HISTORY.md#2026-11-07-complete-wireless-ssh-flash).
+The findings below retain the original research conditions.
 
 ## Findings at a glance
 

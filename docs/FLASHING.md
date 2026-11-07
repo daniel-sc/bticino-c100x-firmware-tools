@@ -7,10 +7,10 @@ scope and follow-up coverage.
 
 ## Compatibility
 
-Only **C100X Door Entry 1.5.8** is supported. Prerelease/source tools check hardware family
+Only **C100X Door Entry 1.5.8** is supported. The tool checks hardware family
 `02.*.*` (three numeric fields, first field `2`), device type `200`, object model
 `1.0.99` and initial status `4*0`. The hardware rule follows the vendor updater;
-it applies to preflight, reboot verification and recovery entry. Prerelease/source tools
+it applies to preflight, reboot verification and recovery entry. Package checks
 require the stock manifest/kernel and supported main/recovery filesystem profiles.
 Passing these checks does not prove bootability.
 
@@ -19,8 +19,7 @@ household checks. A community report adds successful stock-to-modified flashing
 and functional checks on `02*07*0`. These results carry forward for unchanged
 behavior; other family-02 revisions have no recorded hardware flash acceptance yet. See
 [protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) and
-[validation](ACCEPTANCE.md). **Stable v0.1.0 still requires `02*06*0`; broader
-admission starts with v0.2.0-alpha.1.**
+[validation](ACCEPTANCE.md).
 
 ## 1. Inspect and run preflight
 
@@ -97,8 +96,8 @@ check runs **after writing recovery and rebooting normally, before clearing the
 main kernel**. It compares the recovery filesystem and kernel/DTB contents with
 the selected package and checks the copied filesystems offline. Failure or uncertainty stops
 the update. This verifies integrity, not recovery bootability or household
-functions. This gate passed on hardware in the earlier stopped alpha.3 run;
-alpha.6's uninterrupted flash used the ordinary path. See [validation](ACCEPTANCE.md).
+functions. The gate has passed on hardware over USB and within a completed SSH
+flash. See [validation](ACCEPTANCE.md).
 
 - Allow several extra minutes and **512 MiB** of free space. SSH readiness is
   limited to two minutes; readback/analysis to fifteen minutes. Failed acquisitions
@@ -121,13 +120,14 @@ Use `sudo` from your ordinary account and an administrative device account (UID
 Release bundles include the required filesystem tools.
 
 <a id="wireless-updates-source-builds"></a>
+<a id="wireless-updates-prerelease"></a>
 
-## Wireless updates (prerelease)
+## Wireless updates over SSH
 
-**Implemented for offline validation; recovery networking and a full wireless
-flash still require hardware acceptance.** Stable v0.1.0 is USB-only. Use
-[v0.2.0-alpha.2](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
-or [source setup](SOURCE.md), and a newly built dual-image SSH package.
+**A complete owner-controlled OTA flash over SSH has passed on hardware**, including
+recovery networking, installed recovery readback and final destination SSH
+verification. Use a [dual-image SSH package](BUILDER.md#ssh-access); see
+[validation](ACCEPTANCE.md) for the tested conditions.
 
 The existing main firmware must already provide administrative SSH and the supported
 vendor update components. Its SSH service need not be our `c100x-ssh` implementation.
@@ -148,7 +148,15 @@ Run without sudo on the same LAN. Example read-only preflight using your login k
   --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa
 ```
 
-The explicit write command is the same invocation with `flash` instead of `plan`.
+After preflight passes, explicitly write the firmware:
+
+```sh
+/Applications/C100X/c100x flash custom.fwz --transport ssh \
+  --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa
+```
+
+Recovery verification is automatic for SSH transport; `--verify-recovery-ssh`
+may also be supplied explicitly. The recorded full flash took about 11 minutes.
 The default target is `Bticino-Classe100X.local`; `--host NAME_OR_IP` overrides it.
 Hostnames are resolved again on reconnect. A fixed IP/DHCP reservation is a
 fallback when mDNS is unavailable. SSH-config aliases, proxies and jump hosts
@@ -192,17 +200,11 @@ an unambiguous target.
 - **SSH verification fails:** confirm that SSH already works on the installed
   firmware and that you supplied its current credentials. A failed integrity check
   needs investigation; it is not a reason to resume without verification.
-- **v0.2.0-alpha.1 wireless FTP `EOFError` at `operation: connect`:** a confirmed
-  startup race connects before the device's background-launched FTP server is
-  ready. v0.2.0-alpha.2 includes a pre-login readiness wait; alpha.1
-  does not. Use the corrected tool for this failure; rebuilding the firmware is
-  unnecessary. A stop at the first recovery upload before login has requested no
-  payload write. Failures at later stages require their own assessment. See the
-  [diagnosis and validation](VALIDATION-HISTORY.md#2026-11-07-wireless-ftp-startup-race).
-- **Slow-upload and reboot-readiness fixes (v0.2.0-alpha.2):** the command session is
-  refreshed after upload so its 30-second idle timeout does not invalidate the
-  subsequent commit. Transient local SSH-control check timeouts are handled by
-  readiness polling. These fixes are not included in published v0.2.0-alpha.1.
+- **Wireless connection/readiness failure:** use the current Mac tool and retain
+  the failed stage and cause. It waits for the FTP greeting, refreshes the command
+  session after uploads and polls SSH readiness across planned reboots. A failure
+  at the first recovery FTP greeting precedes payload writes; failures at later
+  stages need their own assessment.
 - **Flash fails:** preserve power and the stage/error output for investigation.
   Do not rerun an uncertain write. There is no validated general rescue procedure;
   [recovery evidence](RECOVERY.md) documents the limits.

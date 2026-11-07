@@ -1,7 +1,8 @@
 # Owner wireless updates: consolidated design
 
-**Approved 2026-11-07; implemented in source, hardware validation pending.** The
-owner approved implementation and offline validation, with no legacy `no-ota`
+**Approved and implemented 2026-11-07.** A complete SSH flash, recovery verification
+and user-confirmed household tests have passed; see [current coverage](ACCEPTANCE.md).
+The owner approved implementation and offline validation, with no legacy `no-ota`
 alias. Device writes require separate authorization. Usage is in [FLASHING.md](FLASHING.md).
 Decisions and amendments are recorded in
 [the interview](WIRELESS-UPDATE-DESIGN.md); factual support and limits are in

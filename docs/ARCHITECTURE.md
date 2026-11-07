@@ -243,7 +243,9 @@ configuration and optional daemon INI overrides. MQTT accepts the stock or exact
 prevention XML. No runtime component is added; installer files and persistent
 update data remain intact. Apply this to both prepared filesystems unless
 `--allow-vendor-updates` is selected. Recovery uses its own verifier pins and
-startup script. Hardware acceptance remains pending; existing unprotected
+startup script. A full SSH flash with this policy, recovery boot/access and
+user-confirmed household tests passed; runtime prevention inspection and USB
+operation with customized recovery remain follow-ups. Existing unprotected
 firmware is not changed by preparation (ADRs 018/019, [OTA.md](OTA.md)).
 
 The builder's lifecycle and trust contract are detailed in [BUILDER-REFERENCE.md](BUILDER-REFERENCE.md).

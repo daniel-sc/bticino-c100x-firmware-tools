@@ -1,6 +1,8 @@
 # Owner wireless update: design interview
 
-**Status: approved and implemented in source, 2026-11-07; hardware validation pending.** Product choices
+**Status: approved and implemented, 2026-11-07.** A subsequent complete SSH flash
+and user-confirmed household tests passed; see [current coverage](ACCEPTANCE.md).
+Pending statements below retain the interview's original context. Product choices
 are recorded below; the [consolidated plan](WIRELESS-UPDATE-PLAN.md) collects their
 current meaning and implementation details. The owner approved implementation and
 offline validation, except that the unreleased `--payload no-ota` spelling is

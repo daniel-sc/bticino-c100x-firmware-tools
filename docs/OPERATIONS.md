@@ -50,7 +50,8 @@ the repair evidence is in `~/Developer/halloween-2026/private/klingel-repair-202
 The existing modified device can be reached with the user's `klingel` SSH alias
 (`root2`, observed LAN address `192.168.0.241`). The alias and authentication
 configuration live outside the repository. Stock firmware is not assumed to
-provide this access. No SSH installation is part of the flashing workflow.
+provide this access. USB flashing needs no SSH; wireless flashing requires
+existing main-system access and installs the selected image's recovery SSH.
 
 To open the password-authenticated research session in a real terminal:
 
@@ -97,8 +98,8 @@ disk number. Ambiguous identification, timeout or command failure warns without
 aborting the update solely for that host-side failure. The total budget is ten
 seconds, with a command-session keepalive before the attempt. No forced unmount,
 whole-device ejection, automount setting or notification preference is changed.
-Read-only preflight does not invoke it. The post-alpha.6 discovery correction
-adds `ioreg -l` to include child-media properties. The idle-unmount/network check
+Read-only preflight does not invoke it. Discovery uses `ioreg -l` to include
+child-media properties. The idle-unmount/network check
 and notification behavior across a complete flash remain hardware acceptance work.
 
 The updater does not copy firmware onto that disk. Disk and feth numbers are
@@ -171,9 +172,10 @@ on-device changes but is a different artifact.
   match stock and all filesystem checks passed. These acquisitions have not been
   restore-tested and do not establish a supported restore command.
 - Start with [ACCEPTANCE.md](ACCEPTANCE.md) for current results and remaining work.
-  Alpha.6 passed the uninterrupted full USB sequence and recorded SSH/household
-  checks. Issue #6 subsequently added community-reported stock-to-modified
-  acceptance on `02*07*0`; results carry forward for unchanged behavior.
+  The full USB sequence and SSH/household checks passed; issue #6 added
+  community-reported stock-to-modified acceptance on `02*07*0`. A full wireless
+  SSH flash with recovery verification and post-flash household checks also
+  passed on `02*06*0`. Results carry forward for unchanged behavior.
 - Either direct re-flash or the stock-to-modified acceptance path is possible;
   understand the distinction in [ADR-006](DECISIONS.md#adr-006-separate-direct-re-flash-testing-from-stock-device-acceptance).
 - Before another native check, reconnect USB as needed and run the managed

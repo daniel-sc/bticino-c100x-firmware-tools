@@ -4,7 +4,7 @@
 
 1. Review [ACCEPTANCE.md](ACCEPTANCE.md) against the changes being released;
    apply the validation policy below.
-2. Update `packaging/RELEASE.md` and the README version link for the intended tag.
+2. Update `packaging/RELEASE.md` and the README version for the intended tag.
    Keep release notes dense and user-facing: **one or two sentences per change**,
    focused on its effect. Omit internal review logs and test inventories; link to
    validation details when useful. The first stable release uses a brief product
@@ -38,7 +38,7 @@ A breaking CLI option can be verified offline; a small patch to write sequencing
 can need hardware validation. Major/breaking releases deserve a scope review, but
 the version label alone does not determine whether a flash is useful.
 
-The post-alpha.6 storage-discovery correction is a bounded best-effort host step:
+The USB storage-discovery correction is a bounded best-effort host step:
 its regression and packaged checks suffice for release. Live unmount/network and
 notification observations can wait for convenient maintenance and the next
 otherwise-planned flash. Stock-to-modified now has community-reported coverage
@@ -65,8 +65,8 @@ deferred checks into claimed passes. See [ADR-011](DECISIONS.md#adr-011-distribu
   not send device commands. `--external-usb` is an advanced development escape hatch.
 - CI builds and publishes tagged **alpha prereleases** after offline tests and
   packaged smoke checks, and stable releases when tagged without the alpha suffix.
-  Alpha.6 met the full-flash and functional-acceptance milestone for the tested
-  installation; subsequent validation follows the policy above.
+  USB and SSH full-flash sequences and functional acceptance have passed for the
+  tested installation; subsequent validation follows the policy above.
 - Release artifacts are Developer ID signed, notarized and stapled. Downloaded
   artifacts are checked locally too; no hardware writes are implied by that check.
 

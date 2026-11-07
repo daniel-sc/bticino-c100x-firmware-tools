@@ -45,8 +45,7 @@ with stock. Recovery `bt_device`, `openserver` and `bt_daemon` are byte-identica
 to the corresponding main binaries. This supports the command interpretation
 but does not replace a native hardware flash test.
 
-The separate manufacturer cloud OTA path remains enabled in v0.1.0 SSH/MQTT
-images. Version v0.2.0-alpha.1 and source builds suppress the researched launch
+The builder suppresses the separate manufacturer cloud OTA path's researched launch
 paths in both filesystems by default, unless `--allow-vendor-updates` is selected,
 while preserving these explicit update handlers. Configuration, cloud-to-installer
 flow and limits are documented in the [OTA investigation](OTA.md).
@@ -162,10 +161,10 @@ flash have passed; see [ACCEPTANCE.md](ACCEPTANCE.md) for the tested scope.
 
 ### Hardware-family compatibility (2026-11-07)
 
-Prerelease/source admission follows the vendor's first-component hardware comparison,
+Admission follows the vendor's first-component hardware comparison,
 accepting three nonnegative numeric fields with first field `2`. Device type
 `200`, firmware `1.5.8`, object model `1.0.99` and the expected state/extra status
-must also match. Published v0.1.0 instead checks the full `02*06*0` tuple.
+must also match.
 
 Evidence reviewed for [issue #6](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6):
 
@@ -245,8 +244,10 @@ geometry and feature flags; manifest/kernel remain pinned. Wireless transport
 adds no new write frames: SSH forwards carry this same sequence. It requires
 reference-driven recovery readback before main-kernel invalidation and expected
 SSH identities at each phase. Details are in [ARCHITECTURE.md](ARCHITECTURE.md)
-and the [wireless design](WIRELESS-UPDATE-PLAN.md). Hardware wireless acceptance
-remains pending.
+and the [wireless design](WIRELESS-UPDATE-PLAN.md). A complete hardware SSH flash,
+including installed recovery verification, recovery networking and final SSH,
+passed on 2026-11-07; the user also confirmed household tests passed. See the
+[dated record](VALIDATION-HISTORY.md#2026-11-07-complete-wireless-ssh-flash).
 
 ### FTP startup readiness (2026-11-07)
 

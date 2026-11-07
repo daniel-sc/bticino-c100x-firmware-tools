@@ -5,12 +5,9 @@ The original firmware is preserved; building does not contact or
 change the intercom.
 Install the tool using the [README](../README.md#installation) first.
 
-Version **v0.2.0-alpha.2 and source builds block manufacturer updates in both main
-and recovery by default**, including builds with no optional features. `--allow-vendor-updates`
-opts out. SSH builds provision both filesystems. These changes are not in
-stable v0.1.0, which retains manufacturer updates and main-only SSH. Install the
-[prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.2)
-for the behavior documented here, or use [source setup](SOURCE.md).
+**Builds block manufacturer updates in both main and recovery by default**,
+including builds with no optional features. `--allow-vendor-updates` opts out.
+Selecting SSH provisions both filesystems for owner-controlled wireless flashing.
 
 ## Prepare and choose features
 
@@ -63,13 +60,13 @@ Supply the `.pub` file to the builder; keep the matching private key on your Mac
 Ed25519 is unsupported by the stock SSH server. Legacy RSA login keys require
 `-o PubkeyAcceptedAlgorithms=+ssh-rsa` when connecting.
 
-Each prerelease/source build creates one new SSH host identity shared by main and recovery
+Each SSH build creates one new host identity shared by main and recovery
 and persistent across reboots. Both images receive the same owner login settings;
 recovery retains its own vendor accounts. MQTT/custom payloads remain main-only.
 Key-only builds disable password login. The independent `c100x-ssh` service
 enables SSH regardless of the vendor's SSH-enable setting, preserving device
 configuration. See the [SSH reference](BUILDER-REFERENCE.md#ssh-implementation)
-for service management and upgrading images built before alpha.6.
+for service management.
 
 <a id="optional-mqtt-bridge"></a>
 
@@ -134,8 +131,7 @@ inputs, SSH or MQTT are required. A prevention-only build is:
 ```
 
 To permit manufacturer updates, add **`--allow-vendor-updates`**. With no optional
-payloads this produces a stock-preserving build. The old unreleased
-`--payload no-ota` spelling is rejected; remove it. The report includes
+payloads this produces a stock-preserving build. The report includes
 `vendor_updates: blocked|allowed` and records checks for both filesystems.
 
 The policy removes `fw_manager` from the vendor process list, sets the cloud
@@ -150,9 +146,10 @@ left untouched; update prompts/downloads may remain. Re-enable OTA by rebuilding
 from stock with `--allow-vendor-updates` and explicitly flashing; retained packages may
 then become actionable. There is no runtime toggle.
 
-The implementation has offline image verification; **hardware validation of
-prevention, vendor app/calling behavior and USB flashing with this payload remains
-pending**. See [OTA evidence](OTA.md) and [validation status](ACCEPTANCE.md).
+An image with this policy completed a full SSH flash, recovery integrity checks
+and final SSH verification on hardware; the user confirmed post-flash household
+tests passed. Live prevention behavior and USB flashing with customized recovery
+remain follow-up checks. See [OTA evidence](OTA.md) and [validation status](ACCEPTANCE.md).
 
 ## Build result and next step
 

@@ -2,18 +2,23 @@
 
 ## Current status
 
-Version v0.2.0-alpha.1 and source builds **block manufacturer installation in both
-main and recovery by default**. `--allow-vendor-updates` opts out; `--payload no-ota` is no longer
-accepted. This is independent of SSH selection and flashing transport.
-Published v0.1.0 retains vendor OTA behavior and main-only SSH.
+Builds **block manufacturer installation in both main and recovery by default**.
+`--allow-vendor-updates` opts out. This is independent of SSH selection and
+flashing transport.
 See [usage](BUILDER.md#ota-prevention) and [implementation details](BUILDER-REFERENCE.md#ota-prevention-implementation).
 
-Hardware validation of prevention, vendor app/calling functions and USB flashing
-with the new image policy remains pending. Existing unprotected firmware remains
-outside its protection until replacement. The owner accepts competing-installation
-risk in unprotected phases, with staged-package/activity checks. See ADR-019 and
+On 2026-11-07, a blocked-policy image completed a full wireless SSH flash,
+installed recovery verification and final SSH verification; the user confirmed
+post-flash household tests passed. Runtime inspection of prevention and USB
+flashing with customized recovery remain follow-up coverage; no live manufacturer
+installation was triggered as a blocking test. See the
+[hardware record](VALIDATION-HISTORY.md#2026-11-07-complete-wireless-ssh-flash).
+Existing unprotected firmware remains outside its protection until replacement.
+The owner accepts competing-installation risk in unprotected phases, with
+staged-package/activity checks. See ADR-019 and
 the [wireless design](WIRELESS-UPDATE-PLAN.md). The sections below preserve the
-dated v1 investigation; its main-only scope was subsequently expanded.
+dated v1 investigation; its main-only scope was subsequently expanded. Historical
+pending statements below describe that investigation, not the current status above.
 
 ## Original finding — 2026-11-05
 

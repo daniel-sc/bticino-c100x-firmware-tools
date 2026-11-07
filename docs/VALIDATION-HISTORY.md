@@ -18,6 +18,37 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: v0.2.0 publication and validation
+
+- Published [v0.2.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0)
+  from `4ae64808fb8edd5acb4de1a8697b64c8118646de` at **21:24:38 UTC**.
+  GitHub marks it as the latest stable release, not a prerelease. The title and
+  release notes highlight SSH OTA flashing and default vendor-update blocking.
+- Before tagging, macOS [run 42414594546](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42414594546)
+  and Linux [run 42414594534](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42414594534)
+  passed all **228 tests**, including native MQTT coverage. macOS also passed
+  all **23 USB-helper tests** and packaged smoke. Tagged
+  [run 42415069614](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/42415069614)
+  passed testing, signing, notarization/stapling and publication.
+- Downloaded assets passed published SHA-256 checksums and version/commit
+  provenance checks. DMG SHA-256:
+  `b10acc454012866d95ca465c170eac378a6cdf9c80904078722ae67feaead05d`.
+  Gatekeeper DMG assessment, stapled-ticket validation and all **84** strict
+  Developer ID signature checks passed. The relocated bundle passed arm64/macOS
+  **15.0** and dependency audits, source/documentation parity and packaged smoke.
+- The downloaded CLI built a real pinned-stock SSH+MQTT image with disposable
+  credentials and default dual-image vendor-update blocking. Key and password
+  authentication admission passed for both filesystems. Private artifacts and
+  `verification.json` remain under `.local/v0.2.0-release-validation/`.
+- Stable tap commit `867825d` publishes version **0.2.0** and the downloaded DMG's
+  checksum in `Casks/c100x.rb`. Homebrew parsed the cask; uninstalling the preview
+  cask and installing `daniel-sc/tap/c100x` succeeded. Brew reports **0.2.0**,
+  `c100x --version` reports **v0.2.0**, and the installed `builder-doctor` passed
+  core and optional SSH tool checks.
+- These publication checks were host-only. Device/household acceptance is the
+  separately supplied wireless result below and earlier capability-specific
+  evidence; publication did not initiate another device flash.
+
 ## 2026-11-07: v0.2.0 release preparation
 
 - Prepared stable release notes highlighting owner OTA/SSH flashing, default

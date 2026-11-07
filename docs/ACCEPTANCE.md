@@ -21,9 +21,10 @@ completed. The destination package was admitted as `vendor_updates: blocked`;
 the user subsequently confirmed household tests and a fully working installation.
 See the [dated evidence](VALIDATION-HISTORY.md#2026-11-07-complete-wireless-ssh-flash).
 
-**v0.2.0 release preparation:** current usage and release notes describe SSH OTA
-flashing, dual-image SSH and default vendor-update blocking. Publication and
-artifact-specific checks for the stable tag remain outstanding.
+**v0.2.0 is published:** the stable release includes SSH OTA flashing, dual-image
+SSH and default vendor-update blocking. Release CI, downloaded signed-artifact
+checks, a real SSH+MQTT build and stable Homebrew installation passed. See the
+[publication record](VALIDATION-HISTORY.md#2026-11-07-v020-publication-and-validation).
 
 ## Supported hardware versus tested hardware
 
@@ -44,7 +45,7 @@ have no recorded hardware flash acceptance here.
 
 | Area | Observed result |
 | --- | --- |
-| Distribution pipeline | Published signed/notarized downloads, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware builds and Homebrew installation/upgrade checked. Stable v0.2.0 artifacts still need their own checks. |
+| Distribution | Stable v0.2.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke, real SSH+MQTT firmware build, dual-image authentication admission and Homebrew installation checked. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
 | Dual-image policy/access (offline) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
 | USB flashing | Completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
@@ -79,12 +80,13 @@ and [USB recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-flash-an
 - [x] **Local preparation checks:** all 228 offline tests passed with required
       builder tools and native MQTT coverage; documentation links and workflow
       version selection passed.
-- [ ] **Release commit CI:** run main CI on the intended stable release commit
-      before tagging `v0.2.0`.
-- [ ] **Signed publication:** tagged CI, signing/notarization and downloaded
-      checksum, signature, provenance, relocated smoke and real build checks.
-- [ ] **Stable Homebrew channel:** update `Casks/c100x.rb` with the published
-      version/DMG checksum, then verify installation or upgrade and version output.
+- [x] **Release commit CI:** macOS and Linux CI passed for `4ae6480` before
+      tagging `v0.2.0`.
+- [x] **Signed publication:** tagged CI, signing/notarization and downloaded
+      checksum, signature, provenance, relocated smoke and real build checks passed.
+- [x] **Stable Homebrew channel:** `Casks/c100x.rb` version/checksum published in
+      tap commit `867825d`; preview-to-stable installation, `c100x --version`
+      and `builder-doctor` passed.
 
 ## Wireless and dual-image hardware coverage
 

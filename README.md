@@ -55,7 +55,7 @@ PATH. Requires **macOS 15.0 or later**.
 
 ### Direct download (no Homebrew required)
 
-Download the Apple Silicon DMG from [Releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
+Download the Apple Silicon DMG from [v0.2.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
 per-user installation). The DMG includes an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`

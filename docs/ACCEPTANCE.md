@@ -11,8 +11,25 @@ and explicit wireless transport are implemented. Five private pinned-stock build
 cases and their applicable destination-access checks passed offline. Relocated
 packaged smoke passed using current source/assets and existing native dependencies.
 This is not a newly signed release or hardware wireless acceptance.
-The latest offline suite ran **214 tests: OK, with three optional native-MQTT
-tests skipped**. See the [dated wireless validation record](VALIDATION-HISTORY.md#2026-11-07-dual-image-policy-and-wireless-implementation-offline-validation).
+The latest offline suite ran **216 tests: OK, with three optional native-MQTT
+tests skipped**. See the [dated wireless validation record](VALIDATION-HISTORY.md#2026-11-07-dual-image-policy-and-wireless-implementation-offline-validation)
+and [hardware-family regression checks](VALIDATION-HISTORY.md#2026-11-07-hardware-family-compatibility-offline-validation).
+
+## Supported hardware versus tested hardware
+
+Source tools support C100X Door Entry **1.5.8**, model **`1.0.99`**, hardware family
+**`02.*.*`**, using the vendor updater's first-component hardware comparison.
+Published **v0.1.0 still restricts hardware to `02*06*0`**. The
+[protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) establishes
+the broader compatibility rule; offline regression checks passed for normal entry,
+recovery entry and reboot/reconnection checks.
+
+Hardware flashing and household acceptance remain recorded on **`02*06*0` only**.
+[Issue #6](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6) reports
+a stock `02*07*0` device reaching the old hardware rejection through USB RNDIS;
+no flash was performed. Other family-02 revisions are supported by policy but
+have no recorded hardware flash acceptance here. Stock-to-modified acceptance
+remains open.
 
 ## Passed
 

@@ -13,6 +13,19 @@ date. Use [ACCEPTANCE.md](ACCEPTANCE.md) for current passed/open checks.
 **Status update, 2026-10-28:** firmware-creation scope and whole-archive admission
 are superseded by ADR-007. Original preservation and device checks still apply.
 
+**Hardware-policy amendment, 2026-11-07 (issue #6):** follow the researched MyHOME
+BTESUXP first-component hardware comparison for the fixed C100X 1.5.8 profile.
+Accept hardware family `02.*.*` with three nonnegative numeric fields, alongside
+the existing exact device type, firmware, object model and state checks. Apply
+the same rule at entry, after reboots and during explicit recovery installation.
+This supersedes the exact `02*06*0` hardware restriction in source; published
+v0.1.0 retains it. Vendor compatibility and observed hardware acceptance are
+distinct: the recorded full flash and household checks remain on `02*06*0`.
+The vendor rule, common SHARK storage selection and stock Car-6/Car-7 DTBs provide
+positive compatibility evidence; no identified incompatibility justifies a
+revision allowlist. No generic bypass is needed. See the
+[protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07).
+
 **Context:** The goal is native macOS installation of an existing Windows-tested
 modified C100X image. Firmware modification and Home Assistant design are outside
 this project. Matching a firmware version alone does not identify compatible

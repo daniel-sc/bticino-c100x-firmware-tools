@@ -7,10 +7,19 @@ scope and follow-up coverage.
 
 ## Compatibility
 
-Only **C100X Door Entry 1.5.8** is supported. Preflight checks hardware `02*06*0`,
-object model `1.0.99` and initial status `4*0`. Source tools require the stock
-manifest/kernel and supported main/recovery filesystem profiles. Passing
-these checks does not prove bootability.
+Only **C100X Door Entry 1.5.8** is supported. Source tools check hardware family
+`02.*.*` (three numeric fields, first field `2`), device type `200`, object model
+`1.0.99` and initial status `4*0`. The hardware rule follows the vendor updater;
+it applies to preflight, reboot verification and recovery entry. Source tools
+require the stock manifest/kernel and supported main/recovery filesystem profiles.
+Passing these checks does not prove bootability.
+
+**Supported versus tested:** hardware `02*06*0` has passed the recorded flash and
+household checks. Other family-02 revisions, including `02*07*0`, are supported by
+the compatibility rule but have no recorded hardware flash acceptance yet. See
+[protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) and
+[validation](ACCEPTANCE.md). **Published v0.1.0 still requires `02*06*0`; broader
+admission is currently source-only.**
 
 ## 1. Inspect and run preflight
 

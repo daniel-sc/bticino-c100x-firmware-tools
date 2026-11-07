@@ -140,7 +140,7 @@ monitor handler can close the existing vendor connection when a second arrives
 | --- | --- |
 | `*#13**15##` | Device type `200` |
 | `*#13**16##` | Firmware `1*5*8` |
-| `*#13**17##` | Hardware `02*06*0` |
+| `*#13**17##` | Hardware family `02.*.*`; observed locally `02*06*0` |
 | `*#13**19##` | Uptime: days, hours, minutes, seconds |
 | `*#13**40##` | Firmware state and extra status; initially `4*0` |
 | `*#1013**1##` | Code, configuration, brand, line; observed `99*6*1*0` |
@@ -158,6 +158,40 @@ These queries, including uptime and normalized identity, have been exercised on
 the existing modified intercom through the research tunnel and directly over
 native USB. Native preflight, FTP transfer, recovery-mode networking and a full
 flash have passed; see [ACCEPTANCE.md](ACCEPTANCE.md) for the tested scope.
+
+### Hardware-family compatibility (2026-11-07)
+
+Source admission follows the vendor's first-component hardware comparison,
+accepting three nonnegative numeric fields with first field `2`. Device type
+`200`, firmware `1.5.8`, object model `1.0.99` and the expected state/extra status
+must also match. Published v0.1.0 instead checks the full `02*06*0` tuple.
+
+Evidence reviewed for [issue #6](https://github.com/daniel-sc/bticino-c100x-firmware-tools/issues/6):
+
+- `EthernetProtocolUtility.cs:1250–1253` in the BTESUXP.ETH decompilation uses
+  `02.06.00` as the default hardware reference for model `1.0.99`. Its firmware
+  update check at `:682–705` compares only the first component using
+  `PrecisionRequired.v`. The BTESUXP `CommonProtocolUtility.cs:541–554` implements
+  that numeric first-component comparison; hardware release/build do not affect it.
+- The pinned stock `uImage.zip` contains one kernel and 20 board DTBs. Independent
+  local comparison confirmed the issue's finding: `shark_dig2_car6.dtb` and
+  `shark_dig2_car7.dtb` are both 42863 bytes and differ only at byte 140 (1-based),
+  `6` versus `7` in the model string. Their SHA-256 values are respectively
+  `53cd2d1cd8ce7585d0139ae1f2aee8c46e9c3a756845a2a786e577e8dfc6888c` and
+  `16c7dac7121083a92503896783894162cdd720b1d4593553deaf67f05302355f`.
+- Stock `liblghal.so.0.0.c:15992–16070` identifies the SHARK board family from
+  `/proc/cpuinfo`; `Device::get_device` at `:615–624` selects its storage table
+  by that family. The main/recovery filesystem writers at `:1335–1606` use this
+  table rather than a Car-6/Car-7 comparison.
+- The previously acquired local device evidence associates OpenWebNet `02*06*0`
+  with CPU revision `0206`, model `Dig-2/Car-6`, and bootloader variables
+  `hw_vers_dig=2`, `hw_vers_car=6`. The issue reports a stock `02*07*0` device;
+  its partition layout and boot environment have not been acquired here.
+
+These establish the compatibility policy, not successful flashing on every
+revision. Recorded hardware acceptance remains on `02*06*0`. Stock USB identity
+queries do not expose partition layout or provide full recovery readback. Optional
+SSH recovery verification retains its separate partition-node/size prerequisites.
 
 ## Write sequence
 

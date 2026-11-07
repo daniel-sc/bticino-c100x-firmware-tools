@@ -258,6 +258,11 @@ bytes. The remaining hardware checks are recorded in [ACCEPTANCE.md](ACCEPTANCE.
 
 Support for a new model or release requires new protocol/profile evidence,
 payload validation and identity criteria, then simulations and hardware acceptance.
+Within C100X 1.5.8, source tools accept hardware family `02.*.*` using the vendor's
+first-component rule at every identity check. Revision-specific observed hardware
+results are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md); only `02*06*0`
+has recorded flash/household acceptance. See the
+[hardware-policy amendment](DECISIONS.md#adr-001-preserve-the-existing-image-and-restrict-compatibility).
 New images within this fixed profile do not require adding an archive hash;
 they still require independent package/device checks and functional acceptance.
 The current CLI is intentionally not a general manifest execution engine.

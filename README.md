@@ -26,6 +26,11 @@ The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
 
+Source builds accept hardware family **`02.*.*`**, following the vendor updater's
+compatibility rule for C100X 1.5.8. Hardware flashing and household functions have
+been tested on **`02*06*0`**; other revisions, including `02*07*0`, have not yet
+been flash-validated here. Published v0.1.0 still requires `02*06*0`.
+
 SSH and MQTT are optional. Source-build SSH provisions both main and recovery;
 MQTT applies only to main. Manufacturer-update policy is independent of SSH and
 transport. Building creates a file; flashing installs it on the intercom.

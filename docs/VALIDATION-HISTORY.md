@@ -18,6 +18,24 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: hardware-family compatibility, offline validation
+
+- Reviewed issue #6 against the local vendor decompilation and pinned stock
+  kernel ZIP. Confirmed the vendor's first-component hardware comparison and
+  the one-byte model-string difference between Car-6/Car-7 DTBs. Evidence is
+  recorded in [PROTOCOL.md](PROTOCOL.md#hardware-family-compatibility-2026-11-07).
+- Source identity checks now admit hardware family `02.*.*` for the existing
+  exact C100X 1.5.8 device/model/status profile. Published v0.1.0 retains its
+  exact hardware restriction. Documentation separates supported compatibility
+  from recorded hardware acceptance on `02*06*0`.
+- `mise run test`: **216 tests run, OK, 3 optional native-MQTT tests skipped**.
+  Simulated full and recovery-entry sequences cover `02*06*0`, `02*07*0` and
+  synthetic `2*8*1`. Actual reboot/reconnection code accepts family-02 revisions
+  in both modes and rejects another family at both identity checks. Malformed
+  hardware values and other device/model/firmware/status mismatches remain blocked.
+- No device access or firmware writes were performed. No new revision or
+  stock-to-modified hardware acceptance is claimed.
+
 ## 2026-11-07: dual-image policy and wireless implementation, offline validation
 
 - Owner approved the consolidated wireless design and implementation/offline work,

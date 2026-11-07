@@ -47,7 +47,7 @@ def uptime_seconds(values: tuple[str, ...]) -> int:
 def check_identity(info: dict, expected_status: int) -> None:
     expected = {
         "device_type": (200,), "firmware": (1, 5, 8),
-        "hardware": (2, 6, 0), "object_model": (1, 0, 99),
+        "hardware": (2,), "object_model": (1, 0, 99),
         "update_status": (expected_status, 0),
     }
     for key, value in expected.items():
@@ -55,8 +55,18 @@ def check_identity(info: dict, expected_status: int) -> None:
             actual = tuple(int(part) for part in info[key])
         except (KeyError, TypeError, ValueError) as exc:
             raise UpdateError(f"Missing or invalid {key} in device identity") from exc
-        if actual != value:
-            raise UpdateError(f"Device {key} does not match the researched 1.5.8 update path: expected {value}, received {actual}")
+        if key == "hardware":
+            if len(actual) != 3 or any(part < 0 for part in actual):
+                raise UpdateError("Missing or invalid hardware in device identity")
+            # MyHOME BTESUXP compares only the hardware family (PrecisionRequired.v).
+            # Revision coverage is recorded separately in docs/ACCEPTANCE.md.
+            matches = actual[:1] == value
+            expected_value = "family 02.*.*"
+        else:
+            matches = actual == value
+            expected_value = value
+        if not matches:
+            raise UpdateError(f"Device {key} does not match the researched 1.5.8 update path: expected {expected_value}, received {actual}")
 
 
 class UpdateClient(ReadOnlyClient):

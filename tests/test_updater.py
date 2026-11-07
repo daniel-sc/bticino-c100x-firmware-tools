@@ -13,9 +13,9 @@ from classe100x.updater import NetworkDevice, UpdateClient, UpdateError, Uncerta
 from classe100x.vendor import Credentials, VendorProfile
 
 
-def identity(status=4):
+def identity(status=4, hardware=("02", "06", "0")):
     return {"device_type": ("200",), "firmware": ("1", "5", "8"),
-            "hardware": ("02", "06", "0"), "object_model": ("1", "0", "99"),
+            "hardware": hardware, "object_model": ("1", "0", "99"),
             "update_status": (str(status), "0")}
 
 
@@ -62,7 +62,7 @@ class SimulatedDevice:
 
     def reboot_and_wait(self, status):
         self.event("reboot-" + str(status))
-        return identity(status)
+        return identity(status, hardware=self.initial["hardware"])
 
     def invalidate_main_kernel(self):
         self.event("invalidate-main-kernel")
@@ -81,14 +81,16 @@ class UpdaterTests(unittest.TestCase):
         return flash(self.firmware, device, self.profile, report=lambda message: None)
 
     def test_complete_sequence_has_three_reboot_boundaries(self):
-        device = SimulatedDevice()
-        self.run_update(device)
-        significant = [e for e in device.events if e.startswith(("begin", "commit", "reboot", "invalidate"))]
-        self.assertEqual(significant, [
-            "begin-recovery", "commit-btweb_only_recovery.ext4.gz", "commit-uImage.zip", "reboot-4",
-            "invalidate-main-kernel", "reboot-1", "begin-main",
-            "commit-btweb_only.ext4.gz", "commit-uImage.zip", "reboot-4",
-        ])
+        for hardware in (("02", "06", "0"), ("02", "07", "0"), ("2", "8", "1")):
+            with self.subTest(hardware=hardware):
+                device = SimulatedDevice(initial=identity(hardware=hardware))
+                self.assertEqual(self.run_update(device), identity(hardware=hardware))
+                significant = [e for e in device.events if e.startswith(("begin", "commit", "reboot", "invalidate"))]
+                self.assertEqual(significant, [
+                    "begin-recovery", "commit-btweb_only_recovery.ext4.gz", "commit-uImage.zip", "reboot-4",
+                    "invalidate-main-kernel", "reboot-1", "begin-main",
+                    "commit-btweb_only.ext4.gz", "commit-uImage.zip", "reboot-4",
+                ])
 
     def test_disconnection_at_each_step_stops_all_subsequent_actions(self):
         complete = SimulatedDevice()
@@ -101,13 +103,23 @@ class UpdaterTests(unittest.TestCase):
                 self.assertEqual(device.events, complete.events[:index + 1] + ["close"])
 
     def test_wrong_device_cannot_start_a_transfer(self):
-        for key, value in (("object_model", ("1", "0", "98")), ("hardware", ("2", "7", "0")),
+        for key, value in (("object_model", ("1", "0", "98")), ("hardware", ("3", "6", "0")),
+                           ("device_type", ("201",)),
                            ("firmware", ("1", "7", "0")), ("update_status", ("3", "0"))):
             with self.subTest(key=key):
                 info = identity()
                 info[key] = value
                 device = SimulatedDevice(initial=info)
                 with self.assertRaises(UpdateError):
+                    self.run_update(device)
+                self.assertEqual(device.events, ["connect", "close"])
+
+    def test_malformed_hardware_cannot_start_a_transfer(self):
+        for hardware in (None, (), ("2",), ("2", "7"), ("2", "7", "0", "0"),
+                         ("2", "bad", "0"), ("2", "-1", "0"), ("2", "7", "-1")):
+            with self.subTest(hardware=hardware):
+                device = SimulatedDevice(initial=identity(hardware=hardware))
+                with self.assertRaisesRegex(UpdateError, "invalid hardware"):
                     self.run_update(device)
                 self.assertEqual(device.events, ["connect", "close"])
 
@@ -153,16 +165,18 @@ class RecoveryUpdateTests(unittest.TestCase):
         return flash_recovery(self.firmware, device, self.profile, report=lambda _: None)
 
     def test_recovery_entry_writes_only_main_with_one_reboot(self):
-        device = SimulatedDevice(initial=identity(1))
-        with patch.object(device, "upload", wraps=device.upload) as upload:
-            result = self.run_update(device)
-        self.assertEqual(result, identity(4))
-        self.assertEqual(device.events, [
-            "connect", "check-idle", "begin-main", "upload-btweb_only.ext4.gz",
-            "commit-btweb_only.ext4.gz", "idle", "upload-uImage.zip",
-            "commit-uImage.zip", "idle", "finish", "settle", "reboot-4", "close",
-        ])
-        self.assertTrue(all(call.args[1] is self.profile.recovery for call in upload.call_args_list))
+        for hardware in (("02", "06", "0"), ("02", "07", "0"), ("2", "8", "1")):
+            with self.subTest(hardware=hardware):
+                device = SimulatedDevice(initial=identity(1, hardware=hardware))
+                with patch.object(device, "upload", wraps=device.upload) as upload:
+                    result = self.run_update(device)
+                self.assertEqual(result, identity(4, hardware=hardware))
+                self.assertEqual(device.events, [
+                    "connect", "check-idle", "begin-main", "upload-btweb_only.ext4.gz",
+                    "commit-btweb_only.ext4.gz", "idle", "upload-uImage.zip",
+                    "commit-uImage.zip", "idle", "finish", "settle", "reboot-4", "close",
+                ])
+                self.assertTrue(all(call.args[1] is self.profile.recovery for call in upload.call_args_list))
 
     def test_disconnection_at_each_step_stops_all_subsequent_actions(self):
         complete = SimulatedDevice(initial=identity(1))
@@ -181,7 +195,7 @@ class RecoveryUpdateTests(unittest.TestCase):
         self.assertEqual(device.events, ["connect", "close"])
 
     def test_wrong_recovery_identity_cannot_start(self):
-        for key, value in (("hardware", ("2", "7", "0")), ("object_model", ("1", "0", "98")),
+        for key, value in (("hardware", ("3", "6", "0")), ("object_model", ("1", "0", "98")),
                            ("firmware", ("2", "0", "0")), ("update_status", ("1", "47"))):
             info = identity(1)
             info[key] = value
@@ -404,6 +418,27 @@ class NetworkWaitTests(unittest.TestCase):
         probe.inspect.return_value = info
         with self.assertRaisesRegex(UpdateError, "update_status"):
             self.device.reboot_and_wait(1)
+
+    def test_reboot_and_reconnect_enforce_hardware_family_in_both_modes(self):
+        probe = patch("classe100x.updater.ReadOnlyClient").start().return_value.__enter__.return_value
+        for status in (4, 1):
+            for hardware in (("02", "07", "0"), ("2", "8", "1"), ("3", "6", "0")):
+                for changed_at in ("probe", "connect"):
+                    with self.subTest(status=status, hardware=hardware, changed_at=changed_at):
+                        self.device.client = self.client
+                        info = identity(status, hardware=hardware)
+                        info["uptime"] = ("0", "0", "0", "1")
+                        probe.inspect.return_value = info if changed_at == "probe" else {
+                            **info, "hardware": ("02", "07", "0"),
+                        }
+                        with patch.object(self.device, "connect", return_value=info) as connect:
+                            if hardware[0] == "3":
+                                with self.assertRaisesRegex(UpdateError, "hardware.*family 02"):
+                                    self.device.reboot_and_wait(status)
+                                self.assertEqual(connect.call_count, int(changed_at == "connect"))
+                            else:
+                                self.assertEqual(self.device.reboot_and_wait(status), info)
+                                connect.assert_called_once()
 
     def test_uptime_ranges(self):
         self.assertEqual(uptime_seconds(("1", "2", "3", "4")), 93784)

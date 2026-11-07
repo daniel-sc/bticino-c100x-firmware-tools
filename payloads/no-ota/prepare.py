@@ -8,7 +8,7 @@ from common import BOOT, CLOUD, OUTPUT, STACK, STOCK, prerequisites, require_dig
 c = Context()
 if c.inputs:
     raise FirmwareError("no-ota accepts no inputs")
-prerequisites(c.image)
+prerequisites(c.image, c.data.get("environment", "main"))
 c.image.require_symlink(BOOT, "../init.d/dedrifu.sh")
 stack = c.stock_file(STACK, STOCK[STACK])
 # Preserve every other byte, including vendor formatting. Stock has p0..p9;

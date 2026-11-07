@@ -4,9 +4,10 @@ import json
 
 from classe100x.firmware import FirmwareError
 from classe100x.payload import Context
-from common import BOOT_LINKS, CONFIG, HASHES, HOST_KEY, SERVICE, digest
+from common import BOOT_LINKS, CONFIG, HOST_KEY, SERVICE, check_boot_prerequisites, digest, require_executable, stock_hashes
 
 c = Context()
+HASHES = stock_hashes(c.data.get("environment", "main"))
 for target, asset, mode in (
     ("/etc/passwd", "passwd", 0o644),
     ("/etc/shadow", "shadow", 0o600),
@@ -21,16 +22,12 @@ for path in ("/home/root", "/home/root/.ssh", "/etc/dropbear"):
     info = c.image.stat(path)
     if (info["type"], info["uid"], info["gid"], info["mode"]) != ("directory", 0, 0, 0o700):
         raise FirmwareError("SSH parent-directory metadata check failed")
-c.image.require_file(SERVICE, (c.directory / "files/init.sh").read_bytes(), mode=0o755)
+require_executable(c.image, SERVICE, (c.directory / "files/init.sh").read_bytes())
 for path, target in BOOT_LINKS.items():
     c.image.require_symlink(path, target)
 c.image.require_absent("/etc/rc5.d/S98dropbear")
 c.image.require_symlink("/usr/sbin/dropbear", "./dropbearmulti")
-for path in ("/etc/init.d/dropbear", "/etc/inittab", "/usr/sbin/dropbearmulti"):
-    if digest(c.image.read(path)) != HASHES[path]:
-        raise FirmwareError("SSH boot prerequisite changed")
-if not c.image.stat("/etc/init.d/dropbear")["mode"] & 0o111:
-    raise FirmwareError("SSH init script is not executable")
+check_boot_prerequisites(c.image)
 for path in ("/etc/passwd", "/etc/shadow"):
     data = c.image.read(path)
     original = b"".join(line for line in data.splitlines(keepends=True) if not line.startswith(b"root2:"))

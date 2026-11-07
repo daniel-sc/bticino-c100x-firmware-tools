@@ -134,6 +134,10 @@ item. At the time of recording, neither flash path has been performed by this CL
 authorization for implementation, dependency setup, downloads and local builds.
 No device access or flashing was authorized in that implementation session.
 
+**Design amendment, 2026-11-06:** ADR-019 permits a customized recovery filesystem
+for the planned owner wireless-update feature. Its design is still in progress;
+the currently implemented stock-recovery package checks have not changed.
+
 **Decision:** Keep one Python CLI with separate builder/flasher modules. Build
 only from the stock C100X Door Entry 1.5.8 SHA-256 pin. A named stock selection may
 download the exact manufacturer artifact on verified-cache miss. Local files
@@ -525,7 +529,9 @@ repair does not validate the new service.
 ## ADR-018: Opt-in OTA prevention through coordinated startup configuration
 
 **Accepted 2026-11-05**, following the OTA investigation and design discussion.
-Implemented as `no-ota` v1; hardware validation is pending.
+Originally implemented as `no-ota` v1; hardware validation is pending. ADR-019's
+final approval supersedes its opt-in/main-only selection and recovery-preservation
+rules with a default-on dual-image builder policy.
 
 **Context:** Stock cloud and early-boot paths can replace the custom installation.
 Deleting the dedicated installer rejects fresh requests, but persisted resume
@@ -564,3 +570,132 @@ checks and simulated lifecycle/staged-state scenarios precede separately
 authorized hardware checks of boot, cloud/app functions and USB flashing. The
 accepted policy is not evidence of a validated prevention feature. Detailed
 research, boundaries and implementation checks are in [OTA.md](OTA.md).
+
+## ADR-019: Permit recovery customization for owner wireless updates
+
+**Accepted 2026-11-06 as a design constraint change; complete design approved
+2026-11-07.** The amendments below record its evolution. Source implementation and
+offline validation are approved; firmware writes and hardware acceptance remain separate.
+
+**Context:** The owner prefers source-owned update coordination over vendor-binary
+patching and allows the Mac to remain connected. Stock recovery includes Wi-Fi
+and update services, but no owner SSH account/key provisioned by our main-image
+payload. Reusing stock OTA continuation instead would retain its signature,
+state and failure-handling constraints. The owner explicitly states that leaving
+recovery unchanged is not an important requirement.
+
+**Decision:** Permit narrowly scoped customization of a private copy of the pinned
+stock recovery filesystem for the owner wireless-update feature, including
+administrative SSH access and its startup configuration. Preserve the supplied
+originals, stock kernel/bootloader and existing USB update facilities. This
+supersedes the byte-identical recovery requirement of ADR-007 and the stock-recovery
+preservation choice in ADR-018 for this planned feature; it does not broaden the
+implemented `no-ota` protection guarantee or the current flasher's accepted profile.
+
+**Consequences:** The design may provision recovery access in a prepared image
+before that access is first needed: the established sequence writes recovery from
+running normal firmware. Existing normal-mode SSH can therefore be a candidate
+for wireless bootstrap without pre-existing recovery SSH. Builder/admission rules,
+recovery reference verification, credential transitions, startup ownership and
+continued USB operation need corresponding design and validation. Q10 subsequently
+selects the existing Mac flasher as coordinator. See [the interview record](WIRELESS-UPDATE-DESIGN.md) and
+[feasibility research](WIRELESS-UPDATES.md).
+
+**Scope clarification, 2026-11-06 (Q8/Q9):** newly built wireless-capable firmware
+must prevent manufacturer-initiated installation in both normal and recovery
+environments, including staged updates, while retaining the explicit owner-update
+protocol. Recovery receives only built-in changes needed for owner access,
+updating and prevention; ordinary main payloads such as MQTT and user applications
+are not automatically applied there. Minimize complexity through reuse of
+established mechanisms. The Q15 clarification below settles the existing-main
+bootstrap exception. These are design requirements, not an extension of the
+implemented or validated `no-ota` guarantee.
+
+**Architecture clarification, 2026-11-06 (Q10/Q11):** reuse the source-owned Mac
+flasher and established vendor sequence through SSH transport in both environments.
+Require reference-driven recovery integrity verification before clearing the main
+kernel and entering the new recovery environment. Reuse the existing readback
+checker; its pass does not establish recovery boot or networking. These decisions
+select host coordination instead of the manufacturer's OTA installer continuation;
+the complete implementation design and hardware validation remain pending.
+
+**Bootstrap clarification, 2026-11-07 (Q15):** permit the first wireless
+installation from supported OTA-enabled main with existing administrative SSH.
+Check for known staged manufacturer packages and active installation, rejecting
+those observed conditions before starting. The owner accepts the remaining risk
+of a competing manufacturer installation during both old-main phases, including
+the intermediate reboot; snapshot checks do not guarantee exclusion. Require OTA
+prevention in both destination images. Neither pre-installed `no-ota` nor a
+separate in-place prevention migration is required. This preserves a simple
+wireless bootstrap at the cost of an explicit initial protection gap; it does not
+weaken the stop-on-error policy or authorize a device write.
+
+**Policy revision, 2026-11-07 (Q18/Q19):** SSH selection will provision both main
+and recovery without a separate wireless-capable build option. Manufacturer OTA
+prevention remains independently optional; when selected, it covers both
+environments. Wireless flashing may install packages without prevention. The
+owner accepts competition risk in all unprotected update phases, with the stated
+checks for staged packages and active installation. This supersedes Q8's mandatory
+destination-prevention requirement and broadens the bootstrap-only exception of
+Q15. Prevention is a firmware policy, not a prerequisite of SSH transport.
+Keep the trusted-local-package model and authenticated SSH without introducing
+owner firmware-signing infrastructure. Q20 subsequently selects default-on
+prevention for customized builds.
+
+**Builder policy clarification, 2026-11-07 (Q20):** customized builds default to
+manufacturer OTA prevention in both environments, including builds without SSH.
+Provide an explicit positive `--allow-vendor-updates` override and report the
+resolved policy. No-payload, stock-preserving builds retain stock behavior.
+Expose this as a builder policy option rather than requiring manual selection of
+the ordinary `no-ota` payload. Internal reuse of prevention hooks and final checks
+is appropriate; the user-facing policy change does not require a new prevention
+mechanism. Legacy payload-selection compatibility remains to be specified. This
+amends the planned selection model of ADR-018, not its current implementation or
+hardware-validation status.
+
+**Default revision, 2026-11-07 (Q27):** apply manufacturer OTA prevention to both
+environments by default for every build, including one with no optional payloads.
+This supersedes Q20's no-payload/stock-preserving exception. Use the single
+`--allow-vendor-updates` opt-in to retain vendor installation behavior; no separate
+explicit-block flag is needed. With no other customizations, the default build is
+prevention-only; an explicitly allowed build preserves stock contents. This gives
+one policy rule instead of defaults conditional on feature selection.
+
+**Recovery-entry scope, 2026-11-07 (Q28):** the first wireless version supports
+full updates starting in normal firmware. Existing USB recovery entry remains the
+path after an investigated failure; a wireless `recover` entry point is deferred.
+The common stop-on-error/no-automatic-retry contract continues to apply.
+
+**Final approval, 2026-11-07:** the owner approved the [consolidated design](WIRELESS-UPDATE-PLAN.md),
+including host-tool reuse, for implementation and offline validation. Replace
+`--payload no-ota` outright: it was never released and needs no compatibility alias.
+Source builds now apply default prevention to both filesystems, provision shared
+SSH access when selected, and keep ordinary payloads in main. SSH payload v3 and
+internal prevention policy v2 identify the expanded build behavior; the SSH
+runtime service is unchanged from v2. Admission pins manifest/kernel and both
+filesystem profiles, with additional content/access checks for wireless updates.
+`plan`/`flash --transport ssh` use strict phase-specific identities and mandatory
+recovery readback. Final SSH verification precedes reporting completion; destination
+trust is promoted only after successful verification and completion reporting.
+Static recovery analysis supports the same prevention controls. Offline results
+are in [ACCEPTANCE.md](ACCEPTANCE.md); hardware acceptance is outstanding.
+
+**Trusted-home simplification, 2026-11-07:** the owner confirmed a trusted-home
+network assumption and asked to relax incidental implementation/metadata matching.
+Accept existing administrative SSH without requiring the exact `c100x-ssh` service,
+configuration bytes or key pathname. Establish continuity by actual authentication
+with the original key and credentials across the first planned normal reboot,
+before main-kernel invalidation. Missing access or a changed key stops there; no
+extra test reboot or permissive key-change handling is introduced. This can admit
+other working persistent SSH setups, including vendor-managed ones.
+
+For SSH daemon/init files in prepared images, require regular executable files and
+expected contents rather than exact root ownership or `0755` permissions. The
+builder keeps its normal output metadata; compatible alternatives such as `0750`
+and `0700` are accepted. Destination startup/content and credential admission,
+vendor-component/profile evidence, target identity checks, recovery readback and
+the no-uncertain-write-retry contract remain requirements. Offline checks cannot
+establish future networking or SSH startup; hardware acceptance remains separate.
+The daemon must retain root execution identity: non-root setuid metadata is not
+an equivalent ownership variation and is rejected. Ordinary executable ownership
+and permission variants remain accepted.

@@ -1,6 +1,6 @@
 {
   "id": "ssh",
-  "version": "2",
+  "version": "3",
   "profile": "c100x-1.5.8",
   "verification_required": true
 }

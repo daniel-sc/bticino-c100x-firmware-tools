@@ -17,7 +17,7 @@ import zipfile
 
 from .firmware import FirmwareError, geometry
 from .host import find_tool, run_tool
-from .ssh import SSHError
+from .ssh import SSHError, HostIdentityError
 from .updater import UpdateError
 from .diagnostics import details, failure, format_failure, tool_error
 
@@ -132,8 +132,8 @@ class RecoveryVerifier:
             "profile": "c100x-1.5.8", "firmware_sha256": firmware.sha256,
             "preflight": "not_started", "verification": "not_started",
             "update_sequence": "not_started", "functional_acceptance": "not_performed",
-            "stage": "setup", "host_key_policy": "warn_only",
-            "cryptographic_identity_continuity_required": False,
+            "stage": "setup", "host_key_policy": "strict" if getattr(ssh, "strict", False) else "warn_only",
+            "cryptographic_identity_continuity_required": bool(getattr(ssh, "strict", False)),
             "partitions": {}, "raw_copies": "temporary",
         }
 
@@ -311,6 +311,8 @@ class RecoveryVerifier:
                     self.ssh.run("true", timeout=min(10, remaining(ready_deadline)))
                     break
                 except SSHError as exc:
+                    if isinstance(exc, HostIdentityError):
+                        raise
                     last_error = exc
                     time.sleep(min(2, max(0, ready_deadline - time.monotonic())))
             else:

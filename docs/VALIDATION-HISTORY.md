@@ -1,4 +1,4 @@
-# Validation history through 2026-11-05
+# Validation history through 2026-11-07
 
 Historical evidence and test plans. For current passed/open items, use
 [ACCEPTANCE.md](ACCEPTANCE.md). Pending statements, commands and checklists below
@@ -17,6 +17,90 @@ installation; stock-device acceptance and broader resilience checks remain separ
 The entries below are dated evidence and maintainer test plans, not current setup
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
+
+## 2026-11-07: dual-image policy and wireless implementation, offline validation
+
+- Owner approved the consolidated wireless design and implementation/offline work,
+  rejecting a compatibility alias for the unreleased `--payload no-ota` spelling.
+  Source builds now default to prevention in both images; the explicit opt-out is
+  `--allow-vendor-updates`. SSH provisions both images with shared access and one
+  fresh host key; MQTT and ordinary payloads remain main-only.
+- Five private builds from pinned C100X 1.5.8 stock passed: prevention-only,
+  stock-preserving override, SSH key with prevention, SSH password with vendor
+  updates allowed, and SSH+MQTT with both authentication methods and prevention.
+  Filesystem/payload checks and final archive reopening passed. All three SSH
+  packages passed destination admission; the combined-auth package was checked
+  independently with its key and password. Inputs used disposable synthetic
+  credentials. Private scripts, images and reports remain under
+  `.local/wireless-validation-20261107/`.
+- `mise run test`: **211 tests run, OK, 3 optional native-MQTT tests skipped**.
+  Coverage includes dual-image composition, shared identity, trust transitions,
+  uncertain reboot handling, strict OpenSSH configuration, password broker/pipe
+  boundaries, installer-state rejection, passive FTP mapping and failed final
+  SSH verification without completion or trust promotion.
+- Relocated packaged smoke passed with current source/assets copied into an
+  existing native-dependency bundle: fresh HOME, spaces in paths, isolated Python,
+  restricted PATH and native dependency audit. This was not a new signed release;
+  the reused local bundle reports arm64/minimum macOS 27.0. The first smoke run
+  exposed an unquoted OpenSSH `ControlPath`; the regular test now reproduces that
+  path-with-spaces case and the fixed configuration passes.
+- The static recovery cloud-startup audit supports the same four-part prevention
+  policy with recovery-specific pins. This is offline evidence, not proof of
+  recovery boot/networking or manufacturer-update prevention on hardware.
+- No device access or writes occurred. Recovery Wi-Fi/DHCP, Bonjour, SSH/tunneled
+  transfers, dual-image prevention, preserved USB operation, full wireless flashing
+  and household acceptance remain separately authorized hardware work.
+
+### Independent review follow-up
+
+Two fresh-context subagents independently reviewed repository standards and the
+approved specification. Their reports identified three distinct defects, reproduced
+offline before correction:
+
+- Hostname and address `known_hosts` entries were combined, allowing an unrelated
+  trusted address key to bypass an established hostname identity. Hostname trust
+  now takes precedence; address trust is a fallback only without hostname records.
+- Dropbear content hashes were checked without its executable metadata. Shared
+  boot-prerequisite checks now require root-owned `0755` daemon/init files in both
+  final builder verification and destination admission. Synthetic image tests
+  cover later-payload damage and externally composed main/recovery images.
+- A reader cleanup failure could skip tunnel termination. Cleanup now attempts
+  both resources, retains the original error and clears password references even
+  when cleanup fails. Injected offline errors cover these paths.
+
+Both reviewers rechecked their fixes and reported no remaining concrete defect
+within that scope. The full suite then ran **213 tests, OK, with 3 optional
+native-MQTT tests skipped**; relocated packaged smoke passed again.
+The existing private stock-based SSH packages also passed renewed destination
+admission with the stricter metadata checks, including key-only, password-only
+and both authentication methods. These artifacts were reused, not rebuilt.
+
+### Trusted-home simplification
+
+The owner subsequently requested less restrictive checks for a trusted home LAN.
+Existing administrative SSH no longer has to match our service/configuration
+implementation; actual same-key authentication after the first planned normal
+reboot establishes continuity before main-kernel invalidation. Executable metadata
+checks now accept equivalent modes/ownership, while still rejecting non-executable
+daemon/init files and checking their contents. This supersedes the exact
+root-owned `0755` rule from the initial review correction. Destination startup
+and credential admission, protocol/profile evidence, recovery integrity and
+stop-on-error behavior remain in place. ADR-019 records the revision.
+
+Validation after this revision: **214 tests run, OK, with 3 optional native-MQTT
+tests skipped**, and relocated packaged smoke passed. Private copies of both
+stock-based destination filesystems passed admission with a `0750` daemon owned
+by UID/GID 1000, `0711` vendor init and `0700` owner init. Their contents and
+authentication were retained. Synthetic checks also reject non-executable daemon
+and owner-init files in both environments and reject a changed old-main identity
+after reboot. No hardware access or device writes occurred.
+An independent follow-up found that a non-root setuid daemon was also admitted,
+although it would change execution identity and lose access to root-only key
+material. A synthetic regression reproduced this; the shared prerequisite check
+now rejects that functional incompatibility while accepting ordinary ownership
+and executable-mode variations.
+The reviewer confirmed the fix; the complete **214-test suite (3 optional skips)**
+and relocated packaged smoke passed again afterward.
 
 ## 2026-11-05: no-ota implementation and offline validation
 

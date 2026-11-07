@@ -34,6 +34,60 @@ def recovery_verification(args, firmware, check_transport):
     return RecoveryVerifier(firmware, connection, progress=lambda text: print(text, file=sys.stderr))
 
 
+def wireless_command(args, firmware):
+    from .wireless import Credentials, DEFAULT_HOST, Trust, Wireless, VerificationReader, awake, interruptible
+    from .wireless_image import admit
+    from .recovery import RecoveryVerifier
+
+    def password(prompt):
+        if not sys.stdin.isatty():
+            raise ValueError("SSH password input needs an interactive terminal")
+        return getpass.getpass(prompt)
+
+    def confirm(host, fingerprint):
+        if not sys.stdin.isatty():
+            raise ValueError("First SSH identity enrollment requires an interactive terminal")
+        print(f"First SSH identity for {host}: {fingerprint}", file=sys.stderr)
+        return input("Trust this device fingerprint? Type yes: ") == "yes"
+
+    existing = Credentials(args.ssh_user or "root2", key=args.ssh_key,
+                           password=password("Existing device SSH password: ") if args.ssh_password else None)
+    destination = Credentials(args.destination_ssh_user or existing.user,
+                              key=args.destination_ssh_key if args.destination_ssh_key else
+                              (None if args.destination_ssh_password else existing.key),
+                              password=password("Destination images SSH password: ") if args.destination_ssh_password else
+                              (None if args.destination_ssh_key else existing.password))
+    host = args.host or DEFAULT_HOST
+    progress = lambda text: print(text, file=sys.stderr, flush=True)
+    try:
+        with interruptible(), admit(firmware, destination) as image, Trust(host) as trust:
+            with Wireless(host, existing, destination, image, trust, confirm=confirm) as transport:
+                reader = VerificationReader(transport)
+                with RecoveryVerifier(firmware, reader, progress=progress) as verifier:
+                    if args.command == "plan":
+                        endpoint, port, _, _ = transport.endpoints()
+                        with ReadOnlyClient(endpoint, port) as client:
+                            info = client.inspect()
+                            check_identity(info, 4)
+                            if not client.idle():
+                                raise UpdateError("Update worker is busy; preflight stopped")
+                        verifier.preflight()
+                        print(json.dumps({"firmware": firmware.report(), "device": info, "transport": "ssh",
+                                          "host": host, "vendor_updates": "allowed" if image.vendor_updates else "blocked",
+                                          "device_writes": False, "verification_report": str(verifier.directory / "report.json")}, indent=2))
+                    else:
+                        with awake():
+                            device = NetworkDevice("127.0.0.1", transport=transport)
+                            def final_verification():
+                                transport.verified()
+                                verifier.record["final_ssh"] = "verified"
+                            flash(firmware, device, C100X_PROFILE, report=progress, verification=verifier,
+                                  final_verification=final_verification)
+                            transport.remember()
+    finally:
+        existing.password = destination.password = None
+
+
 def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "_usb-worker":
         def notify(interface):
@@ -67,6 +121,7 @@ def main() -> int:
     build.add_argument("--stock", choices=[PROFILE], help="Fetch/cache the selected stock image if needed")
     build.add_argument("--cache", type=Path, default=Path(".local/firmware-cache"))
     build.add_argument("--payload", action="append", default=[], help="Bundled name or trusted local directory, in application order")
+    build.add_argument("--allow-vendor-updates", action="store_true", help="Permit manufacturer installation; every build blocks it in both images by default")
     build.add_argument("--inputs", type=Path, help="Private JSON object mapping payload IDs to inputs")
     build.add_argument("--ssh-public-key", type=Path, help="Public login key for the explicitly selected ssh payload")
     build.add_argument("--ssh-password", action="store_true", help="Prompt privately for the ssh payload login password")
@@ -89,12 +144,18 @@ def main() -> int:
         if name != "inspect-fw":
             command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the USB helper executable")
         if name in ("plan", "flash"):
+            command.add_argument("--transport", choices=("usb", "ssh"), default="usb")
+            command.add_argument("--host", help="Wireless hostname or IPv4 address (default: Bticino-Classe100X.local)")
             command.add_argument("--external-usb", action="store_true", help="Advanced: use an already running USB supervisor")
             command.add_argument("--verify-recovery-ssh", action="store_true", help="Optional: require installed recovery readback before clearing the main kernel (existing SSH required)")
             command.add_argument("--ssh-user", help="Existing administrative SSH account for recovery verification")
             auth = command.add_mutually_exclusive_group()
             auth.add_argument("--ssh-password", action="store_true", help="Prompt once for the existing SSH password; keep it only in memory")
             auth.add_argument("--ssh-key", type=Path, help="SSH identity file (encrypted keys must already be unlocked in your agent)")
+            command.add_argument("--destination-ssh-user", help="Destination account; defaults to existing SSH user")
+            destination_auth = command.add_mutually_exclusive_group()
+            destination_auth.add_argument("--destination-ssh-key", type=Path, help="Destination login key; defaults to existing authentication")
+            destination_auth.add_argument("--destination-ssh-password", action="store_true", help="Prompt for a different destination password")
     for command in commands.choices.values():
         command.add_argument("--debug", action="store_true", default=argparse.SUPPRESS,
                              help="Include Python stack traces in error output")
@@ -102,7 +163,12 @@ def main() -> int:
     os.umask(0o077)
     try:
         if args.command in ("plan", "flash"):
-            if args.verify_recovery_ssh:
+            if args.transport == "ssh":
+                if args.external_usb:
+                    raise ValueError("--external-usb cannot be combined with --transport ssh")
+            elif args.host or args.destination_ssh_user or args.destination_ssh_key or args.destination_ssh_password:
+                raise ValueError("Wireless host/destination options require --transport ssh")
+            elif args.verify_recovery_ssh:
                 if not args.ssh_user:
                     raise ValueError("--verify-recovery-ssh requires --ssh-user")
                 if args.external_usb:
@@ -180,6 +246,7 @@ def main() -> int:
                 source = fetch_stock(args.cache) if args.stock else args.firmware
                 result = build(source, args.output, payloads=[resolve_payload(p) for p in args.payload],
                                inputs=inputs, input_base=input_base,
+                               allow_vendor_updates=args.allow_vendor_updates,
                                overrides={"debugfs": args.debugfs, "e2fsck": args.e2fsck, "7zip": args.sevenzip},
                                report_path=args.report, progress=lambda msg: print(msg, file=sys.stderr))
             print(json.dumps(result, indent=2))
@@ -195,6 +262,8 @@ def main() -> int:
             with prepare_firmware(args.firmware) as firmware:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
+                elif args.command in ("plan", "flash") and args.transport == "ssh":
+                    wireless_command(args, firmware)
                 else:
                     from_recovery = args.command in ("plan-recovery", "recover")
                     external_usb = not from_recovery and args.external_usb

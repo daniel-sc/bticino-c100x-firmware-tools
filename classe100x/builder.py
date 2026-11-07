@@ -15,7 +15,7 @@ import tempfile
 from .download import STOCK_SIZE, publish
 from .ext4 import Ext4
 from .firmware import (ARCHIVE_KEY, FirmwareError, MAIN_SIZE, PROFILE, STOCK_SHA256,
-                       check_main_image, prepare_firmware, regular_file)
+                       check_main_image, filesystem_profile, prepare_firmware, regular_file)
 from .host import find_tool, run_tool
 from .diagnostics import details, failure, format_failure, protect_inputs, tool_error
 
@@ -105,17 +105,17 @@ def hook(directory: Path, name: str, *, required: bool = False) -> bool:
     return True
 
 
-def expand(source: Path, target: Path) -> str:
+def expand(source: Path, target: Path, *, recovery=False) -> str:
     digest = hashlib.sha256()
     size = 0
     with gzip.open(source, "rb") as src, target.open("xb") as dst:
         while chunk := src.read(1024 * 1024):
             size += len(chunk)
-            if size > MAIN_SIZE:
-                raise FirmwareError("Expanded main filesystem exceeds its profile size")
+            if size > filesystem_profile(recovery)[0]:
+                raise FirmwareError("Expanded filesystem exceeds its profile size")
             dst.write(chunk)
             digest.update(chunk)
-    check_main_image(target)
+    check_main_image(target, recovery=recovery)
     return digest.hexdigest()
 
 
@@ -126,6 +126,18 @@ def filesystem_layout(image: Path) -> bytes:
     # UUID, journal identity/inode/device, directory hash seed/version/descriptor size.
     # Allocation counters and timestamps legitimately change during payload application.
     return sb[104:120] + sb[208:232] + sb[236:256]
+
+
+def check_shared_ssh(workspace, filename, tools):
+    access = []
+    for environment in ("main", "recovery"):
+        image = Ext4(workspace / environment / filename, tools["debugfs"], tools["e2fsck"])
+        fields = [image.read(path) for path in ("/etc/dropbear/classe100x_ecdsa_host_key",
+                                                "/home/root/.ssh/authorized_keys", "/etc/default/c100x-ssh")]
+        fields.append(b"\n".join(line for line in image.read("/etc/shadow").splitlines() if line.startswith(b"root2:")))
+        access.append(fields)
+    if access[0] != access[1]:
+        raise FirmwareError("Main and recovery SSH identity or authentication differs")
 
 
 def pack(directory: Path, destination: Path, sevenzip: str) -> None:
@@ -160,7 +172,7 @@ def builder_tools(overrides: dict | None = None) -> dict:
 
 def build(source: Path, output: Path, *, payloads: list[Path] = (), inputs: dict | None = None,
           input_base: Path | None = None, overrides: dict | None = None,
-          report_path: Path | None = None, progress=lambda message: None) -> dict:
+          report_path: Path | None = None, allow_vendor_updates=False, progress=lambda message: None) -> dict:
     """Preserve failure evidence at the requested report path without overwriting."""
     if report_path is not None:
         report_path = report_path.absolute()
@@ -177,7 +189,8 @@ def build(source: Path, output: Path, *, payloads: list[Path] = (), inputs: dict
 
     try:
         return _build(source, output, payloads=payloads, inputs=inputs, input_base=input_base,
-                      overrides=overrides, report_path=report_path, progress=report_stage)
+                      overrides=overrides, report_path=report_path, progress=report_stage,
+                      allow_vendor_updates=allow_vendor_updates)
     except (Exception, KeyboardInterrupt) as exc:
         details(exc, build_stage=stage)
         if report_path is not None:
@@ -205,18 +218,25 @@ def save_report(report, path):
 
 
 def _build(source: Path, output: Path, *, payloads=(), inputs=None, input_base=None,
-           overrides=None, report_path=None, progress=lambda message: None) -> dict:
+           overrides=None, report_path=None, allow_vendor_updates=False, progress=lambda message: None) -> dict:
     output = output.absolute()
     if output.exists() or output.is_symlink():
         raise FirmwareError("Output already exists; originals and previous builds are never overwritten")
     if not output.parent.is_dir():
         raise FirmwareError("Output directory does not exist")
     selected = load_payloads(payloads)
+    for path, manifest in selected:
+        if manifest["id"] == "no-ota":
+            raise FirmwareError("no-ota is now a default builder policy, not a selectable payload; use --allow-vendor-updates to opt out")
+        if manifest["id"] == "ssh" and path.resolve() != (BUNDLED / "ssh").resolve():
+            raise FirmwareError("The reserved ssh identity requires the bundled dual-filesystem payload")
     inputs = inputs or {}
     if not isinstance(inputs, dict) or any(not isinstance(v, dict) for v in inputs.values()):
         raise FirmwareError("Payload inputs must map payload identities to input objects")
     if set(inputs) - {manifest["id"] for _, manifest in selected}:
         raise FirmwareError("Inputs were supplied for an unselected payload")
+    if not allow_vendor_updates:
+        selected = load_payloads([BUNDLED / "no-ota"]) + selected
     tools = builder_tools(overrides)
     versions = tool_versions(tools)
     if shutil.disk_usage(output.parent).free < MAIN_SIZE * 3 + STOCK_SIZE * 3:
@@ -238,68 +258,80 @@ def _build(source: Path, output: Path, *, payloads=(), inputs=None, input_base=N
                 digest.update(chunk)
             if copied != STOCK_SIZE or digest.hexdigest() != STOCK_SHA256:
                 raise FirmwareError("Builder requires the pinned original stock SHA-256")
+        shared = workspace / "shared-ssh"
+        shared.mkdir(mode=0o700)
+        records, hashes, layouts = [], {}, {}
         with prepare_firmware(snapshot, temporary_parent=workspace) as original:
-            image = workspace / "working.ext4"
-            original_image_hash = expand(original.directory / MEMBER_ORDER[0], image)
-            original_layout = filesystem_layout(image)
-            filesystem = Ext4(image, tools["debugfs"], tools["e2fsck"])
-            progress("Checking the original filesystem")
-            filesystem.check()
-            records = []
-            for path, manifest in selected:
-                directory = workspace / manifest["id"]
-                snapshot_payload(path, directory)
-                context = {"image": str(image), "directory": str(directory), "tools": tools,
-                           "input_base": str((input_base or Path.cwd()).resolve()),
-                           "inputs": inputs.get(manifest["id"], {})}
-                context_path = directory / "context.json"
-                context_path.write_text(json.dumps(context))
-                context_path.chmod(0o600)
-                progress(f"Applying payload {manifest['id']}")
-                hook(directory, "prepare.py")
-                filesystem.apply(directory / "apply.debugfs", directory)
-                verified = hook(directory, "verify.py", required=bool(manifest.get("verification_required")))
-                records.append({"id": manifest["id"], "version": manifest["version"],
-                                "verification": "passed" if verified else "not supplied"})
-            progress("Checking the modified filesystem and all final payload results")
-            check_main_image(image)
-            filesystem.check()
-            if filesystem_layout(image) != original_layout:
-                raise FirmwareError("Payload changed preserved filesystem layout/identity metadata")
-            for (_, manifest), record in zip(selected, records):
-                hook(workspace / manifest["id"], "verify.py", required=record["verification"] == "passed")
-            check_main_image(image)
-            filesystem.check()
-            if filesystem_layout(image) != original_layout:
-                raise FirmwareError("Verification changed preserved filesystem layout/identity metadata")
-            with image.open("rb") as raw:
-                main_hash = hashlib.file_digest(raw, "sha256").hexdigest()
-            if not selected and main_hash != original_image_hash:
-                raise FirmwareError("Unmodified round trip changed filesystem bytes")
-            progress("Compressing and packaging the image")
-            with image.open("rb") as raw, (original.directory / MEMBER_ORDER[0]).open("wb") as zipped:
-                with gzip.GzipFile(filename="", mode="wb", fileobj=zipped, mtime=0, compresslevel=9) as gz:
-                    shutil.copyfileobj(raw, gz, 1024 * 1024)
+            for environment, member in (("main", MEMBER_ORDER[0]), ("recovery", MEMBER_ORDER[1])):
+                recovery = environment == "recovery"
+                root = workspace / environment
+                root.mkdir()
+                image = root / "working.ext4"
+                original_hash = expand(original.directory / member, image, recovery=recovery)
+                layouts[environment] = filesystem_layout(image)
+                filesystem = Ext4(image, tools["debugfs"], tools["e2fsck"])
+                progress(f"Checking original {environment} filesystem")
+                filesystem.check()
+                active = [(p, m) for p, m in selected if not recovery or m["id"] in ("ssh", "no-ota")]
+                for path, manifest in active:
+                    directory = root / manifest["id"]
+                    snapshot_payload(path, directory)
+                    context = {"image": str(image), "directory": str(directory), "tools": tools,
+                               "environment": environment, "shared_ssh": str(shared),
+                               "input_base": str((input_base or Path.cwd()).resolve()),
+                               "inputs": inputs.get(manifest["id"], {})}
+                    context_path = directory / "context.json"
+                    context_path.write_text(json.dumps(context))
+                    context_path.chmod(0o600)
+                    progress(f"Applying {manifest['id']} to {environment}")
+                    hook(directory, "prepare.py")
+                    filesystem.apply(directory / "apply.debugfs", directory)
+                    verified = hook(directory, "verify.py", required=bool(manifest.get("verification_required")))
+                    records.append({"id": manifest["id"], "version": manifest["version"], "environment": environment,
+                                    "verification": "passed" if verified else "not supplied"})
+                progress(f"Checking final {environment} filesystem and payload results")
+                for record in (r for r in records if r["environment"] == environment):
+                    hook(root / record["id"], "verify.py", required=record["verification"] == "passed")
+                check_main_image(image, recovery=recovery)
+                filesystem.check()
+                if filesystem_layout(image) != layouts[environment]:
+                    raise FirmwareError("Payload changed preserved filesystem layout/identity metadata")
+                with image.open("rb") as raw:
+                    hashes[environment] = hashlib.file_digest(raw, "sha256").hexdigest()
+                if not active and hashes[environment] != original_hash:
+                    raise FirmwareError("Unmodified round trip changed filesystem bytes")
+                if active:
+                    with image.open("rb") as raw, (original.directory / member).open("wb") as zipped:
+                        with gzip.GzipFile(filename="", mode="wb", fileobj=zipped, mtime=0, compresslevel=9) as gz:
+                            shutil.copyfileobj(raw, gz, 1024 * 1024)
+            if any(m["id"] == "ssh" for _, m in selected):
+                check_shared_ssh(workspace, "working.ext4", tools)
+            progress("Packaging both checked filesystems")
             artifact = workspace / "output.fwz"
             pack(original.directory, artifact, tools["7zip"])
         progress("Reopening and verifying the finished FWZ")
         with prepare_firmware(artifact, temporary_parent=workspace) as finished:
-            reopened = workspace / "reopened.ext4"
-            if expand(finished.directory / MEMBER_ORDER[0], reopened) != main_hash:
-                raise FirmwareError("Repacked filesystem differs from the checked working image")
-            Ext4(reopened, tools["debugfs"], tools["e2fsck"]).check()
-            for (_, manifest), record in zip(selected, records):
-                directory = workspace / manifest["id"]
-                context_path = directory / "context.json"
-                context = json.loads(context_path.read_text())
-                context["image"] = str(reopened)
-                context_path.write_text(json.dumps(context))
-                hook(directory, "verify.py", required=record["verification"] == "passed")
-            with reopened.open("rb") as raw:
-                if hashlib.file_digest(raw, "sha256").hexdigest() != main_hash:
-                    raise FirmwareError("Verification hook modified the reopened filesystem")
+            for environment, member in (("main", MEMBER_ORDER[0]), ("recovery", MEMBER_ORDER[1])):
+                reopened = workspace / environment / "reopened.ext4"
+                if expand(finished.directory / member, reopened, recovery=environment == "recovery") != hashes[environment]:
+                    raise FirmwareError("Repacked filesystem differs from the checked working image")
+                Ext4(reopened, tools["debugfs"], tools["e2fsck"]).check()
+                for record in (r for r in records if r["environment"] == environment):
+                    directory = workspace / environment / record["id"]
+                    context_path = directory / "context.json"
+                    context = json.loads(context_path.read_text())
+                    context["image"] = str(reopened)
+                    context_path.write_text(json.dumps(context))
+                    hook(directory, "verify.py", required=record["verification"] == "passed")
+                with reopened.open("rb") as raw:
+                    if hashlib.file_digest(raw, "sha256").hexdigest() != hashes[environment]:
+                        raise FirmwareError("Verification hook modified the reopened filesystem")
+            if any(m["id"] == "ssh" for _, m in selected):
+                check_shared_ssh(workspace, "reopened.ext4", tools)
             report = {"schema": 1, "profile": PROFILE, "source_sha256": STOCK_SHA256,
-                      "output_sha256": finished.sha256, "main_filesystem_sha256": main_hash,
+                      "output_sha256": finished.sha256, "main_filesystem_sha256": hashes["main"],
+                      "recovery_filesystem_sha256": hashes["recovery"],
+                      "vendor_updates": "allowed" if allow_vendor_updates else "blocked",
                       "payloads": records, "tools": versions, "offline_checks": "passed",
                       "hardware_acceptance": "not performed", "myhome_import": "not performed"}
         artifact.chmod(0o600)

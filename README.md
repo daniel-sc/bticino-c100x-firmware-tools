@@ -15,21 +15,25 @@ for tested scope and follow-up coverage.
   a password, or both.
 - **MQTT bridge:** publish intercom events to your MQTT broker and receive raw
   OpenWebNet commands, with broker settings supplied when building.
-- **Optional OTA prevention:** `no-ota` disables vendor update launch paths in
-  normal firmware (source builds; hardware validation pending).
+- **OTA prevention:** source builds block manufacturer installation in main and
+  recovery by default; `--allow-vendor-updates` opts out (hardware validation pending).
 - **Device flasher:** inspect an image, check the connected device, and explicitly
-  start an update over USB. The stock-device flashing workflow does not require SSH.
+  start an update over USB. Source builds also provide explicit SSH wireless
+  transport with mandatory recovery verification (hardware validation pending).
+  The stock-device USB workflow does not require SSH.
 
 The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
 firmware are unsupported. Linux/WSL support is planned but not yet validated.
 There is no GUI or Home Assistant configuration/discovery integration.
 
-SSH, MQTT and `no-ota` are independently optional and can be combined. Building
-creates a file on your Mac; flashing installs that file on the intercom.
+SSH and MQTT are optional. Source-build SSH provisions both main and recovery;
+MQTT applies only to main. Manufacturer-update policy is independent of SSH and
+transport. Building creates a file; flashing installs it on the intercom.
 
-**Manufacturer OTA updates remain enabled unless `no-ota` is selected** and can
-overwrite the custom installation. The published v0.1.0 does not include `no-ota`;
-see [source-build usage and limits](docs/BUILDER.md#ota-prevention).
+**Published v0.1.0 retains manufacturer updates and main-only SSH.** The new
+default policy, dual-image SSH and wireless transport are source-only changes;
+see [builder policy](docs/BUILDER.md#ota-prevention) and
+[wireless usage](docs/FLASHING.md#wireless-updates-source-builds).
 
 ## Installation
 
@@ -65,15 +69,16 @@ firmware and private settings outside the installation folder.
 
 ## Build and install firmware
 
-1. [Build firmware](docs/BUILDER.md): choose [SSH access](docs/BUILDER.md#ssh-access),
-   [MQTT](docs/BUILDER.md#mqtt-bridge), and/or
-   [OTA prevention](docs/BUILDER.md#ota-prevention), and create a checked `.fwz` image.
+1. [Build firmware](docs/BUILDER.md): choose [SSH access](docs/BUILDER.md#ssh-access)
+   and/or [MQTT](docs/BUILDER.md#mqtt-bridge), review the
+   [update policy](docs/BUILDER.md#ota-prevention), and create a checked `.fwz` image.
 2. [Flash firmware](docs/FLASHING.md): connect by USB, run read-only preflight,
    explicitly flash, then check the intercom's functions.
 
 Already have a compatible image? Start with the flashing guide. USB networking
 is managed automatically. Building runs as your normal user; device checks and
-flashing use `sudo`. Keep generated images private: they can contain credentials.
+USB flashing use `sudo`; source wireless commands run without it. Keep generated
+images private: they can contain credentials.
 
 ## Updating the Mac tool
 

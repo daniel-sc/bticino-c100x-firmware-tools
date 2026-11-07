@@ -1,10 +1,18 @@
 # Validation and release readiness
 
-**As of 2026-11-05:** the core build, native USB flash and household workflow has
+**As of 2026-11-07:** the published core build, native USB flash and household workflow has
 passed on the tested C100X Door Entry 1.5.8 installation using Apple Silicon
 macOS. **Version 0.1.0 is published and validated**, including its signed download
 and Homebrew installation. It carries forward alpha.6's full-flash and functional
 acceptance for unchanged device behavior.
+
+**Unreleased source changes:** dual-image SSH, default manufacturer-update prevention
+and explicit wireless transport are implemented. Five private pinned-stock build
+cases and their applicable destination-access checks passed offline. Relocated
+packaged smoke passed using current source/assets and existing native dependencies.
+This is not a newly signed release or hardware wireless acceptance.
+The latest offline suite ran **214 tests: OK, with three optional native-MQTT
+tests skipped**. See the [dated wireless validation record](VALIDATION-HISTORY.md#2026-11-07-dual-image-policy-and-wireless-implementation-offline-validation).
 
 ## Passed
 
@@ -12,7 +20,7 @@ acceptance for unchanged device behavior.
 | --- | --- |
 | Distribution | v0.1.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware build and Homebrew installation checked. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
-| OTA prevention (unreleased, offline only) | `no-ota` v1 builds passed standalone and with SSH/MQTT in both tested orders. Independent whole-image comparison, staged-state fixtures and conflict checks passed; hardware acceptance remains pending. |
+| Dual-image policy/access (unreleased, offline only) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
 | USB flashing | Alpha.6 completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
 | SSH payload v2 | Fresh RSA-key logins over USB/Wi-Fi, password-only login, service restart and vendor start/stop isolation passed. Reboot with vendor `abil_ssh` absent preserved access and host identity. |
 | Household functions | User confirmed ringing/notification, answering, video, two-way audio, door release, MQTT events and existing MQTT door control working after the alpha.6 installation. |
@@ -40,7 +48,15 @@ and [optional recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-fla
       downloaded-artifact checks. This bounded, best-effort host-side correction
       did not require another firmware flash for release.
 
-## Follow-up hardware coverage (non-blocking)
+## Wireless and dual-image hardware acceptance (pending)
+
+The source changes materially alter recovery and require separately authorized
+validation: recovery Wi-Fi/DHCP and Bonjour, administrative SSH and tunneled
+protocol/FTP transfers, prevention in both environments, preserved USB operation,
+complete wireless installation and household functions. No device access or writes
+were performed during implementation. Failure injection remains simulation-only.
+
+## Follow-up hardware coverage (non-blocking for unchanged released behavior)
 
 These are disclosed coverage gaps, not requirements to reflash for each release.
 Carry forward observed acceptance unless a change materially affects the behavior
@@ -69,17 +85,17 @@ Never deliberately interrupt a firmware write. Record results only after observa
 
 ## Remaining limits and deferred work
 
-- Manufacturer OTA updates remain enabled in v0.1.0 and builds without `no-ota`,
+- Manufacturer OTA updates remain enabled in v0.1.0 and source builds with `--allow-vendor-updates`,
   and can replace the custom installation.
   Offline comparison confirmed the stock updater/configuration in the v0.1.0
   SSH+MQTT image. Read-only SSH on 2026-11-05 confirmed stock updater components,
   enabled settings and no packages at the two known persistent staging paths.
   Missing-installer branches passed 33 isolated ARM-emulation cases; no live OTA
-  overwrite or prevention test was performed. `no-ota` v1 (ADR-018) is implemented
-  and checked offline, but not released or installed on the device. Boot,
+  overwrite or prevention test was performed. The source default policy now covers
+  both prepared filesystems (ADR-019), but is not released or installed on the device. Boot,
   vendor app notifications, remote answering, commissioning/reconnection,
-  household functions and explicit USB flashing with this payload still require
-  hardware validation. Stock recovery and installation transitions are excluded.
+  household functions and explicit USB flashing with this policy still require
+  hardware validation. Existing unprotected firmware remains unprotected until replacement.
   See [OTA investigation](OTA.md) and [offline validation](VALIDATION-HISTORY.md#2026-11-05-no-ota-implementation-and-offline-validation).
 - Linux/WSL parity and Windows/MyHOME import of generated images are unvalidated;
   the distributed tool targets Apple Silicon macOS 15+.

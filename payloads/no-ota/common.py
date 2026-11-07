@@ -45,8 +45,15 @@ def require_pinned(image, path, expected, mode, owner):
     image.require_file(path, data, mode=mode, uid=owner, gid=owner)
 
 
-def prerequisites(image):
-    for path, (expected, mode, owner) in UNCHANGED.items():
+def prerequisites(image, environment="main"):
+    pins = dict(UNCHANGED)
+    if environment == "recovery":
+        pins["/etc/init.d/bt_daemon-apps.sh"] = ("9d90f7e4610f99a7ef428dbed4cfabe5321a9a63d3659ebc44963d0341f710aa", 0o700, 0)
+        pins["/home/bticino/bin/bt_eliot"] = ("b8a98d62cfc043e809a2687ce4f237e5ff6d3ca5804ce1bd58ae4de39367581c", 0o755, 0)
+        for path, (checksum, mode, owner) in list(pins.items()):
+            if path.startswith(("/home/bticino/bin/", "/home/bticino/lib/")):
+                pins[path] = checksum, mode, 0
+    for path, (expected, mode, owner) in pins.items():
         require_pinned(image, path, expected, mode, owner)
     # An INI can override/add daemon processes. Only the researched, absent case
     # is supported; do not attempt to interpret arbitrary vendor overrides.

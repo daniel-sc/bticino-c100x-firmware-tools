@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
 
@@ -26,8 +27,12 @@ def main():
         env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(home), "TMPDIR": temporary,
                "LC_ALL": "C", "OPENSSL_CONF": "/dev/null"}
         def run(*command, input=None):
-            return subprocess.run(list(map(str, command)), cwd=root, env=env, input=input,
-                                  capture_output=True, check=True, timeout=120).stdout
+            result = subprocess.run(list(map(str, command)), cwd=root, env=env, input=input,
+                                    capture_output=True, timeout=120)
+            if result.returncode:
+                sys.stderr.buffer.write(result.stdout + result.stderr)
+                result.check_returncode()
+            return result.stdout
         cli = bundle / "c100x"
         run(cli, "--version")
         for command in ("build-fw", "inspect-fw", "plan", "flash", "plan-recovery", "recover", "usb"):
@@ -68,7 +73,7 @@ def main():
 
         # Exercise USB handover/recovery sequencing with simulated devices using
         # the shipped interpreter and modules, including isolated child workers.
-        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py"):
+        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py", "test_wireless.py"):
             run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
                 "import sys, unittest; sys.path.insert(0, sys.argv[1]); "
                 "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern=sys.argv[3]); "

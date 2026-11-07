@@ -8,8 +8,8 @@ scope and follow-up coverage.
 ## Compatibility
 
 Only **C100X Door Entry 1.5.8** is supported. Preflight checks hardware `02*06*0`,
-object model `1.0.99` and initial status `4*0`. Images must preserve the stock
-manifest, recovery and kernel and match the main-filesystem profile. Passing
+object model `1.0.99` and initial status `4*0`. Source tools require the stock
+manifest/kernel and supported main/recovery filesystem profiles. Passing
 these checks does not prove bootability.
 
 ## 1. Inspect and run preflight
@@ -85,7 +85,7 @@ managed USB connection, not LAN SSH.
 `plan` checks prerequisites without firmware writes. During `flash`, the extra
 check runs **after writing recovery and rebooting normally, before clearing the
 main kernel**. It compares the recovery filesystem and kernel/DTB contents with
-stock and checks the copied filesystems offline. Failure or uncertainty stops
+the selected package and checks the copied filesystems offline. Failure or uncertainty stops
 the update. This verifies integrity, not recovery bootability or household
 functions. This gate passed on hardware in the earlier stopped alpha.3 run;
 alpha.6's uninterrupted flash used the ordinary path. See [validation](ACCEPTANCE.md).
@@ -109,6 +109,66 @@ alpha.6's uninterrupted flash used the ordinary path. See [validation](ACCEPTANC
 Use `sudo` from your ordinary account and an administrative device account (UID
 0). This mode requires managed USB, so it cannot be combined with `--external-usb`.
 Release bundles include the required filesystem tools.
+
+## Wireless updates (source builds)
+
+**Implemented for offline validation; recovery networking and a full wireless
+flash still require hardware acceptance.** Published v0.1.0 is USB-only. Use
+[source setup](SOURCE.md) and a newly built dual-image SSH package.
+
+The existing main firmware must already provide administrative SSH and the supported
+vendor update components. Its SSH service need not be our `c100x-ssh` implementation.
+After the first planned normal reboot, the same trusted host key and credentials
+must reconnect before main-kernel invalidation. If SSH disappears or regenerates
+its key, the run stops with main's kernel still intact. Recovery SSH need not
+pre-exist: the normal system installs it before recovery access is needed.
+
+The workflow assumes a trusted home network and owner-selected package. Admission
+accepts equivalent executable permissions (for example `0750` or `0700`) on SSH
+daemon/init files. Destination startup contents and credentials are still checked
+offline because those environments cannot authenticate until installed.
+
+Run without sudo on the same LAN. Example read-only preflight using your login key:
+
+```sh
+mise exec -- python -m classe100x plan custom.fwz --transport ssh \
+  --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa
+```
+
+The explicit write command is the same invocation with `flash` instead of `plan`.
+The default target is `Bticino-Classe100X.local`; `--host NAME_OR_IP` overrides it.
+Hostnames are resolved again on reconnect. A fixed IP/DHCP reservation is a
+fallback when mDNS is unavailable. SSH-config aliases, proxies and jump hosts
+are not interpreted. If a hostname resolves to multiple IPv4 addresses, supply
+an unambiguous target.
+
+- Use `--ssh-password` instead of a key to prompt once for the existing password;
+  omit both for an unlocked SSH agent. Destination credentials default to the
+  existing settings; `--destination-ssh-user`, `--destination-ssh-key` or
+  `--destination-ssh-password` override them. Destination access is checked offline
+  before any write. Keep the matching `.pub` sidecar beside an encrypted private
+  key and unlock it in the agent. Login passwords are not persisted.
+- Strict host-key checks apply. Existing trusted entries can seed enrollment;
+  otherwise confirm the first fingerprint interactively. A trusted hostname
+  identity takes precedence over entries for its resolved IP; address trust is
+  used only when the hostname has no saved identity. Tool-owned trust lives
+  under `~/Library/Application Support/C100X/trust/`. Your ordinary `known_hosts`
+  is not changed. The expected package key is used in new recovery/main and
+  remembered after final verification. Unexpected key changes stop the run.
+- Recovery readback is mandatory, using the same gate as optional USB verification.
+  Allow roughly 2 GiB free for image inspection plus private recovery evidence.
+  Source setups need e2fsprogs, Dropbear keygen and OpenSSL; the release tool set
+  already includes them. Ordinary USB flashing retains its smaller dependencies.
+- The Mac remains connected throughout and temporarily prevents idle sleep. Lid
+  closure, explicit sleep, network interruption and power loss remain separate.
+- Known staged vendor packages, nonempty update metadata or active installers
+  stop preflight. These snapshots cannot prevent a subsequent competing installer
+  in unprotected firmware. Neither pre-installed prevention nor temporary
+  in-place configuration changes are required.
+- Final normal reboot, vendor identity/state and authenticated destination SSH
+  are required for completion. Perform household checks separately. No automatic
+  retry/resume, transport fallback or cleanup reboot occurs. Recovery-entry
+  commands remain USB-only after investigation.
 
 ## Troubleshooting
 

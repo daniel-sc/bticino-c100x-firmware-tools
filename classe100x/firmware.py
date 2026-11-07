@@ -26,12 +26,17 @@ ARCHIVE_KEY = b"C100X"  # Published format password, not a device credential.
 PROFILE = "c100x-1.5.8"
 PRESERVED_SHA256 = {
     "fwz.xml": "f2f78c7a45546800f1d1148e3229b39365c417b9a758b80c57dfa807697e8fb5",
-    "btweb_only_recovery.ext4.gz": "00840dd0d6e326e8cc25033037a24889ef9cfad13795e83a495b355e1d69cce3",
     "uImage.zip": "b06b75e3a956fb26578788293db449f5f188b0502a70cd24f91719ad1dffda3d",
 }
 MAIN_SIZE = 1073741824
 # Stock superblock geometry/features; no implicit resizing or feature conversion.
 MAIN_GEOMETRY = (262144, 262144, 0, 2, 32768, 32768, 60, 578, 123, 0, 256)
+RECOVERY_SIZE = 153600000
+RECOVERY_GEOMETRY = (37544, 150000, 1, 0, 8192, 1976, 60, 578, 123, 0, 128)
+
+
+def filesystem_profile(recovery=False):
+    return (RECOVERY_SIZE, RECOVERY_GEOMETRY) if recovery else (MAIN_SIZE, MAIN_GEOMETRY)
 
 
 def regular_file(path: Path):
@@ -53,10 +58,11 @@ def geometry(header: bytes) -> tuple:
                  for offset in (0, 4, 20, 24, 32, 40, 92, 96, 100, 336)) + (struct.unpack_from("<H", sb, 88)[0],)
 
 
-def check_main_image(path: Path) -> None:
+def check_main_image(path: Path, *, recovery=False) -> None:
+    size, expected = filesystem_profile(recovery)
     with regular_file(path) as source:
-        if os.fstat(source.fileno()).st_size != MAIN_SIZE or geometry(source.read(2048)) != MAIN_GEOMETRY:
-            raise FirmwareError("Main filesystem size, geometry or features differ from the stock profile")
+        if os.fstat(source.fileno()).st_size != size or geometry(source.read(2048)) != expected:
+            raise FirmwareError("Filesystem size, geometry or features differ from the stock profile")
 
 
 def _check_zip_directory(source) -> None:
@@ -165,23 +171,24 @@ def validate_manifest(data: bytes) -> None:
 
 def _validate_payload(path: Path, *, profile: bool = False) -> None:
     if path.name.endswith(".gz"):
+        expected_size, expected_geometry = filesystem_profile(path.name == RECOVERY_FILES[0])
         with gzip.open(path, "rb") as stream:
             header = stream.read(2048)
             if header[1080:1082] != b"\x53\xef":
                 raise FirmwareError("Filesystem payload is not an ext filesystem")
-            if profile and path.name == MAIN_FILES[0] and geometry(header) != MAIN_GEOMETRY:
-                raise FirmwareError("Main filesystem geometry/features differ from the stock profile")
+            if profile and geometry(header) != expected_geometry:
+                raise FirmwareError("Filesystem geometry/features differ from the stock profile")
             size = len(header)
             while chunk := stream.read(1024 * 1024):
                 size += len(chunk)
-                limit = MAIN_SIZE if profile and path.name == MAIN_FILES[0] else 2 * 1024**3
+                limit = expected_size if profile else 2 * 1024**3
                 if size > limit:
                     raise FirmwareError("Expanded filesystem exceeds the supported limit")
             # Consume through EOF to verify the gzip trailer before any device writes.
             if size < 2048:
                 raise FirmwareError("Truncated filesystem payload")
-            if profile and path.name == MAIN_FILES[0] and (size != MAIN_SIZE or geometry(header) != MAIN_GEOMETRY):
-                raise FirmwareError("Main filesystem size, geometry or features differ from the stock profile")
+            if profile and (size != expected_size or geometry(header) != expected_geometry):
+                raise FirmwareError("Filesystem size, geometry or features differ from the stock profile")
     else:
         with zipfile.ZipFile(path) as kernel:
             files = kernel.infolist()
@@ -198,7 +205,7 @@ def _validate_payload(path: Path, *, profile: bool = False) -> None:
 def prepare_firmware(path: Path, archive_key: bytes = ARCHIVE_KEY, *, temporary_parent: Path | None = None):
     """Yield verified payloads in a private temporary directory, then remove them.
 
-    The main filesystem may vary; the manifest, recovery and kernel must match
+    Both filesystems may vary; the manifest and kernel must match
     stock. This checks package compatibility/integrity, not filesystem health or
     bootability. The source descriptor stays open throughout inspection.
     """

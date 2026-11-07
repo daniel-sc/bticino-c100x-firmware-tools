@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import zipfile
 
 from classe100x import builder, firmware
@@ -94,6 +95,8 @@ class BuilderTests(unittest.TestCase):
         with self.image.open("rb") as stream:
             geom = firmware.geometry(stream.read(2048))
         changes = ((firmware, "PRESERVED_SHA256", preserved), (firmware, "MAIN_GEOMETRY", geom),
+                   (firmware, "RECOVERY_GEOMETRY", geom),
+                   (firmware, "RECOVERY_SIZE", self.image.stat().st_size),
                    (firmware, "MAIN_SIZE", self.image.stat().st_size),
                    (builder, "MAIN_SIZE", self.image.stat().st_size),
                    (builder, "STOCK_SIZE", self.stock.stat().st_size),
@@ -117,6 +120,7 @@ class BuilderTests(unittest.TestCase):
         return path
 
     def build(self, **kwargs):
+        kwargs.setdefault("allow_vendor_updates", True)
         return builder.build(self.stock, self.output, overrides=self.tools, **kwargs)
 
     def check_clean_failure(self):
@@ -342,7 +346,7 @@ class BuilderTests(unittest.TestCase):
                 with firmware.prepare_firmware(archive, temporary_parent=self.root):
                     self.fail("invalid outer archive")
 
-    def test_local_header_mismatch_and_changed_recovery_are_rejected(self):
+    def test_local_header_mismatch_and_recovery_profile(self):
         data = bytearray(self.stock.read_bytes())
         # Change only the local encryption flag; the central directory still claims encryption.
         data[6:8] = struct.pack("<H", 0)
@@ -353,9 +357,15 @@ class BuilderTests(unittest.TestCase):
                 self.fail("inconsistent encryption")
         (self.members / "btweb_only_recovery.ext4.gz").write_bytes(gzip.compress(self.image.read_bytes(), mtime=123))
         builder.pack(self.members, self.root / "changed-recovery.fwz", self.tools["7zip"])
-        with self.assertRaisesRegex(FirmwareError, "Recovery/kernel"):
-            with firmware.prepare_firmware(self.root / "changed-recovery.fwz"):
-                self.fail("changed recovery")
+        with firmware.prepare_firmware(self.root / "changed-recovery.fwz"):
+            pass  # Compression identity is no longer the recovery admission contract.
+        raw = bytearray(self.image.read_bytes())
+        struct.pack_into("<I", raw, 1024 + 96, 0xffffffff)
+        (self.members / "btweb_only_recovery.ext4.gz").write_bytes(gzip.compress(raw))
+        builder.pack(self.members, self.root / "bad-recovery.fwz", self.tools["7zip"])
+        with self.assertRaisesRegex(FirmwareError, "geometry"):
+            with firmware.prepare_firmware(self.root / "bad-recovery.fwz"):
+                self.fail("unsupported recovery features")
 
     def test_guarded_replacement_rejects_xattrs_and_hardlinks(self):
         (self.root / "asset").write_bytes(b"fixture")
@@ -419,11 +429,12 @@ class BuilderTests(unittest.TestCase):
         setup += "symlink /usr/sbin/dropbear ./dropbearmulti\n"
         self.commands(setup)
         self.restock()
-        payload = self.root / "ssh-source"
+        payload = self.root / "ssh"
         shutil.copytree(builder.BUNDLED / "ssh", payload)
         hashes = {name: hashlib.sha256(data).hexdigest() for name, data in originals.items()}
         with (payload / "common.py").open("a") as stream:
-            stream.write("\nHASHES = " + repr(hashes) + "\n")
+            stream.write("\nHASHES = " + repr(hashes) + "\nRECOVERY_SHADOW = HASHES['/etc/shadow']\n")
+        self.enterContext(patch.object(builder, "BUNDLED", self.root))
         key = self.root / "login"
         status, _, _ = run_tool([keygen, "-q", "-t", "ecdsa", "-b", "256", "-N", "", "-f", str(key)])
         self.assertEqual(status, 0)
@@ -433,15 +444,34 @@ class BuilderTests(unittest.TestCase):
                              ("both", {"password": password, "public_key": str(key) + ".pub"})):
             with self.subTest(mode=mode):
                 result = self.build(payloads=[payload], inputs={"ssh": values})
+                self.assertEqual({r["environment"] for r in result["payloads"]}, {"main", "recovery"})
+                with firmware.prepare_firmware(self.output) as package:
+                    keys = []
+                    for index, name in enumerate((firmware.MAIN_FILES[0], firmware.RECOVERY_FILES[0])):
+                        image = self.root / f"checked-{index}.ext4"
+                        image.write_bytes(gzip.decompress((package.directory / name).read_bytes()))
+                        keys.append(Ext4(image, self.tools["debugfs"], self.tools["e2fsck"]).read("/etc/dropbear/classe100x_ecdsa_host_key"))
+                    self.assertEqual(keys[0], keys[1])
                 self.assertNotIn(password, json.dumps(result))
                 self.assertNotIn(key.with_suffix(".pub").read_text().split()[1], json.dumps(result))
                 self.output.unlink()
         # A later payload must not silently return lifecycle control to the vendor
         # or remove the independent service's shutdown integration.
+        compatible = self.payload("ssh-metadata", "set_inode_field /usr/sbin/dropbearmulti mode 0100750\n"
+                                  "set_inode_field /usr/sbin/dropbearmulti uid 1000\n"
+                                  "set_inode_field /usr/sbin/dropbearmulti gid 1000\n"
+                                  "set_inode_field /etc/init.d/dropbear mode 0100711\n"
+                                  "set_inode_field /etc/init.d/c100x-ssh mode 0100700\n")
+        self.build(payloads=[payload, compatible], inputs={"ssh": {"public_key": str(key) + ".pub"}})
+        self.output.unlink()
         (self.root / "reenable-vendor").write_text("NO_START=0\n")
         for name, commands in (
             ("vendor-conflict", "rm /etc/default/dropbear\nwrite reenable-vendor /etc/default/dropbear\n"),
             ("shutdown-conflict", "rm /etc/rc6.d/K01c100x-ssh\n"),
+            ("daemon-mode-conflict", "set_inode_field /usr/sbin/dropbearmulti mode 0100644\n"),
+            ("service-mode-conflict", "set_inode_field /etc/init.d/c100x-ssh mode 0100644\n"),
+            ("daemon-setuid-conflict", "set_inode_field /usr/sbin/dropbearmulti mode 0104750\n"
+             "set_inode_field /usr/sbin/dropbearmulti uid 1000\n"),
         ):
             conflict = self.payload(name, commands)
             if name == "vendor-conflict":
@@ -449,6 +479,27 @@ class BuilderTests(unittest.TestCase):
             with self.subTest(conflict=name), self.assertRaises(FirmwareError):
                 self.build(payloads=[payload, conflict], inputs={"ssh": {"public_key": str(key) + ".pub"}})
             self.check_clean_failure()
+
+        # Admission must reject the same defect in either externally composed image,
+        # even if its daemon bytes still match and a build report claims success.
+        from classe100x.wireless_image import inspect_image
+        for index, environment in enumerate(("main", "recovery")):
+            image = Ext4(self.root / f"checked-{index}.ext4", self.tools["debugfs"], self.tools["e2fsck"])
+            for path, mode, uid in (("/usr/sbin/dropbearmulti", "0100644", 0),
+                                    ("/etc/init.d/c100x-ssh", "0100644", 0),
+                                    ("/usr/sbin/dropbearmulti", "0104750", 1000)):
+                commands = self.root / "admission-tamper.debugfs"
+                commands.write_text("set_inode_field /usr/sbin/dropbearmulti mode 0100755\n"
+                                    "set_inode_field /usr/sbin/dropbearmulti uid 0\n"
+                                    "set_inode_field /etc/init.d/c100x-ssh mode 0100755\n"
+                                    f"set_inode_field {path} mode {mode}\n"
+                                    f"set_inode_field {path} uid {uid}\n")
+                image.apply(commands, self.root)
+                with patch("classe100x.wireless_image.ASSETS", self.root), \
+                        self.subTest(environment=environment, path=path, mode=mode), \
+                        self.assertRaisesRegex(FirmwareError, "not an executable regular file|setuid"):
+                    inspect_image(image, environment, self.root,
+                                  SimpleNamespace(user="root2", password=password), {})
 
     def mqtt_fixture(self, with_ssh=False):
         facts = runpy.run_path(str(builder.BUNDLED / "mqtt/common.py"))
@@ -483,12 +534,27 @@ class BuilderTests(unittest.TestCase):
         paths = []
         for name, values in (("mqtt", {path: originals[path] for path in facts["HASHES"]}),
                              ("ssh", ssh_originals)) if with_ssh else (("mqtt", originals),):
-            payload = self.root / (name + "-source")
+            payload = self.root / name
             shutil.copytree(builder.BUNDLED / name, payload)
             with (payload / "common.py").open("a") as stream:
                 stream.write("\nHASHES = " + repr({p: hashlib.sha256(data).hexdigest() for p, data in values.items()}) + "\n")
+                if name == "ssh":
+                    stream.write("RECOVERY_SHADOW = HASHES['/etc/shadow']\n")
             paths.append(payload)
+        self.enterContext(patch.object(builder, "BUNDLED", self.root))
         return paths
+
+    def test_default_policy_applies_to_both_images_without_payload_selection(self):
+        policy = self.payload("no-ota", "write policy /policy\nset_inode_field /policy mode 0100600\n",
+                              "from classe100x.payload import Context\nContext().image.require_file('/policy',b'blocked',mode=0o600)\n")
+        (policy / "policy").write_bytes(b"blocked")
+        with patch.object(builder, "BUNDLED", self.root):
+            result = self.build(allow_vendor_updates=False)
+        self.assertEqual(result["vendor_updates"], "blocked")
+        self.assertEqual([r["environment"] for r in result["payloads"]], ["main", "recovery"])
+        self.output.unlink()
+        with self.assertRaisesRegex(FirmwareError, "not a selectable payload"):
+            self.build(payloads=[policy])
 
     def test_mqtt_install_composition_and_private_report(self):
         payloads = self.mqtt_fixture(with_ssh=True)

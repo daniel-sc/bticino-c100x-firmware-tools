@@ -1,13 +1,16 @@
 # Build firmware
 
-Build a new C100X Door Entry **1.5.8** image with optional SSH, MQTT and OTA
-prevention. The original firmware is preserved; building does not contact or
+Build a new C100X Door Entry **1.5.8** image with optional SSH and MQTT.
+The original firmware is preserved; building does not contact or
 change the intercom.
 Install the tool using the [README](../README.md#installation) first.
 
-SSH/MQTT alone retain manufacturer OTA updates, which can replace the custom
-installation. The optional `no-ota` payload is currently available from source;
-it is not included in the published v0.1.0. See [OTA prevention](#ota-prevention).
+Current **source builds block manufacturer updates in both main and recovery by
+default**, including builds with no optional features. `--allow-vendor-updates`
+opts out. Source SSH builds provision both filesystems. These changes are not in
+published v0.1.0, which retains manufacturer updates and main-only SSH. Use
+[source setup](SOURCE.md) for the new behavior; replace the executable in examples
+with `mise exec -- python -m classe100x`.
 
 ## Prepare and choose features
 
@@ -60,7 +63,9 @@ Supply the `.pub` file to the builder; keep the matching private key on your Mac
 Ed25519 is unsupported by the stock SSH server. Legacy RSA login keys require
 `-o PubkeyAcceptedAlgorithms=+ssh-rsa` when connecting.
 
-Each build creates a new SSH host identity that persists across reboots.
+Each source build creates one new SSH host identity shared by main and recovery
+and persistent across reboots. Both images receive the same owner login settings;
+recovery retains its own vendor accounts. MQTT/custom payloads remain main-only.
 Key-only builds disable password login. The independent `c100x-ssh` service
 enables SSH regardless of the vendor's SSH-enable setting, preserving device
 configuration. See the [SSH reference](BUILDER-REFERENCE.md#ssh-implementation)
@@ -120,24 +125,29 @@ for compatibility details.
 
 ## OTA prevention
 
-Build option: `--payload no-ota`. No inputs, SSH or MQTT are required. For this
-unreleased feature, follow [source setup](SOURCE.md), then run:
+Prevention is a default builder policy, not a manually selected payload. No
+inputs, SSH or MQTT are required. A prevention-only source build is:
 
 ```sh
 mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
-  --payload no-ota --output .local/no-ota.fwz --report .local/no-ota.build.json
+  --output .local/no-ota.fwz --report .local/no-ota.build.json
 ```
 
-Add `--payload no-ota` to an SSH/MQTT source build to combine them, in either order.
-The payload removes `fw_manager` from the vendor process list, sets the cloud
+To permit manufacturer updates, add **`--allow-vendor-updates`**. With no optional
+payloads this produces a stock-preserving build. The old unreleased
+`--payload no-ota` spelling is rejected; remove it. The report includes
+`vendor_updates: blocked|allowed` and records checks for both filesystems.
+
+The policy removes `fw_manager` from the vendor process list, sets the cloud
 client's `FwUpdate=0`, and removes the early-boot installer link. It verifies the
 daemon's separate installer setting stays disabled. Installer files remain intact.
 
-Protection applies to **normal firmware only**, including app-approved and
-previously staged updates. Stock recovery and installation-transition windows
-remain outside its scope. Staged packages and persistent update metadata are
+Protection applies in **both prepared environments**, including app-approved and
+previously staged updates. Existing unprotected firmware remains unprotected until
+replacement; installation checks do not exclude a later competing vendor update.
+Staged packages and persistent update metadata are
 left untouched; update prompts/downloads may remain. Re-enable OTA by rebuilding
-from stock without `no-ota` and explicitly USB-flashing; retained packages may
+from stock with `--allow-vendor-updates` and explicitly flashing; retained packages may
 then become actionable. There is no runtime toggle.
 
 The implementation has offline image verification; **hardware validation of

@@ -23,6 +23,17 @@ class UncertainDelivery(UpdateError):
     pass
 
 
+class ForwardedFTP(ftplib.FTP):
+    """Keep passive data on the authenticated loopback forward, never PASV's host."""
+    data_port = None
+
+    def makepasv(self):
+        _, port = super().makepasv()
+        if port != 11111:
+            raise UpdateError("Unexpected vendor passive FTP port")
+        return "127.0.0.1", self.data_port
+
+
 def uptime_seconds(values: tuple[str, ...]) -> int:
     try:
         days, hours, minutes, seconds = map(int, values)
@@ -84,16 +95,23 @@ class UpdateClient(ReadOnlyClient):
 class NetworkDevice:
     def __init__(self, host: str, port: int = 20000, *, timeout: float = 30,
                  reboot_timeout: float = 240, write_timeout: float = 180,
-                 check_transport=lambda: None, before_reboot=None):
+                 check_transport=lambda: None, before_reboot=None, transport=None):
         self.host, self.port, self.timeout = host, port, timeout
         self.reboot_timeout, self.write_timeout = reboot_timeout, write_timeout
         self.client: UpdateClient | None = None
         self.check_transport = check_transport
         self.before_reboot = before_reboot
+        self.transport = transport
+        self.ftp_port, self.data_port = 21, None
+
+    def _transport_ready(self):
+        self.check_transport()
+        if self.transport is not None:
+            self.host, self.port, self.ftp_port, self.data_port = self.transport.endpoints()
 
     def connect(self) -> dict:
         self.close()
-        self.check_transport()
+        self._transport_ready()
         client = UpdateClient(self.host, self.port, self.timeout)
         self.client = client.__enter__()
         return self.client.inspect()
@@ -106,12 +124,15 @@ class NetworkDevice:
     def upload(self, path: Path, credentials: Credentials) -> None:
         # FTP starts only after the explicit begin command. Each worker consumes
         # and deletes its input, so exactly one file must be present at commit.
-        self.check_transport()
+        self._transport_ready()
         remember_secret(credentials.password)
         operation = "connect"
         try:
-            with ftplib.FTP(timeout=30) as ftp:
-                ftp.connect(self.host, 21)
+            factory = ForwardedFTP if self.data_port is not None else ftplib.FTP
+            with factory(timeout=30) as ftp:
+                if self.data_port is not None:
+                    ftp.data_port = self.data_port
+                ftp.connect(self.host, self.ftp_port)
                 operation = "login"
                 ftp.login(credentials.username, credentials.password)
                 operation = "inspect staging directory"
@@ -159,16 +180,21 @@ class NetworkDevice:
         started = time.monotonic()
         self.client.reboot()
         self.close()
+        if self.transport is not None:
+            self.transport.rebooting(status)
         deadline = started + self.reboot_timeout
         last_error = None
         observation = None
         while time.monotonic() < deadline:
             time.sleep(1)
             try:
-                self.check_transport()
+                self._transport_ready()
                 with ReadOnlyClient(self.host, self.port, timeout=2) as probe:
                     info = probe.inspect()
             except (ProtocolError, OSError) as exc:
+                from .ssh import HostIdentityError
+                if isinstance(exc, HostIdentityError):
+                    raise
                 last_error = exc
                 continue
             elapsed = time.monotonic() - started
@@ -180,6 +206,8 @@ class NetworkDevice:
                 last_error = None
                 continue
             check_identity(info, status)
+            if self.transport is not None:
+                self.transport.arrived(status)
             info = self.connect()
             check_identity(info, status)
             return info
@@ -193,9 +221,10 @@ class NetworkDevice:
 
 
 def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
-          report=print, *, verification=None) -> dict:
+          report=print, *, verification=None, final_verification=None) -> dict:
     """Three verified reboot boundaries; any failure stops subsequent writes."""
-    return _flash(firmware, device, profile, report, verification=verification)
+    return _flash(firmware, device, profile, report, verification=verification,
+                  final_verification=final_verification)
 
 
 def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
@@ -204,7 +233,8 @@ def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: V
     return _flash(firmware, device, profile, report, from_recovery=True)
 
 
-def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False):
+def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False,
+           final_verification=None):
     stage = "preflight"
     try:
         info = device.connect()
@@ -258,6 +288,10 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
                 stage = "entering recovery: rebooting"
                 report(stage)
                 device.reboot_and_wait(1)
+        if final_verification is not None:
+            stage = "final destination SSH verification"
+            report(stage)
+            final_verification()
         stage = "update sequence completed"
         if verification is not None:
             verification.update_result("completed", stage)

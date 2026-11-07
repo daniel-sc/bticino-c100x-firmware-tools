@@ -2,14 +2,18 @@
 
 ## Current status
 
-The optional **`no-ota` v1 payload is implemented**, with offline image checks.
-Select it explicitly when building; SSH/MQTT alone retain vendor OTA behavior.
-It is available from source and is not included in published v0.1.0.
+Current source builds **block manufacturer installation in both main and recovery
+by default**. `--allow-vendor-updates` opts out; `--payload no-ota` is no longer
+accepted. This is independent of SSH selection and flashing transport.
+Published v0.1.0 retains vendor OTA behavior and main-only SSH.
 See [usage](BUILDER.md#ota-prevention) and [implementation details](BUILDER-REFERENCE.md#ota-prevention-implementation).
 
 Hardware validation of prevention, vendor app/calling functions and USB flashing
-with this payload remains pending. The policy covers normal firmware only;
-stock recovery and installation-transition windows remain outside its scope.
+with the new image policy remains pending. Existing unprotected firmware remains
+outside its protection until replacement. The owner accepts competing-installation
+risk in unprotected phases, with staged-package/activity checks. See ADR-019 and
+the [wireless design](WIRELESS-UPDATE-PLAN.md). The sections below preserve the
+dated v1 investigation; its main-only scope was subsequently expanded.
 
 ## Original finding — 2026-11-05
 

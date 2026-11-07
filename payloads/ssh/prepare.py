@@ -1,14 +1,14 @@
 """Prepare guarded account/config edits and a fresh persistent host identity."""
 
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 
 from classe100x.firmware import FirmwareError
 from classe100x.host import find_tool, run_tool
 from classe100x.payload import Context
 from classe100x.diagnostics import tool_error
-from common import BOOT_LINKS, CONFIG, HASHES, HOST_KEY, SERVICE, public_key
+from common import BOOT_LINKS, CONFIG, HOST_KEY, SERVICE, public_key, stock_hashes
 
 c = Context()
 if set(c.inputs) - {"public_key", "password", "password_file", "dropbearkey", "openssl"}:
@@ -29,7 +29,7 @@ if "public_key" in c.inputs:
 if not key and password is None:
     raise FirmwareError("SSH requires a public key, password, or both")
 
-original = {path: c.stock_file(path, checksum) for path, checksum in HASHES.items()}
+original = {path: c.stock_file(path, checksum) for path, checksum in stock_hashes(c.data.get("environment", "main")).items()}
 if b"id:5:initdefault:" not in original["/etc/inittab"]:
     raise FirmwareError("Unexpected default runlevel")
 c.image.require_symlink("/usr/sbin/dropbear", "./dropbearmulti")
@@ -47,14 +47,21 @@ for path in ("/etc/passwd", "/etc/shadow"):
         raise FirmwareError("The administrative account already exists")
 
 password_hash = b"*"
+shared = Path(c.data["shared_ssh"]) if "shared_ssh" in c.data else None
 if password is not None:
     # Stock shadow entries use SHA-512 crypt ($6$). stdin keeps the password out of argv.
     openssl = find_tool("openssl", c.inputs.get("openssl"))
-    status, out, err = run_tool([openssl, "passwd", "-6", "-stdin"],
-                              input_data=password.encode() + b"\n", timeout=10)
-    password_hash = out.strip()
+    if shared is not None and (shared / "password_hash").exists():
+        status, password_hash, err = 0, (shared / "password_hash").read_bytes(), b""
+    else:
+        status, out, err = run_tool([openssl, "passwd", "-6", "-stdin"],
+                                  input_data=password.encode() + b"\n", timeout=10)
+        password_hash = out.strip()
     if status or not re.fullmatch(rb"\$6\$[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}", password_hash):
         raise tool_error(FirmwareError("Unable to produce the stock-supported password hash"), openssl, status, err)
+    if shared is not None:
+        (shared / "password_hash").write_bytes(password_hash)
+        (shared / "password_hash").chmod(0o600)
 
 c.write("passwd", original["/etc/passwd"].rstrip(b"\n") + b"\nroot2:x:0:0:root:/home/root:/bin/sh\n")
 c.write("shadow", original["/etc/shadow"].rstrip(b"\n") + b"\nroot2:" + password_hash + b":18033:0:99999:7:::\n")
@@ -66,10 +73,17 @@ c.write("authorized_keys", key)
 
 hostkey = c.generated / "host_key"
 dropbearkey = find_tool("dropbearkey", c.inputs.get("dropbearkey"))
-status, _, err = run_tool([dropbearkey,
-                         "-t", "ecdsa", "-s", "256", "-f", str(hostkey)], timeout=30)
+if shared is not None and (shared / "host_key").exists():
+    hostkey.write_bytes((shared / "host_key").read_bytes())
+    status, err = 0, b""
+else:
+    status, _, err = run_tool([dropbearkey,
+                             "-t", "ecdsa", "-s", "256", "-f", str(hostkey)], timeout=30)
 if status or not hostkey.is_file():
     raise tool_error(FirmwareError("Unable to generate the SSH host key"), dropbearkey, status, err)
 hostkey.chmod(0o600)
+if shared is not None:
+    (shared / "host_key").write_bytes(hostkey.read_bytes())
+    (shared / "host_key").chmod(0o600)
 c.write("expected.json", json.dumps({"password_enabled": password is not None,
                                     "public_key_type": key_type}).encode())

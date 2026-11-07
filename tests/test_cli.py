@@ -61,6 +61,52 @@ class CliTests(unittest.TestCase):
         self.network.assert_not_called()
         self.assertEqual(self.device.events, [])
 
+    def test_wireless_plan_is_read_only_and_gate_is_mandatory(self):
+        with patch("classe100x.wireless.Credentials"), patch("classe100x.wireless.Trust"), \
+                patch("classe100x.wireless.Wireless") as transport, \
+                patch("classe100x.wireless_image.admit") as admission, \
+                patch("classe100x.recovery.RecoveryVerifier") as verifier:
+            admission.return_value.__enter__.return_value.vendor_updates = False
+            active = transport.return_value.__enter__.return_value
+            active.endpoints.return_value = ("127.0.0.1", 23000, 23001, 23002)
+            status, output = self.invoke("plan", "--transport", "ssh", "--host", "intercom.local")
+            self.assertEqual(status, 0, self.last_output)
+            result = json.loads(output)
+            self.assertFalse(result["device_writes"])
+            self.assertEqual(result["host"], "intercom.local")
+            verifier.return_value.__enter__.return_value.preflight.assert_called_once()
+            verifier.return_value.__enter__.return_value.verify.assert_not_called()
+            active.verified.assert_not_called()
+            self.network.assert_not_called()
+            self.usb.assert_not_called()
+
+    def test_wireless_flash_and_failed_admission_never_fall_back_to_usb(self):
+        with patch("classe100x.wireless.Credentials"), patch("classe100x.wireless.Trust"), \
+                patch("classe100x.wireless.awake"), patch("classe100x.wireless.Wireless") as transport, \
+                patch("classe100x.wireless_image.admit") as admission, \
+                patch("classe100x.recovery.RecoveryVerifier") as verifier:
+            self.assertEqual(self.invoke("flash", "--transport", "ssh")[0], 0, self.last_output)
+            gate = verifier.return_value.__enter__.return_value
+            gate.preflight.assert_called_once()
+            gate.verify.assert_called_once()
+            transport.return_value.__enter__.return_value.verified.assert_called_once()
+            active = transport.return_value.__enter__.return_value
+            active.remember.assert_called_once()
+            self.usb.assert_not_called()
+            active.remember.reset_mock()
+            active.verified.side_effect = OSError("final SSH unavailable")
+            self.assertEqual(self.invoke("flash", "--transport", "ssh")[0], 1)
+            self.assertNotIn("Update sequence completed", self.last_output)
+            active.remember.assert_not_called()
+            gate.update_result.assert_called_with("stopped", "final destination SSH verification")
+            self.network.reset_mock()
+            self.device.events.clear()
+            admission.return_value.__enter__.side_effect = FirmwareError("invalid destination")
+            self.assertEqual(self.invoke("flash", "--transport", "ssh")[0], 1)
+            self.network.assert_not_called()
+            self.usb.assert_not_called()
+            self.assertEqual(self.device.events, [])
+
     def test_debug_and_unexpected_errors_include_tracebacks(self):
         for error, options, traceback_expected in (
                 (FirmwareError("fixture invalid"), (), False),

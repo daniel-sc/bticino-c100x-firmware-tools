@@ -191,8 +191,15 @@ Both researched archives have the same manifest and contain only `fwz.xml`, the
 two filesystem gzip files and `uImage.zip`. Six extras referenced by the manifest
 are absent from both archives. The firmware modules are processed separately
 from configuration/extra updates; absent extra payloads are not invented.
-The selected recovery and kernel files are byte-identical to stock. See
+The original selected recovery and kernel files were byte-identical to stock. See
 [selected-image.json](selected-image.json) for sizes and hashes.
+Current source admission permits customized recovery with fixed expanded size,
+geometry and feature flags; manifest/kernel remain pinned. Wireless transport
+adds no new write frames: SSH forwards carry this same sequence. It requires
+reference-driven recovery readback before main-kernel invalidation and expected
+SSH identities at each phase. Details are in [ARCHITECTURE.md](ARCHITECTURE.md)
+and the [wireless design](WIRELESS-UPDATE-PLAN.md). Hardware wireless acceptance
+remains pending.
 
 ## Completion, timeouts and errors
 

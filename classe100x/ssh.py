@@ -34,6 +34,10 @@ class SSHError(OSError):
     pass
 
 
+class HostIdentityError(SSHError):
+    """An identity mismatch is fatal even during a read-only reconnect wait."""
+
+
 def _invoking_user():
     try:
         if os.geteuid() == 0:
@@ -55,7 +59,11 @@ def _invoking_user():
 
 class SSHConnection:
     def __init__(self, user: str, *, key: Path | None = None,
-                 password: str | None = None, check_transport=lambda: None, warn=print):
+                 password: str | None = None, check_transport=lambda: None, warn=print,
+                 host="192.168.129.1", host_key=None):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,252}", host):
+            raise SSHError("Invalid SSH hostname or IPv4 address")
+        self.host, self.host_key = host, host_key
         if not isinstance(user, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}", user):
             raise SSHError("Invalid SSH account name")
         if password is not None and key is not None:
@@ -159,10 +167,10 @@ class SSHConnection:
 
     def _command(self, command, known_hosts, timeout):
         options = [
-            "Hostname=192.168.129.1", "Port=22", "AddressFamily=inet",
+            f"Hostname={self.host}", "Port=22", "AddressFamily=inet",
             "ProxyCommand=none", "ProxyJump=none", "ControlMaster=no", "ControlPath=none",
             "ClearAllForwardings=yes", "ForwardAgent=no", "ForwardX11=no", "Tunnel=no",
-            "PermitLocalCommand=no", "RequestTTY=no", "StrictHostKeyChecking=no",
+            "PermitLocalCommand=no", "RequestTTY=no", f"StrictHostKeyChecking={'yes' if self.host_key else 'no'}",
             f'UserKnownHostsFile="{known_hosts}"', "GlobalKnownHostsFile=/dev/null",
             "HashKnownHosts=no", "UpdateHostKeys=no", "VerifyHostKeyDNS=no",
             "CheckHostIP=no", "LogLevel=ERROR", "ConnectionAttempts=1",
@@ -181,7 +189,7 @@ class SSHConnection:
             args += ["-o", option]
         if self.key is not None:
             args += ["-o", "IdentitiesOnly=yes", "-i", str(self.key)]
-        return [*args, "-l", self.user, "192.168.129.1", command]
+        return [*args, "-l", self.user, self.host, command]
 
     def _observe_host_key(self, path):
         with path.open("rb") as stream:
@@ -191,7 +199,7 @@ class SSHConnection:
         found = False
         for line in data.splitlines():
             fields = line.split()
-            if len(fields) != 3 or fields[0] != b"192.168.129.1":
+            if len(fields) != 3 or fields[0] != self.host.encode():
                 raise SSHError("Invalid SSH host-key evidence")
             if not re.fullmatch(rb"[a-zA-Z0-9@._+-]{1,80}", fields[1]):
                 raise SSHError("Invalid SSH host-key evidence")
@@ -206,9 +214,10 @@ class SSHConnection:
             found = True
             if self.host_keys and self.host_keys[-1]["fingerprint"] == fingerprint:
                 continue
-            status = "changed" if self.host_keys else "first_seen"
+            status = "verified" if self.host_key else ("changed" if self.host_keys else "first_seen")
             self.host_keys.append({"algorithm": fields[1].decode(), "fingerprint": fingerprint, "status": status})
-            self.warn(f"SSH host key {'changed' if status == 'changed' else 'first seen'}: {fingerprint}; identity continuity is not verified")
+            if not self.host_key:
+                self.warn(f"SSH host key {'changed' if status == 'changed' else 'first seen'}: {fingerprint}; identity continuity is not verified")
         return found
 
     def run(self, command: str, *, timeout: float = 30, output: Path | None = None,
@@ -230,8 +239,9 @@ class SSHConnection:
             # Fresh each time: OpenSSH disables password auth for changed keys in
             # an existing known_hosts file even with StrictHostKeyChecking=no.
             known_hosts.unlink(missing_ok=True)
-            with known_hosts.open("xb"):
-                pass
+            with known_hosts.open("x") as stream:
+                if self.host_key:
+                    stream.write(f"{self.host} {self.host_key}\n")
             os.chmod(known_hosts, 0o600)
             self._own(known_hosts)
             if output is not None:
@@ -247,9 +257,12 @@ class SSHConnection:
                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, env=self._environment(),
                                        cwd=self._directory, start_new_session=True, **privileges)
+            self._started(process)
             result = self._receive(process, target, expected_size, deadline, stderr)
-            observed = self._observe_host_key(known_hosts)
+            observed = self._observe_host_key(known_hosts) if not self.host_key or process.returncode == 0 else False
             if process.returncode:
+                if self.host_key and (b"Host key verification failed" in stderr or b"REMOTE HOST IDENTIFICATION" in stderr):
+                    raise HostIdentityError("SSH server identity differs from the expected phase key")
                 raise SSHError(f"SSH command failed (exit {process.returncode})")
             if not observed:
                 raise SSHError("SSH connection did not provide host-key evidence")
@@ -258,7 +271,7 @@ class SSHConnection:
                 target = None
             return result
         except BaseException as error:
-            details(error, operation="SSH read", endpoint=f"{self.user}@192.168.129.1:22",
+            details(error, operation="SSH read", endpoint=f"{self.user}@{self.host}:22",
                     timeout_seconds=timeout, stderr=stderr,
                     exit_status=process.poll() if process is not None else None)
             if process is not None:
@@ -272,7 +285,8 @@ class SSHConnection:
                 # Authentication failures, cancellation and bounded-output
                 # failures can all happen after OpenSSH accepted the host key.
                 try:
-                    self._observe_host_key(known_hosts)
+                    if not self.host_key:
+                        self._observe_host_key(known_hosts)
                 except (OSError, SSHError):
                     pass
             if target is not None:
@@ -287,6 +301,9 @@ class SSHConnection:
             if process is not None:
                 process.stdout.close()
                 process.stderr.close()
+
+    def _started(self, process):
+        pass
 
     def _receive(self, process, target, expected_size, deadline, stderr):
         captured = bytearray()

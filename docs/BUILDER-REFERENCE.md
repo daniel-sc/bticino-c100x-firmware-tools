@@ -12,7 +12,8 @@ Key-only builds set Dropbear `-s`; password builds enable daemon-wide password
 authentication while preserving vendor accounts. The added `root2` account has
 UID/GID 0 and home `/home/root`.
 
-The host key is newly generated for each build and installed at
+The host key is newly generated once for each source build and installed in both
+main and recovery at
 `/etc/dropbear/classe100x_ecdsa_host_key`. The payload-owned `c100x-ssh` init script
 passes that path directly to stock Dropbear's `-r` option. No boot-time key
 generation is needed. Identity is intended
@@ -20,7 +21,8 @@ to remain stable across reboots; a new build intentionally has a different host
 identity. The FWZ contains the host private key and possibly configuration
 secrets: treat it as a private artifact, not as encrypted secret storage.
 
-SSH payload version 2 owns `/etc/init.d/c100x-ssh`, reads its password-mode flag
+SSH payload version 3 shares identity/authentication between both images and
+retains version 2's runtime service. It owns `/etc/init.d/c100x-ssh`, reads its password-mode flag
 from `/etc/default/c100x-ssh` and uses `/var/run/c100x-ssh.pid`. It starts on port22
 on all interfaces through `rc5.d/S98c100x-ssh`, and stops through `K01c100x-ssh`
 in runlevels 0, 1 and 6. Use `/etc/init.d/c100x-ssh start|stop|restart|status`
@@ -39,6 +41,13 @@ Available in alpha.6; rebuild and flash to install it. Older released
 payloads use the vendor-controlled service. Alpha.6 hardware checks passed startup,
 vendor start/stop isolation, service restart, RSA-key/password login and reboot
 identity persistence with `abil_ssh` absent; see [acceptance](ACCEPTANCE.md).
+
+SSH executable checks allow equivalent permission/ownership metadata: the daemon
+and init scripts must remain regular executable files with their expected contents,
+not necessarily exactly root-owned `0755`. The builder still installs its normal
+metadata; these checks permit compatible later payload changes.
+Non-root setuid on the daemon is rejected because it changes execution identity
+and can prevent access to the root-only host key; ordinary ownership does not.
 
 ## MQTT limits and diagnostics
 
@@ -75,7 +84,9 @@ pending; offline build verification alone establishes installed bytes only.
 
 ## Downloads and package policy
 
-With no payloads the decompressed main filesystem must remain byte-identical.
+With no payloads **and `--allow-vendor-updates`**, both decompressed filesystems
+remain byte-identical. Without the override, even a no-feature build applies
+manufacturer-update prevention to both images.
 The rebuilt archive is not byte-identical: compression, timestamps and encryption
 randomness can differ. A fresh SSH host key also prevents identical SSH builds.
 
@@ -91,9 +102,9 @@ Both the builder and flasher require exactly four classic, ZipCrypto-encrypted
 DEFLATE ZIP entries. Flags 1 (stock/7zip) and 3 (researched legacy custom image)
 are accepted; AES, Zip64 and streaming descriptors are rejected. Local and
 central headers must agree. ZIP timestamps/attributes may differ, and bounded
-non-Zip64/non-AES extra fields are allowed. The decoded `fwz.xml`, recovery gzip
-and kernel ZIP are SHA-256 pinned to stock. Only the main filesystem may vary.
-Its expanded size, ext geometry and feature flags are checked without e2fsprogs
+non-Zip64/non-AES extra fields are allowed. The decoded `fwz.xml`
+and kernel ZIP are SHA-256 pinned to stock. Both filesystems may vary.
+Their expanded sizes, ext geometry and feature flags are checked without e2fsprogs
 by the flasher. Builder checks additionally preserve filesystem identity/journal
 layout fields and run `e2fsck -f -n` before and after modification.
 The extraction-version low byte is 20; the original vendor package uses upper
@@ -112,8 +123,10 @@ test; matching ZIP properties is not that acceptance test.
 
 ## OTA prevention implementation
 
-`payloads/no-ota/` is a host-only, input-free payload (ADR-018). It makes exactly
-three filesystem changes: rewrite `cfg/stack_open.xml` without `fw_manager` and
+`payloads/no-ota/` supplies internal host-only policy hooks (ADRs 018/019), applied
+automatically to both images unless `--allow-vendor-updates` is selected. It is
+not a selectable payload. In each image it makes three filesystem changes:
+rewrite `cfg/stack_open.xml` without `fw_manager` and
 renumber the following process, rewrite `cfg/bt_eliot` with `FwUpdate=0`, and
 remove `/etc/rcS.d/S96-dedrifu.sh`. Both configuration files retain vendor mode
 `0664` and ownership `1000:1000`. No runtime service or configuration-data write
@@ -131,7 +144,9 @@ MQTT accepts exactly the stock startup XML or the `no-ota` v1 output, so the
 bundled payloads compose in either order without accepting arbitrary XML edits.
 Custom payloads remain trusted host code: these readback checks detect conflicts
 with the researched policy, not arbitrary new launchers or privileged code.
-See [OTA.md](OTA.md) for the evidence, normal-firmware scope and hardware limits.
+Recovery uses its own verifier pins and startup script; the cloud startup bypass
+has been established by direct binary comparison/disassembly. See [OTA.md](OTA.md)
+and [wireless research](WIRELESS-UPDATES.md) for evidence and hardware limits.
 
 <a id="authoring-trusted-payloads"></a>
 

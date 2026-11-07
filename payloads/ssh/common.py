@@ -15,6 +15,38 @@ HASHES = {
     "/usr/sbin/dropbearmulti": "25593c31c1793bb2ea51d6ff084af51d527ee13c1913915612a4f0bcc8312760",
 }
 HOST_KEY = "/etc/dropbear/classe100x_ecdsa_host_key"
+RECOVERY_SHADOW = "719004d55690293421539b3a821fa54e642aa8687bccd6954b46621ce3f98cc2"
+
+
+def stock_hashes(environment="main"):
+    return {**HASHES, **({"/etc/shadow": RECOVERY_SHADOW} if environment == "recovery" else {})}
+
+
+def require_executable(image, path, expected=None):
+    # The service runs as root. Linux still requires at least one execute bit;
+    # exact owner/group and permission spelling do not establish bootability.
+    info = image.stat(path)
+    if info["type"] != "regular" or not info["mode"] & 0o111:
+        raise FirmwareError(f"SSH prerequisite is not an executable regular file: {path}")
+    if expected is not None and image.read(path) != expected:
+        raise FirmwareError(f"SSH executable contents changed: {path}")
+    return info
+
+
+def check_boot_prerequisites(image):
+    for path in ("/etc/init.d/dropbear", "/etc/inittab", "/usr/sbin/dropbearmulti"):
+        data = image.read(path)
+        if digest(data) != HASHES[path]:
+            raise FirmwareError("SSH boot prerequisite changed")
+        if path != "/etc/inittab":
+            info = require_executable(image, path)
+            # Unlike ordinary ownership, setuid changes the daemon's effective
+            # identity and can make its root-only host key unreadable. Linux
+            # ignores setuid on shell scripts, so this applies only to the ELF.
+            if path == "/usr/sbin/dropbearmulti" and info["mode"] & 0o4000 and info["uid"] != 0:
+                raise FirmwareError("SSH daemon setuid metadata would change its root execution identity")
+
+
 SERVICE = "/etc/init.d/c100x-ssh"
 CONFIG = "/etc/default/c100x-ssh"
 BOOT_LINKS = {

@@ -18,9 +18,10 @@ Mac, supervised child of plan/flash (sudo)
   Python USB worker
     TetherKit CLI <-> feth/BPF <-> libusb <-> USB RNDIS, device 192.168.129.1
 
-Research only: LAN SSH -> read-only inspection / authorized partition backups
+Explicit --transport ssh: LAN SSH -> loopback OpenWebNet + FTP control/passive forwards
 
 Optional verification: USB SSH :22 -> installed recovery readback -> host e2fsprogs
+Mandatory wireless verification: LAN SSH -> recovery readback -> host e2fsprogs
 ```
 
 The USB worker has no firmware or credential responsibilities. It
@@ -29,7 +30,10 @@ device reboots. Interface names may change; the supervisor learns the system-sid
 name from the pinned helper's English output and configures its static address.
 It does not install a kernel extension or a permanent background service.
 
-`plan` and `flash` use a fixed device IP and own a managed USB session by default.
+`plan` and `flash` use a fixed USB device IP and own a managed USB session by default.
+With `--transport ssh`, they use `Bticino-Classe100X.local` or `--host`, own strict
+phase-specific SSH forwards and require recovery verification. Names are resolved
+again after planned reboots. Wireless recovery entry is not implemented.
 The session waits for interface configuration and verifies that the device route
 uses the reported feth interface. Reconnection and FTP setup recheck this route.
 `--external-usb` retains the developer-managed transport mode. `probe` accepts
@@ -51,17 +55,19 @@ LAN `en` interface is never accepted (ADR-015).
 | `diagnostics.py` | Shared exception-chain/traceback rendering and JSON evidence; bounded notes/tool diagnostics and exact known-secret removal |
 | `firmware.py` | Fixed package profile, preserved component hashes, bounded archive validation/staging; expose `PreparedFirmware` and transfer payload metadata |
 | `download.py` | Fetch and cache the pinned original, verify size/hash, no-clobber publication |
-| `builder.py` | Private working copy, ordered trusted image payloads, repacking, final checks and publication |
+| `builder.py` | Two private filesystem copies, automatic vendor-update policy, shared SSH provisioning, main-only ordinary payloads, repacking and final checks |
 | `ext4.py`, `host.py` | Image-file e2fsprogs operations, metadata readback and bounded subprocess execution with failure diagnostics |
 | `payload.py`, `payload_runner.py` | Small workspace helpers and subprocess execution for trusted Python payload hooks |
 | `payloads/ssh/` | Stock-specific SSH account/key preparation, independently owned init service, vendor-control disablement and image verification |
 | `payloads/mqtt/` | Stock-runtime bridge, private broker configuration, startup integration and image readback checks |
-| `payloads/no-ota/` | Optional main-firmware updater startup suppression and pinned final policy checks |
+| `payloads/no-ota/` | Internal default-on startup suppression in both filesystems and environment-specific pinned checks; not a selectable payload |
 | `vendor.py` | Bundled C100X normal/recovery FTP settings with source provenance and redacted representations |
 | `protocol.py` | TCP framing, command-session handshake, bounded exchanges and explicit read-only query allowlist |
 | `updater.py` | `UpdateClient` adds write operations; `NetworkDevice` owns sockets/FTP/waits; `flash()` sequences stages and reports where a failure occurred |
-| `recovery.py` | Optional pre-write SSH prerequisites and post-recovery-write integrity gate; bounded acquisition, offline checks and private evidence |
-| `ssh.py`, `ssh_askpass.py`, `ssh-askpass` | Fixed USB OpenSSH reads, invoking-user authentication, memory-only password broker and warning-only host-key evidence |
+| `recovery.py` | SSH prerequisites and post-recovery-write integrity gate (optional for USB, mandatory for wireless); bounded acquisition, offline checks and private evidence |
+| `ssh.py`, `ssh_askpass.py`, `ssh-askpass` | OpenSSH reads, invoking-user authentication and memory-only password broker; warning-only USB evidence or strict expected wireless identity |
+| `wireless.py` | Direct LAN resolution, owner trust enrollment/records, phase-owned strict SSH forwards, credential reuse, read-only installer checks and scoped idle-sleep prevention |
+| `wireless_image.py` | Wireless-only expanded image admission, content-derived host identity/access policy and pipe-only future credential checks |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
 | `usb_session.py` | Native ECM/helper RNDIS selection, parent-owned worker, readiness/route checks, bounded startup and cleanup |
 | `usb_storage.py` | Bounded best-effort macOS unmount of USB-associated storage before planned reboot; no device protocol or persistent host settings |
@@ -76,6 +82,9 @@ Builder modules are imported only for builder commands. Ordinary inspection,
 planning and flashing do not require builder tools. Explicit SSH recovery
 verification imports the shared host-tool boundary and requires e2fsprogs; it
 does not import the builder or require 7zip, Dropbear keygen or OpenSSL.
+Wireless admission additionally uses the shipped Dropbear keygen and OpenSSL
+tools to inspect the destination identity and authentication. These imports/tools
+are lazy; ordinary USB inspection/flashing remains independent of them.
 No native macOS frameworks are imported by the Python CLI; the USB supervisor's
 feth/helper execution remains macOS-specific.
 
@@ -163,6 +172,29 @@ standard path has no verifier. Authentication and evidence ownership use the
 invoking ordinary user even though USB management runs under sudo. See
 [ADR-012](DECISIONS.md#adr-012-optional-ssh-recovery-integrity-gate).
 
+Wireless always uses that verifier, borrowing administrative reads from the
+transport without closing its owner at the integrity gate. The old-main key and
+credentials apply across the first reboot. Package-derived destination identity
+and credentials apply in recovery and final main. Expected keys never become a
+permissive union: a known preceding environment is only not-ready during a planned
+transition, and an unexpected identity is fatal. Read-only polling can recreate
+forwards during planned reboots; an unexpected active-stage tunnel loss stops.
+Final normal reboot/state and SSH are required before promoting destination trust.
+Trust records are invoking-user-owned and separate from general SSH settings.
+On the trusted-home network model, existing-main SSH is admitted by working
+administrative access and actual same-key reconnection after its planned reboot,
+without matching a particular startup script or configuration spelling. A failed
+reconnection stops before main-kernel invalidation. Destination images still require
+checked startup contents and credentials; executable metadata checks accept
+equivalent modes/ownership instead of requiring exactly root-owned `0755`.
+
+The three forwards use unprivileged loopback listeners for remote 20000, 21 and
+11111. The FTP adapter requires PASV port 11111 and maps it to the owned local
+listener, ignoring the advertised address. No vendor port is exposed on the LAN.
+Known staged packages, nonempty vendor update metadata and active installers stop
+preflight; an idle manager alone does not. Competition after a snapshot remains
+accepted in unprotected environments. No device configuration is changed by checks.
+
 Managed USB sessions handle SIGINT/SIGTERM/SIGHUP, stop the worker and allow the
 helper to clean up before forced termination. The standalone `usb` developer
 command retains its own signal handling. Restarting transport is not resuming an
@@ -189,19 +221,21 @@ No vendor process, updater or SSH service is managed by this payload. See
 [ADR-013](DECISIONS.md#adr-013-optional-stock-runtime-mqtt-payload) and
 [builder reference](BUILDER-REFERENCE.md#mqtt-limits-and-diagnostics) for the compatibility contract.
 
-The optional `no-ota` payload removes the manager from the vendor process list
+The default manufacturer-update policy removes the manager from the vendor process list
 and disables the independent boot installer link. `FwUpdate=0` bypasses the cloud
 client's startup dependency on that manager; both selectable XML variants retain
 the disabled daemon installer setting. Exact image checks reject conflicting
 configuration and optional daemon INI overrides. MQTT accepts the stock or exact
-`no-ota` XML. No runtime component is added; installer files and persistent update
-data remain intact. Hardware acceptance is pending; stock recovery and initial
-installation transitions are outside this policy (ADR-018, [OTA.md](OTA.md)).
+prevention XML. No runtime component is added; installer files and persistent
+update data remain intact. Apply this to both prepared filesystems unless
+`--allow-vendor-updates` is selected. Recovery uses its own verifier pins and
+startup script. Hardware acceptance remains pending; existing unprotected
+firmware is not changed by preparation (ADRs 018/019, [OTA.md](OTA.md)).
 
 The builder's lifecycle and trust contract are detailed in [BUILDER-REFERENCE.md](BUILDER-REFERENCE.md).
-It starts from pinned stock, edits only a private main-filesystem copy, checks
+It starts from pinned stock, edits private main/recovery filesystem copies, checks
 the baseline/output read-only with e2fsck, preserves archive components, and
-reopens the final FWZ before no-clobber publication. No filesystem is mounted.
+reopens both images in the final FWZ before no-clobber publication. No filesystem is mounted.
 Raw payloads have host permissions; their commands are not inferred into a change
 plan. Declared readback checks catch some composition conflicts, not all of them.
 

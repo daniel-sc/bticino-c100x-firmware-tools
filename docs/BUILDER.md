@@ -5,12 +5,12 @@ The original firmware is preserved; building does not contact or
 change the intercom.
 Install the tool using the [README](../README.md#installation) first.
 
-Current **source builds block manufacturer updates in both main and recovery by
-default**, including builds with no optional features. `--allow-vendor-updates`
-opts out. Source SSH builds provision both filesystems. These changes are not in
-published v0.1.0, which retains manufacturer updates and main-only SSH. Use
-[source setup](SOURCE.md) for the new behavior; replace the executable in examples
-with `mise exec -- python -m classe100x`.
+Version **v0.2.0-alpha.1 and source builds block manufacturer updates in both main
+and recovery by default**, including builds with no optional features. `--allow-vendor-updates`
+opts out. SSH builds provision both filesystems. These changes are not in
+stable v0.1.0, which retains manufacturer updates and main-only SSH. Install the
+[prerelease](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+for the behavior documented here, or use [source setup](SOURCE.md).
 
 ## Prepare and choose features
 
@@ -63,7 +63,7 @@ Supply the `.pub` file to the builder; keep the matching private key on your Mac
 Ed25519 is unsupported by the stock SSH server. Legacy RSA login keys require
 `-o PubkeyAcceptedAlgorithms=+ssh-rsa` when connecting.
 
-Each source build creates one new SSH host identity shared by main and recovery
+Each prerelease/source build creates one new SSH host identity shared by main and recovery
 and persistent across reboots. Both images receive the same owner login settings;
 recovery retains its own vendor accounts. MQTT/custom payloads remain main-only.
 Key-only builds disable password login. The independent `c100x-ssh` service
@@ -126,11 +126,11 @@ for compatibility details.
 ## OTA prevention
 
 Prevention is a default builder policy, not a manually selected payload. No
-inputs, SSH or MQTT are required. A prevention-only source build is:
+inputs, SSH or MQTT are required. A prevention-only build is:
 
 ```sh
-mise exec -- python -m classe100x build-fw --stock c100x-1.5.8 \
-  --output .local/no-ota.fwz --report .local/no-ota.build.json
+/Applications/C100X/c100x build-fw --stock c100x-1.5.8 \
+  --output no-ota.fwz --report no-ota.build.json
 ```
 
 To permit manufacturer updates, add **`--allow-vendor-updates`**. With no optional

@@ -45,10 +45,11 @@ with stock. Recovery `bt_device`, `openserver` and `bt_daemon` are byte-identica
 to the corresponding main binaries. This supports the command interpretation
 but does not replace a native hardware flash test.
 
-The separate manufacturer cloud OTA path remains enabled in SSH/MQTT images
-unless `no-ota` is selected. That payload suppresses the researched normal-firmware
-launch paths while preserving these explicit update handlers. Its configuration,
-cloud-to-installer flow and limits are documented in the [OTA investigation](OTA.md).
+The separate manufacturer cloud OTA path remains enabled in v0.1.0 SSH/MQTT
+images. Version v0.2.0-alpha.1 and source builds suppress the researched launch
+paths in both filesystems by default, unless `--allow-vendor-updates` is selected,
+while preserving these explicit update handlers. Configuration, cloud-to-installer
+flow and limits are documented in the [OTA investigation](OTA.md).
 
 ## Transport and authentication
 
@@ -161,7 +162,7 @@ flash have passed; see [ACCEPTANCE.md](ACCEPTANCE.md) for the tested scope.
 
 ### Hardware-family compatibility (2026-11-07)
 
-Source admission follows the vendor's first-component hardware comparison,
+Prerelease/source admission follows the vendor's first-component hardware comparison,
 accepting three nonnegative numeric fields with first field `2`. Device type
 `200`, firmware `1.5.8`, object model `1.0.99` and the expected state/extra status
 must also match. Published v0.1.0 instead checks the full `02*06*0` tuple.

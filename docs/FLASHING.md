@@ -7,10 +7,10 @@ scope and follow-up coverage.
 
 ## Compatibility
 
-Only **C100X Door Entry 1.5.8** is supported. Source tools check hardware family
+Only **C100X Door Entry 1.5.8** is supported. Prerelease/source tools check hardware family
 `02.*.*` (three numeric fields, first field `2`), device type `200`, object model
 `1.0.99` and initial status `4*0`. The hardware rule follows the vendor updater;
-it applies to preflight, reboot verification and recovery entry. Source tools
+it applies to preflight, reboot verification and recovery entry. Prerelease/source tools
 require the stock manifest/kernel and supported main/recovery filesystem profiles.
 Passing these checks does not prove bootability.
 
@@ -18,8 +18,8 @@ Passing these checks does not prove bootability.
 household checks. Other family-02 revisions, including `02*07*0`, are supported by
 the compatibility rule but have no recorded hardware flash acceptance yet. See
 [protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) and
-[validation](ACCEPTANCE.md). **Published v0.1.0 still requires `02*06*0`; broader
-admission is currently source-only.**
+[validation](ACCEPTANCE.md). **Stable v0.1.0 still requires `02*06*0`; broader
+admission starts with v0.2.0-alpha.1.**
 
 ## 1. Inspect and run preflight
 
@@ -119,11 +119,14 @@ Use `sudo` from your ordinary account and an administrative device account (UID
 0). This mode requires managed USB, so it cannot be combined with `--external-usb`.
 Release bundles include the required filesystem tools.
 
-## Wireless updates (source builds)
+<a id="wireless-updates-source-builds"></a>
+
+## Wireless updates (prerelease)
 
 **Implemented for offline validation; recovery networking and a full wireless
-flash still require hardware acceptance.** Published v0.1.0 is USB-only. Use
-[source setup](SOURCE.md) and a newly built dual-image SSH package.
+flash still require hardware acceptance.** Stable v0.1.0 is USB-only. Use
+[v0.2.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)
+or [source setup](SOURCE.md), and a newly built dual-image SSH package.
 
 The existing main firmware must already provide administrative SSH and the supported
 vendor update components. Its SSH service need not be our `c100x-ssh` implementation.
@@ -140,7 +143,7 @@ offline because those environments cannot authenticate until installed.
 Run without sudo on the same LAN. Example read-only preflight using your login key:
 
 ```sh
-mise exec -- python -m classe100x plan custom.fwz --transport ssh \
+/Applications/C100X/c100x plan custom.fwz --transport ssh \
   --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa
 ```
 

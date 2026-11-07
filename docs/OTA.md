@@ -2,8 +2,8 @@
 
 ## Current status
 
-Current source builds **block manufacturer installation in both main and recovery
-by default**. `--allow-vendor-updates` opts out; `--payload no-ota` is no longer
+Version v0.2.0-alpha.1 and source builds **block manufacturer installation in both
+main and recovery by default**. `--allow-vendor-updates` opts out; `--payload no-ota` is no longer
 accepted. This is independent of SSH selection and flashing transport.
 Published v0.1.0 retains vendor OTA behavior and main-only SSH.
 See [usage](BUILDER.md#ota-prevention) and [implementation details](BUILDER-REFERENCE.md#ota-prevention-implementation).

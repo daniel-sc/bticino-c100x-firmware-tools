@@ -6,8 +6,9 @@ macOS. **Version 0.1.0 is published and validated**, including its signed downlo
 and Homebrew installation. It carries forward alpha.6's full-flash and functional
 acceptance for unchanged device behavior.
 
-**Unreleased source changes:** dual-image SSH, default manufacturer-update prevention
-and explicit wireless transport are implemented. Five private pinned-stock build
+**v0.2.0-alpha.1 prerelease candidate:** broader hardware-family admission,
+dual-image SSH, default manufacturer-update prevention and explicit wireless
+transport are implemented. Five private pinned-stock build
 cases and their applicable destination-access checks passed offline. Relocated
 packaged smoke passed using current source/assets and existing native dependencies.
 This is not a newly signed release or hardware wireless acceptance.
@@ -17,7 +18,8 @@ and [hardware-family regression checks](VALIDATION-HISTORY.md#2026-11-07-hardwar
 
 ## Supported hardware versus tested hardware
 
-Source tools support C100X Door Entry **1.5.8**, model **`1.0.99`**, hardware family
+The v0.2.0-alpha.1 candidate and source tools support C100X Door Entry **1.5.8**,
+model **`1.0.99`**, hardware family
 **`02.*.*`**, using the vendor updater's first-component hardware comparison.
 Published **v0.1.0 still restricts hardware to `02*06*0`**. The
 [protocol evidence](PROTOCOL.md#hardware-family-compatibility-2026-11-07) establishes
@@ -37,7 +39,7 @@ remains open.
 | --- | --- |
 | Distribution | v0.1.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke checks, real SSH+MQTT firmware build and Homebrew installation checked. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
-| Dual-image policy/access (unreleased, offline only) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
+| Dual-image policy/access (prerelease, offline only) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
 | USB flashing | Alpha.6 completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
 | SSH payload v2 | Fresh RSA-key logins over USB/Wi-Fi, password-only login, service restart and vendor start/stop isolation passed. Reboot with vendor `abil_ssh` absent preserved access and host identity. |
 | Household functions | User confirmed ringing/notification, answering, video, two-way audio, door release, MQTT events and existing MQTT door control working after the alpha.6 installation. |
@@ -102,14 +104,14 @@ Never deliberately interrupt a firmware write. Record results only after observa
 
 ## Remaining limits and deferred work
 
-- Manufacturer OTA updates remain enabled in v0.1.0 and source builds with `--allow-vendor-updates`,
+- Manufacturer OTA updates remain enabled in v0.1.0 and prerelease/source builds with `--allow-vendor-updates`,
   and can replace the custom installation.
   Offline comparison confirmed the stock updater/configuration in the v0.1.0
   SSH+MQTT image. Read-only SSH on 2026-11-05 confirmed stock updater components,
   enabled settings and no packages at the two known persistent staging paths.
   Missing-installer branches passed 33 isolated ARM-emulation cases; no live OTA
   overwrite or prevention test was performed. The source default policy now covers
-  both prepared filesystems (ADR-019), but is not released or installed on the device. Boot,
+  both prepared filesystems (ADR-019), but has not been installed on the tested device. Boot,
   vendor app notifications, remote answering, commissioning/reconnection,
   household functions and explicit USB flashing with this policy still require
   hardware validation. Existing unprotected firmware remains unprotected until replacement.

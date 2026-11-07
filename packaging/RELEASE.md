@@ -22,7 +22,7 @@ The self-contained DMG is signed and notarized and includes all required tools.
 Install with Homebrew:
 
 ```sh
-brew install --cask daniel-sc/tap/c100x
+brew install --cask daniel-sc/tap/c100x@preview
 ```
 
 Or download the DMG below and copy its `C100X` folder into Applications.

@@ -179,7 +179,8 @@ link. Released documentation remains a snapshot; corrections ship in a new relea
 ## Homebrew tap follow-up
 
 The public [daniel-sc/homebrew-tap](https://github.com/daniel-sc/homebrew-tap)
-repository contains `Casks/c100x.rb`, installing the
+repository contains `Casks/c100x.rb` (stable) and `Casks/c100x@preview.rb`
+(prerelease), installing the
 existing signed DMG's complete bundle into `/Applications/C100X` and linking
 `c100x` onto PATH. Keep Apple Silicon/macOS 15+ requirements aligned with the
 release metadata. Install with:
@@ -188,8 +189,10 @@ release metadata. Install with:
 brew install --cask daniel-sc/tap/c100x
 ```
 
-After publishing and validating **each release**, manually update the tap's
-cask version and DMG SHA-256 (and URL if needed), then commit and push the tap.
+After publishing and validating **each release**, manually update the matching
+cask's version and DMG SHA-256 (and URL if needed), then commit and push the tap.
+Stable tags update `c100x`; alpha/beta tags update `c100x@preview`. Keep their
+mutual `conflicts_with` declarations: both install the same bundle and executable.
 Use the published DMG checksum, not a local candidate's. Verify Brew installation
 or upgrade and `c100x --version` before reporting the tap updated. Updates are
 manual; there is no cross-repository release automation.

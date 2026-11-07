@@ -323,6 +323,13 @@ pipeline. Stable releases become latest; alphas do not replace them. Maintain
 stable release uses a short product introduction. Update the Homebrew cask after
 each published and validated release.
 
+**Homebrew channels, accepted 2026-11-07:** keep `c100x` on stable releases and
+publish prereleases through `c100x@preview` in the same tap. Declare mutual
+conflicts because both install `/Applications/C100X` and the `c100x` command.
+This supersedes updating the single cask for every release; update only the
+matching channel's version/checksum. Initially restore stable v0.1.0 and move
+v0.2.0-alpha.1 to preview.
+
 ## ADR-012: Optional SSH recovery integrity gate
 
 **Accepted 2026-10-29**, after the documented design interview. This scopes the

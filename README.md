@@ -44,13 +44,14 @@ see [builder policy](docs/BUILDER.md#ota-prevention) and
 
 ## Installation
 
-With [Homebrew](https://brew.sh), install the signed Apple Silicon prerelease
-(the cask currently tracks **v0.2.0-alpha.1**):
+With [Homebrew](https://brew.sh), install the signed Apple Silicon stable release:
 
 ```sh
 brew install --cask daniel-sc/tap/c100x
 c100x --version
 ```
+
+For prereleases, use `brew install --cask daniel-sc/tap/c100x@preview` instead.
 
 This installs the complete bundle into `/Applications/C100X` and puts `c100x` on
 PATH. Requires **macOS 15.0 or later**.

@@ -10,7 +10,8 @@ acceptance for unchanged device behavior.
 SSH, default manufacturer-update prevention and explicit wireless transport are
 included. The signed/notarized download passed checksum/signature checks,
 relocated packaged smoke, a real SSH+MQTT build and dual-image authentication
-admission. Homebrew was updated and an actual upgrade reports the new version.
+admission. Homebrew's `c100x` tracks stable v0.1.0; `c100x@preview` tracks
+v0.2.0-alpha.1, with installation and version output verified.
 Both macOS and Linux candidate CI passed **all 216 tests**, including native MQTT;
 tagged release CI also passed. These are host/offline results; hardware acceptance
 of wireless, dual-image changes and additional revisions remains pending. See the

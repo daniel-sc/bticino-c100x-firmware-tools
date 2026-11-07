@@ -18,6 +18,16 @@ The entries below are dated evidence and maintainer test plans, not current setu
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
 
+## 2026-11-07: separate Homebrew stable and preview channels
+
+- Tap commit `3a1d959` restores `c100x` to v0.1.0 and adds `c100x@preview` for
+  v0.2.0-alpha.1, using the previously validated published DMG checksums.
+- Homebrew parsed both casks and rejected preview installation while `c100x`
+  was installed, confirming the conflict declaration. Switching the local
+  installation to `c100x@preview` succeeded; Brew and `c100x --version` report
+  v0.2.0-alpha.1. Both casks declare the reciprocal conflict.
+- Updated installation/release instructions and the channel decision in ADR-011.
+
 ## 2026-11-07: v0.2.0-alpha.1 publication and validation
 
 - Published [v0.2.0-alpha.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0-alpha.1)

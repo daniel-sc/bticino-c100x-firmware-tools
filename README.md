@@ -131,6 +131,17 @@ messages, with known passwords removed. A failed build can create the requested
 - [Architecture](docs/ARCHITECTURE.md), [decisions](docs/DECISIONS.md),
   [protocol evidence](docs/PROTOCOL.md), and [release packaging](docs/RELEASING.md).
 
+## Useful links and related work
+
+Thanks to the authors and contributors of the community projects below for the
+research and tools on which this project is partly based.
+
+- [bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x) provides community firmware tools and research, currently focused on Classe 300X, with legacy C100X material.
+- [c300x-controller](https://github.com/slyoldfox/c300x-controller) adds intercom APIs, MQTT events, WebRTC and HomeKit support to rooted devices.
+- [BTicino Telegram community](https://t.me/bTicinoClasse300x) discusses Classe 300X and other intercom integrations, including Home Assistant.
+- [BTicino software and firmware](https://www.bticino.com/tools/product-software-and-firmware/home-systems) points to official downloads, including MyHOME Suite.
+- [Classe 100X generation guide](https://assets.legrand.com/pim/AUTRE/Classe100X_README_v1.pdf) explains how to distinguish Door Entry and Home + Security models and their incompatible firmware.
+
 ## License
 
 Project code is [MIT-licensed](LICENSE). Manufacturer firmware and external

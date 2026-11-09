@@ -3,6 +3,7 @@ from types import MappingProxyType
 from unittest.mock import patch
 
 from classe100x import source_profiles as sp
+from classe100x.updater import UpdateError, check_identity
 from classe100x.wireless import SSHError, Wireless, installer_check
 from classe100x.wireless_image import facts
 
@@ -59,11 +60,6 @@ class SourceProfileTableTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sp.matching_profiles({sp.UPDATE_EXECUTABLES[0]: "0" * 64})
 
-    def test_select_by_version(self):
-        self.assertIs(sp.select_by_version((P157, P158), (1, 5, 8)), P158)
-        with self.assertRaises(ValueError):
-            sp.select_by_version((P157,), (1, 5, 8))
-
     def test_new_version_needs_only_a_table_entry(self):
         p156 = sp.SourceProfile(version=(1, 5, 6),
                                 executable_sha256={**hashes(P157), sp.UPDATE_EXECUTABLES[1]: "1" * 64})
@@ -74,13 +70,23 @@ class SourceProfileTableTests(unittest.TestCase):
             wireless.preflight()
             self.assertEqual(wireless.source_candidates, (p156,))
 
-    def test_identical_executables_in_two_versions_stay_ambiguous_until_version_is_known(self):
+    def test_identical_executables_in_two_versions_are_told_apart_by_the_reported_version(self):
         twin = sp.SourceProfile(version=(1, 5, 9), executable_sha256=hashes(P158))
         table = MappingProxyType({**sp.SOURCE_PROFILES, (1, 5, 9): twin})
         with patch.object(sp, "SOURCE_PROFILES", table):
             found = sp.matching_profiles(hashes(P158))
             self.assertEqual({p.version for p in found}, {(1, 5, 8), (1, 5, 9)})
-            self.assertIs(sp.select_by_version(found, (1, 5, 9)), twin)
+            versions = sp.candidate_versions(found)
+        identity = {"device_type": ("200",), "hardware": ("02", "06", "0"),
+                    "object_model": ("1", "0", "99"), "update_status": ("4", "0")}
+        for version, accepted in (((1, 5, 8), True), ((1, 5, 9), True), ((1, 5, 7), False)):
+            with self.subTest(version=version):
+                reported = {**identity, "firmware": tuple(str(part) for part in version)}
+                if accepted:
+                    check_identity(reported, 4, source_versions=versions)
+                else:
+                    with self.assertRaises(UpdateError):
+                        check_identity(reported, 4, source_versions=versions)
 
     def test_mismatch_description_names_the_closest_profile_and_files(self):
         altered = {**hashes(P157), sp.UPDATE_EXECUTABLES[0]: "0" * 64}

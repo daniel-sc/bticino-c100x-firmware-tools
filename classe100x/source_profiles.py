@@ -19,10 +19,6 @@ class HostKeyPolicy(Enum):
 class SourceProfile:
     version: tuple[int, int, int]
     executable_sha256: Mapping[str, str]
-    device_type: tuple[int, ...] = (200,)
-    hardware_family: tuple[int, ...] = (2,)
-    object_model: tuple[int, ...] = (1, 0, 99)
-    normal_status: tuple[int, ...] = (4, 0)
     host_key_policy: HostKeyPolicy = HostKeyPolicy.STABLE
 
     def __post_init__(self):
@@ -56,13 +52,6 @@ SOURCE_PROFILES = MappingProxyType({
     ),
 })
 
-def profile_for_version(version: tuple[int, int, int]) -> SourceProfile:
-    try:
-        return SOURCE_PROFILES[version]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported source firmware version: {version}") from exc
-
-
 # Firmware version the bundled FWZ profile installs. Recovery and the final MAIN
 # must always match this profile, whatever the source version was.
 TARGET_VERSION = (1, 5, 8)
@@ -76,19 +65,13 @@ def matching_profiles(observed: Mapping[str, str]) -> tuple[SourceProfile, ...]:
     """Profiles whose pinned executables equal the observed hashes exactly.
 
     Several profiles may match when two versions ship identical executables. The
-    version reported by the device then selects between them (select_by_version).
+    versions of all matches are then accepted together (candidate_versions) and the
+    version reported by the device is checked against them by check_identity().
     """
     if set(observed) != set(UPDATE_EXECUTABLES):
         raise ValueError("Observed hashes must cover every update executable")
     return tuple(profile for profile in SOURCE_PROFILES.values()
                  if dict(profile.executable_sha256) == dict(observed))
-
-
-def select_by_version(candidates, version) -> SourceProfile:
-    for profile in candidates:
-        if profile.version == tuple(version):
-            return profile
-    raise ValueError(f"No candidate source profile for firmware {tuple(version)}")
 
 
 def describe_mismatch(observed: Mapping[str, str], profiles=None) -> str:

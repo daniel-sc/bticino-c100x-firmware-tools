@@ -13,7 +13,8 @@ from .transport import run_usb
 from .resources import tetherkit, version
 from .usb_session import usb_session
 from .usb_storage import unmount_usb_storage
-from .updater import NetworkDevice, UpdateError, check_identity, flash, flash_recovery
+from .updater import (NetworkDevice, UpdateError, check_identity, check_resume, flash, flash_recovery,
+                      resume_recovery)
 from .vendor import C100X_PROFILE
 from .diagnostics import clear_secrets, failure, format_failure, text
 
@@ -72,7 +73,30 @@ def wireless_command(args, firmware):
             with Wireless(host, existing, destination, image, trust, confirm=confirm, **wireless_options) as transport:
                 reader = VerificationReader(transport)
                 with RecoveryVerifier(firmware, reader, progress=progress) as verifier:
-                    if args.command == "plan":
+                    if args.command in ("plan-resume-recovery", "resume-recovery"):
+                        # Interrupted after recovery was written and before the main kernel was cleared.
+                        # Recovery is never written again: it is read back and verified first.
+                        transport.resume_after_recovery()
+                        device = NetworkDevice("127.0.0.1", transport=transport)
+                        source_versions = candidate_versions(transport.source_candidates)
+                        if args.command == "plan-resume-recovery":
+                            info = check_resume(device, verifier, progress, source_versions=source_versions)
+                            print(json.dumps({"firmware": firmware.report(), "device": info, "transport": "ssh",
+                                              "resume_from": "recovery written, main kernel intact",
+                                              "recovery_verification": verifier.record["verification"],
+                                              "device_writes": False,
+                                              "verification_report": str(verifier.directory / "report.json")},
+                                             indent=2))
+                        else:
+                            with awake():
+                                def final_verification():
+                                    transport.verified()
+                                    verifier.record["final_ssh"] = "verified"
+                                resume_recovery(firmware, device, C100X_PROFILE, report=progress,
+                                                verification=verifier, final_verification=final_verification,
+                                                source_versions=source_versions)
+                                transport.remember()
+                    elif args.command == "plan":
                         endpoint, port, _, _ = transport.endpoints()
                         with ReadOnlyClient(endpoint, port) as client:
                             info = client.inspect()
@@ -168,6 +192,24 @@ def main() -> int:
             destination_auth.add_argument("--destination-ssh-password", action="store_true", help="Prompt for a different destination password")
             command.add_argument("--accept-regenerated-host-key", action="store_true",
                                  help="Accept the SSH host key that a source firmware regenerates at every boot, which cannot be verified (SSH transport; the update stops without it)")
+    # Resuming an interrupted update is possible over SSH only.
+    for name, help_text in (
+        ("plan-resume-recovery", "Read-only check of an update interrupted after recovery was written (SSH)"),
+        ("resume-recovery", "Continue an update interrupted after recovery was written: verify it, clear main, install main (SSH)"),
+    ):
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("firmware", type=Path)
+        command.add_argument("--host", help="Wireless hostname or IPv4 address (default: Bticino-Classe100X.local)")
+        command.add_argument("--ssh-user", help="Existing administrative SSH account")
+        auth = command.add_mutually_exclusive_group()
+        auth.add_argument("--ssh-password", action="store_true", help="Prompt once for the existing SSH password; keep it only in memory")
+        auth.add_argument("--ssh-key", type=Path, help="SSH identity file (encrypted keys must already be unlocked in your agent)")
+        command.add_argument("--destination-ssh-user", help="Destination account; defaults to existing SSH user")
+        destination_auth = command.add_mutually_exclusive_group()
+        destination_auth.add_argument("--destination-ssh-key", type=Path, help="Destination login key; defaults to existing authentication")
+        destination_auth.add_argument("--destination-ssh-password", action="store_true", help="Prompt for a different destination password")
+        command.add_argument("--accept-regenerated-host-key", action="store_true",
+                             help="Accept the SSH host key that a source firmware regenerates at every boot, which cannot be verified (the command stops without it)")
     for command in commands.choices.values():
         command.add_argument("--debug", action="store_true", default=argparse.SUPPRESS,
                              help="Include Python stack traces in error output")
@@ -275,7 +317,8 @@ def main() -> int:
             with prepare_firmware(args.firmware) as firmware:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
-                elif args.command in ("plan", "flash") and args.transport == "ssh":
+                elif (args.command in ("plan", "flash") and args.transport == "ssh") or args.command in (
+                        "plan-resume-recovery", "resume-recovery"):
                     wireless_command(args, firmware)
                 else:
                     from_recovery = args.command in ("plan-recovery", "recover")
@@ -315,7 +358,7 @@ def main() -> int:
                                 flash(firmware, device, C100X_PROFILE, report=report, verification=verification)
             if args.command == "inspect-fw":
                 print("Firmware validation passed.", file=sys.stderr)
-            elif args.command in ("plan", "plan-recovery"):
+            elif args.command in ("plan", "plan-recovery", "plan-resume-recovery"):
                 print("Preflight passed. All requested preflight checks passed. No firmware was written.", file=sys.stderr)
         return 0
     except Exception as exc:

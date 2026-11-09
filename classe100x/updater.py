@@ -287,7 +287,7 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
     try:
         info = device.connect()
         check_identity(info, 1 if from_recovery else 4, source_versions=source_versions)
-        if verification is not None:
+        if verification is not None and not from_recovery:
             verification.preflight()
             verification.update_result("in_progress", stage)
             # SSH work can outlast openserver's 30-second command idle timer.
@@ -405,3 +405,74 @@ def check_source_identity(info: dict, profile: SourceProfile, expected_status: i
             f"Source hardware is outside profile family "
             f"{profile.hardware_family}: {hardware}"
         )
+
+
+def _checked_source_main(device, verification, source_versions, mark, *, recording):
+    """Everything that proves a resume is safe. Reads only: no write, no reboot."""
+    mark("resume: checking the running source MAIN")
+    info = device.connect()
+    check_identity(info, 4, source_versions=source_versions)
+    if not device.client.idle():
+        raise UpdateError("Update worker is busy; resume stopped")
+    verification.preflight()
+    if recording:
+        verification.update_result("in_progress", "resume: checking the running source MAIN")
+    mark("resume: verifying the already written recovery over SSH")
+    verification.verify()
+    mark("resume: reconnecting after SSH verification")
+    # The SSH readback can outlast the 30-second command idle timer: use a fresh session.
+    info = device.connect()
+    check_identity(info, 4, source_versions=source_versions)
+    return info
+
+
+def check_resume(device, verification, report=print, *, source_versions) -> dict:
+    """Read-only plan of resume_recovery(): same checks, nothing is cleared, written or rebooted."""
+    if not source_versions:
+        raise ValueError("Resuming needs the source firmware versions matched by the preflight")
+    try:
+        return _checked_source_main(device, verification, source_versions, report, recording=False)
+    finally:
+        device.close()
+
+
+def resume_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
+                    report=print, *, verification, final_verification=None, source_versions) -> dict:
+    """Continue an update whose recovery was written but whose main kernel was not cleared yet.
+
+    The installed recovery is read back and proven identical to the firmware before anything is
+    cleared; it is never written again. Source versions are accepted only until the main kernel is
+    cleared. Afterwards this is the ordinary installation of the main system from recovery.
+    """
+    if not source_versions:
+        raise ValueError("Resuming needs the source firmware versions matched by the preflight")
+    stage = "resume: checking the running source MAIN"
+    clear_attempted = False
+
+    def mark(text):
+        nonlocal stage
+        stage = text
+        report(text)
+
+    try:
+        _checked_source_main(device, verification, source_versions, mark, recording=True)
+        mark("entering recovery: clearing main kernel")
+        clear_attempted = True
+        device.client.invalidate_main_kernel()
+        mark("entering recovery: rebooting")
+        device.reboot_and_wait(1)
+    except (Exception, KeyboardInterrupt) as exc:
+        device.close()
+        _record_stop(verification, stage, report)
+        state = "" if clear_attempted else " The main kernel was not cleared; the source MAIN is unchanged."
+        if isinstance(exc, KeyboardInterrupt):
+            raise UpdateError(f"Interrupted at '{stage}'.{state} Keep the device powered; "
+                              "no automatic retry or cleanup reboot.") from exc
+        if not isinstance(exc, (UpdateError, ProtocolError, OSError)):
+            details(exc, update_stage=stage,
+                    device_state="Keep the device powered; no automatic retry or cleanup reboot")
+            raise
+        raise UpdateError(f"Stopped at '{stage}': {exc}.{state} Keep the device powered; "
+                          "no automatic retry or cleanup reboot.") from exc
+    return _flash(firmware, device, profile, report, from_recovery=True, verification=verification,
+                  final_verification=final_verification)

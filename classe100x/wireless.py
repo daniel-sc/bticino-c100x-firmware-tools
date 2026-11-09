@@ -473,6 +473,18 @@ class Wireless:
         # and reconnecting with the same key after the planned normal reboot.
         # Its init script, configuration formatting and key pathname may differ.
 
+    def resume_after_recovery(self):
+        """Continue an update interrupted after the recovery transfer and before the main kernel clear.
+
+        The source MAIN just entered is the one that follows the recovery transfer, so the next
+        planned reboot is the one into recovery, and no further host key regeneration is accepted.
+        """
+        if (self.phase != 0 or self.reconnecting or self.connection is None
+                or not self.source_candidates):
+            raise SSHError("Resuming needs a freshly entered source MAIN that matched a supported profile")
+        self.phase = 1
+        self.rotation_accepted = True
+
     def rebooting(self, status):
         expected = (4, 1, 4)
         if self.phase >= 3 or status != expected[self.phase]:

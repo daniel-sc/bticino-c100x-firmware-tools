@@ -59,10 +59,17 @@ def wireless_command(args, firmware):
                               password=password("Destination images SSH password: ") if args.destination_ssh_password else
                               (None if args.destination_ssh_key else existing.password))
     host = args.host or DEFAULT_HOST
+    wireless_options = {}
+    if getattr(args, "accept_regenerated_host_key", False):
+        wireless_options["accept_regenerated_key"] = True
+        if args.ssh_password:
+            print("Warning: if the intercom regenerates its SSH host key at boot, the key after the "
+                  "reboot cannot be verified and the existing password is offered to whatever answers. "
+                  "Prefer --ssh-key.", file=sys.stderr)
     progress = lambda text: print(text, file=sys.stderr, flush=True)
     try:
         with interruptible(), admit(firmware, destination) as image, Trust(host) as trust:
-            with Wireless(host, existing, destination, image, trust, confirm=confirm) as transport:
+            with Wireless(host, existing, destination, image, trust, confirm=confirm, **wireless_options) as transport:
                 reader = VerificationReader(transport)
                 with RecoveryVerifier(firmware, reader, progress=progress) as verifier:
                     if args.command == "plan":
@@ -159,6 +166,8 @@ def main() -> int:
             destination_auth = command.add_mutually_exclusive_group()
             destination_auth.add_argument("--destination-ssh-key", type=Path, help="Destination login key; defaults to existing authentication")
             destination_auth.add_argument("--destination-ssh-password", action="store_true", help="Prompt for a different destination password")
+            command.add_argument("--accept-regenerated-host-key", action="store_true",
+                                 help="Accept the SSH host key that a source firmware regenerates at every boot, which cannot be verified (SSH transport; the update stops without it)")
     for command in commands.choices.values():
         command.add_argument("--debug", action="store_true", default=argparse.SUPPRESS,
                              help="Include Python stack traces in error output")
@@ -169,7 +178,8 @@ def main() -> int:
             if args.transport == "ssh":
                 if args.external_usb:
                     raise ValueError("--external-usb cannot be combined with --transport ssh")
-            elif args.host or args.destination_ssh_user or args.destination_ssh_key or args.destination_ssh_password:
+            elif (args.host or args.destination_ssh_user or args.destination_ssh_key or args.destination_ssh_password
+                  or args.accept_regenerated_host_key):
                 raise ValueError("Wireless host/destination options require --transport ssh")
             elif args.verify_recovery_ssh:
                 if not args.ssh_user:

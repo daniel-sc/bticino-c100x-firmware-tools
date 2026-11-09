@@ -21,7 +21,8 @@ from .host import run_tool
 from .diagnostics import tool_error
 from .ssh import SSHConnection, SSHError, HostIdentityError, _invoking_user
 from .wireless_image import facts, pipe_tool, public_identity
-from .source_profiles import UPDATE_EXECUTABLES, describe_mismatch, matching_profiles, target_profile
+from .source_profiles import (UPDATE_EXECUTABLES, HostKeyPolicy, describe_mismatch, matching_profiles,
+                              target_profile)
 
 
 DEFAULT_HOST = "Bticino-Classe100X.local"
@@ -327,7 +328,8 @@ def interruptible():
 class Wireless:
     strict = True
 
-    def __init__(self, host, existing, destination, image, trust, *, confirm):
+    def __init__(self, host, existing, destination, image, trust, *, confirm,
+                 accept_regenerated_key=False):
         self.host, self.existing, self.destination = host, existing, destination
         self.image, self.trust, self.confirm = image, trust, confirm
         self.phase = 0
@@ -341,6 +343,10 @@ class Wireless:
         self.host_keys = []
         # Source profiles whose executables matched in the source MAIN.
         self.source_candidates = ()
+        # A regenerated source host key is accepted once, in the first normal reboot only.
+        self.rotation_accepted = False
+        # The owner accepted, up front, that such a regenerated key cannot be verified.
+        self.accept_regenerated_key = accept_regenerated_key
         account = _invoking_user()
         self.uid, self.gid = account.pw_uid, account.pw_gid
 
@@ -350,7 +356,15 @@ class Wireless:
             self.old_key = self.trust.enroll(self.ip, self.confirm)
             self._connect()
             self.preflight()
-            self.trust.save(self.old_key)
+            if self.ephemeral_source:
+                if not self.accept_regenerated_key:
+                    raise SSHError(
+                        "The running firmware regenerates its SSH host key at every normal boot, so the "
+                        "key seen after the reboot cannot be verified. Nothing was written. Pass "
+                        "--accept-regenerated-host-key to accept this; prefer --ssh-key over --ssh-password.")
+                # A key that is regenerated at every boot is not a stable identity: never saved.
+            else:
+                self.trust.save(self.old_key)
             return self
         except BaseException as error:
             self.__exit__(type(error), error, error.__traceback__)
@@ -369,7 +383,7 @@ class Wireless:
         if key not in observed:
             if self.reconnecting and self.previous_key in observed:
                 raise SSHError("Previous environment still responds; waiting for the planned reboot")
-            raise HostIdentityError("Unexpected SSH identity during phase transition")
+            key = self._accept_regenerated_key(observed)
         self.tunnel = Tunnel(credentials, self.ip, key)
         try:
             self.tunnel.start()
@@ -380,6 +394,35 @@ class Wireless:
             self.close(error=error)
             raise
         self.host_keys.append({"phase": self.phase, "fingerprint": fingerprint(key), "status": "verified"})
+
+    @property
+    def ephemeral_source(self):
+        """True when every matched source profile regenerates its SSH host key at each normal boot.
+
+        An empty or mixed match is not ephemeral, so strict continuity applies.
+        """
+        return bool(self.source_candidates) and all(
+            profile.host_key_policy is HostKeyPolicy.EPHEMERAL_ON_NORMAL_REBOOT
+            for profile in self.source_candidates)
+
+    def _accept_regenerated_key(self, observed):
+        """Accept the regenerated host key of an ephemeral source MAIN, once, when the owner opted in.
+
+        Nothing stable exists to compare the key with, so the protection is structural: only in the
+        normal reboot that follows the recovery transfer, only after the previous key stopped
+        answering, only once and only with the explicit opt-in. Every other unexpected identity is
+        fatal, as before.
+        """
+        if not (self.phase == 1 and self.reconnecting and self.ephemeral_source
+                and self.accept_regenerated_key and not self.rotation_accepted):
+            raise HostIdentityError("Unexpected SSH identity during phase transition")
+        key = sorted(observed)[0]
+        self.host_keys.append({"phase": self.phase, "fingerprint": fingerprint(key),
+                               "previous_fingerprint": fingerprint(self.old_key),
+                               "status": "regenerated_key_accepted"})
+        self.rotation_accepted = True
+        self.old_key = key
+        return key
 
     def endpoints(self):
         if self.tunnel is None:

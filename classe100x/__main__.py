@@ -61,6 +61,8 @@ def wireless_command(args, firmware):
                               (None if args.destination_ssh_key else existing.password))
     host = args.host or DEFAULT_HOST
     wireless_options = {}
+    if args.command in ("plan-recovery", "recover"):
+        wireless_options["in_recovery"] = True
     if getattr(args, "accept_regenerated_host_key", False):
         wireless_options["accept_regenerated_key"] = True
         if args.ssh_password:
@@ -71,6 +73,11 @@ def wireless_command(args, firmware):
     try:
         with interruptible(), admit(firmware, destination) as image, Trust(host) as trust:
             with Wireless(host, existing, destination, image, trust, confirm=confirm, **wireless_options) as transport:
+                if args.command in ("plan-recovery", "recover"):
+                    # The intercom already runs the recovery of this image. The recovery readback
+                    # of the other commands does not apply: it reads the partitions of a MAIN.
+                    recovery_over_ssh(args, firmware, transport, progress)
+                    return
                 reader = VerificationReader(transport)
                 with RecoveryVerifier(firmware, reader, progress=progress) as verifier:
                     if args.command in ("plan-resume-recovery", "resume-recovery"):
@@ -120,6 +127,37 @@ def wireless_command(args, firmware):
                             transport.remember()
     finally:
         existing.password = destination.password = None
+
+
+def recovery_over_ssh(args, firmware, transport, progress):
+    """plan-recovery and recover over SSH: the intercom already runs the recovery of this image.
+
+    The main kernel was cleared by an earlier run, so there is nothing to verify or clear here.
+    Recovery is never written, and no write is retried.
+    """
+    from .wireless import awake
+
+    device = NetworkDevice("127.0.0.1", transport=transport)
+    if args.command == "plan-recovery":
+        try:
+            info = device.connect()
+            check_identity(info, 1)
+            if not device.client.idle():
+                raise UpdateError("Recovery update worker is busy; no transfer was started")
+        finally:
+            device.close()
+        print(json.dumps({"firmware": firmware.report(), "device": info, "transport": "ssh",
+                          "running": "recovery installed from this image", "device_writes": False},
+                         indent=2))
+        return
+
+    def final_verification():
+        transport.verified()
+
+    with awake():
+        flash_recovery(firmware, device, C100X_PROFILE, report=progress,
+                       final_verification=final_verification)
+        transport.remember()
 
 
 def main() -> int:
@@ -192,6 +230,17 @@ def main() -> int:
             destination_auth.add_argument("--destination-ssh-password", action="store_true", help="Prompt for a different destination password")
             command.add_argument("--accept-regenerated-host-key", action="store_true",
                                  help="Accept the SSH host key that a source firmware regenerates at every boot, which cannot be verified (SSH transport; the update stops without it)")
+    # plan-recovery and recover also run over SSH, with a single login for the running recovery.
+    for name in ("plan-recovery", "recover"):
+        command = commands.choices[name]
+        command.add_argument("--transport", choices=("usb", "ssh"), default="usb")
+        command.add_argument("--host", help="Wireless hostname or IPv4 address (default: Bticino-Classe100X.local)")
+        command.add_argument("--ssh-user", help="SSH account of the running recovery (default: root2)")
+        auth = command.add_mutually_exclusive_group()
+        auth.add_argument("--ssh-password", action="store_true", help="Prompt once for the SSH password of the running recovery; keep it only in memory")
+        auth.add_argument("--ssh-key", type=Path, help="SSH identity file (encrypted keys must already be unlocked in your agent)")
+        command.set_defaults(destination_ssh_user=None, destination_ssh_key=None,
+                             destination_ssh_password=False, accept_regenerated_host_key=False)
     # Resuming an interrupted update is possible over SSH only.
     for name, help_text in (
         ("plan-resume-recovery", "Read-only check of an update interrupted after recovery was written (SSH)"),
@@ -216,6 +265,12 @@ def main() -> int:
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.command in ("plan-recovery", "recover"):
+            if args.transport == "ssh":
+                if not (args.ssh_password or args.ssh_key):
+                    raise ValueError("--transport ssh needs --ssh-password or --ssh-key")
+            elif args.host or args.ssh_user or args.ssh_password or args.ssh_key:
+                raise ValueError("Wireless host and SSH login options require --transport ssh")
         if args.command in ("plan", "flash"):
             if args.transport == "ssh":
                 if args.external_usb:
@@ -317,7 +372,7 @@ def main() -> int:
             with prepare_firmware(args.firmware) as firmware:
                 if args.command == "inspect-fw":
                     print(json.dumps(firmware.report(), indent=2))
-                elif (args.command in ("plan", "flash") and args.transport == "ssh") or args.command in (
+                elif (args.command in ("plan", "flash", "plan-recovery", "recover") and args.transport == "ssh") or args.command in (
                         "plan-resume-recovery", "resume-recovery"):
                     wireless_command(args, firmware)
                 else:

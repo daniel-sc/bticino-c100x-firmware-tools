@@ -327,9 +327,10 @@ def interruptible():
 
 class Wireless:
     strict = True
+    in_recovery = False
 
     def __init__(self, host, existing, destination, image, trust, *, confirm,
-                 accept_regenerated_key=False):
+                 accept_regenerated_key=False, in_recovery=False):
         self.host, self.existing, self.destination = host, existing, destination
         self.image, self.trust, self.confirm = image, trust, confirm
         self.phase = 0
@@ -347,12 +348,17 @@ class Wireless:
         self.rotation_accepted = False
         # The owner accepted, up front, that such a regenerated key cannot be verified.
         self.accept_regenerated_key = accept_regenerated_key
+        # True when the intercom already runs the recovery installed from this image.
+        self.in_recovery = in_recovery
         account = _invoking_user()
         self.uid, self.gid = account.pw_uid, account.pw_gid
 
     def __enter__(self):
         try:
             self.ip = resolve(self.host)
+            if self.in_recovery:
+                self._enter_recovery()
+                return self
             self.old_key = self.trust.enroll(self.ip, self.confirm)
             self._connect()
             self.preflight()
@@ -472,6 +478,20 @@ class Wireless:
         # Existing-main SSH eligibility is demonstrated by administrative access
         # and reconnecting with the same key after the planned normal reboot.
         # Its init script, configuration formatting and key pathname may differ.
+
+    def _enter_recovery(self):
+        """Connect to a recovery that was installed from this image and is already running.
+
+        Its host key and login are the ones the image carries, so they are verified against the image
+        itself. Nothing is enrolled and nothing is saved until the final verification.
+        """
+        if self.image.host_key not in scan_keys(self.ip):
+            raise HostIdentityError(
+                "The running system does not present the SSH host key of this firmware image, so it is "
+                "not a recovery installed from it. Nothing was written.")
+        self.phase = 2
+        self._connect()
+        self.preflight()
 
     def resume_after_recovery(self):
         """Continue an update interrupted after the recovery transfer and before the main kernel clear.

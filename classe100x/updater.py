@@ -273,9 +273,10 @@ def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProf
 
 
 def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
-                   report=print) -> dict:
+                   report=print, *, final_verification=None) -> dict:
     """Explicit main installation from already running recovery; never a write retry."""
-    return _flash(firmware, device, profile, report, from_recovery=True)
+    return _flash(firmware, device, profile, report, from_recovery=True,
+                  final_verification=final_verification)
 
 
 def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False,

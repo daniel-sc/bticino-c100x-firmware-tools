@@ -1,8 +1,10 @@
 """Verified source firmware profiles for supported update transitions."""
+
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
+
 
 UPDATE_EXECUTABLES = (
     "/home/bticino/bin/bt_device",
@@ -11,9 +13,11 @@ UPDATE_EXECUTABLES = (
     "/home/bticino/bin/dedrifupdater",
 )
 
+
 class HostKeyPolicy(Enum):
     STABLE = "stable"
     EPHEMERAL_ON_NORMAL_REBOOT = "ephemeral_on_normal_reboot"
+
 
 @dataclass(frozen=True)
 class SourceProfile:
@@ -29,6 +33,7 @@ class SourceProfile:
                 raise ValueError("Invalid SHA-256 in source profile")
         object.__setattr__(self, "executable_sha256",
                            MappingProxyType(dict(self.executable_sha256)))
+
 
 SOURCE_PROFILES = MappingProxyType({
     (1, 5, 7): SourceProfile(

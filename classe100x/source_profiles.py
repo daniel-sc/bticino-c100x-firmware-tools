@@ -61,3 +61,46 @@ def profile_for_version(version: tuple[int, int, int]) -> SourceProfile:
         return SOURCE_PROFILES[version]
     except KeyError as exc:
         raise ValueError(f"Unsupported source firmware version: {version}") from exc
+
+
+# Firmware version the bundled FWZ profile installs. Recovery and the final MAIN
+# must always match this profile, whatever the source version was.
+TARGET_VERSION = (1, 5, 8)
+
+
+def target_profile() -> SourceProfile:
+    return SOURCE_PROFILES[TARGET_VERSION]
+
+
+def matching_profiles(observed: Mapping[str, str]) -> tuple[SourceProfile, ...]:
+    """Profiles whose pinned executables equal the observed hashes exactly.
+
+    Several profiles may match when two versions ship identical executables. The
+    version reported by the device then selects between them (select_by_version).
+    """
+    if set(observed) != set(UPDATE_EXECUTABLES):
+        raise ValueError("Observed hashes must cover every update executable")
+    return tuple(profile for profile in SOURCE_PROFILES.values()
+                 if dict(profile.executable_sha256) == dict(observed))
+
+
+def select_by_version(candidates, version) -> SourceProfile:
+    for profile in candidates:
+        if profile.version == tuple(version):
+            return profile
+    raise ValueError(f"No candidate source profile for firmware {tuple(version)}")
+
+
+def describe_mismatch(observed: Mapping[str, str], profiles=None) -> str:
+    """Human-readable difference against the closest profile, for error messages."""
+    pool = tuple(SOURCE_PROFILES.values() if profiles is None else profiles)
+    if not pool:
+        return ""
+
+    def differing(profile):
+        return [path for path in UPDATE_EXECUTABLES
+                if observed.get(path) != profile.executable_sha256[path]]
+
+    closest = min(pool, key=lambda profile: len(differing(profile)))
+    names = ", ".join(path.rsplit("/", 1)[-1] for path in differing(closest))
+    return "closest profile {}.{}.{} differs in: {}".format(*closest.version, names)

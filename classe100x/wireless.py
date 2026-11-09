@@ -21,6 +21,7 @@ from .host import run_tool
 from .diagnostics import tool_error
 from .ssh import SSHConnection, SSHError, HostIdentityError, _invoking_user
 from .wireless_image import facts, pipe_tool, public_identity
+from .source_profiles import UPDATE_EXECUTABLES, describe_mismatch, matching_profiles, target_profile
 
 
 DEFAULT_HOST = "Bticino-Classe100X.local"
@@ -338,6 +339,8 @@ class Wireless:
         self.reconnecting = False
         self.final_verified = False
         self.host_keys = []
+        # Source profiles whose executables matched in the source MAIN.
+        self.source_candidates = ()
         account = _invoking_user()
         self.uid, self.gid = account.pw_uid, account.pw_gid
 
@@ -402,11 +405,27 @@ class Wireless:
     def preflight(self):
         if self.run(installer_check()) != b"READY\n":
             raise SSHError("Manufacturer installation check failed")
-        pins = facts("no-ota")["UNCHANGED"]
-        paths = ["/home/bticino/bin/" + name for name in ("bt_device", "bt_daemon", "fw_manager", "dedrifupdater")]
+        paths = list(UPDATE_EXECUTABLES)
         result = self.run("sha256sum " + " ".join(paths)).decode().splitlines()
-        if [line.split()[0] for line in result] != [pins[path][0] for path in paths]:
-            raise SSHError("Installed update executables differ from the researched profile")
+        if len(result) != len(paths) or any(not line.split() for line in result):
+            raise SSHError("Installed update executable check returned an unexpected result")
+        observed = {path: line.split()[0] for path, line in zip(paths, result)}
+        if self.phase < 2:
+            # The running environment is the source MAIN (before and after the first
+            # normal reboot): its executables must equal a supported source profile,
+            # and the same profile must still match after that reboot.
+            candidates = matching_profiles(observed)
+            if self.phase == 1 and self.source_candidates:
+                kept = {profile.version for profile in self.source_candidates}
+                candidates = tuple(profile for profile in candidates if profile.version in kept)
+            if not candidates:
+                raise SSHError("Installed update executables match no supported source "
+                               "firmware profile; " + describe_mismatch(observed))
+            self.source_candidates = candidates
+        elif observed != dict(target_profile().executable_sha256):
+            # Recovery and the final MAIN always carry the target executables.
+            raise SSHError("Installed update executables differ from the target profile; "
+                           + describe_mismatch(observed, (target_profile(),)))
         # Existing-main SSH eligibility is demonstrated by administrative access
         # and reconnecting with the same key after the planned normal reboot.
         # Its init script, configuration formatting and key pathname may differ.

@@ -570,8 +570,18 @@ class VerificationReader:
 
 @contextmanager
 def awake():
-    process = subprocess.Popen(["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())],
-                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        process = subprocess.Popen(["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except FileNotFoundError:
+        process = None
+    if process is None:
+        # caffeinate exists only on macOS. Nothing keeps this host awake, and a host that suspends in
+        # the middle of an update stops it between two writes: say so.
+        print("Warning: no idle-sleep assertion is available on this host (caffeinate is macOS only). "
+              "Keep the computer awake until the update ends.", file=sys.stderr, flush=True)
+        yield
+        return
     try:
         time.sleep(0.05)
         if process.poll() is not None:

@@ -104,3 +104,12 @@ def describe_mismatch(observed: Mapping[str, str], profiles=None) -> str:
     closest = min(pool, key=lambda profile: len(differing(profile)))
     names = ", ".join(path.rsplit("/", 1)[-1] for path in differing(closest))
     return "closest profile {}.{}.{} differs in: {}".format(*closest.version, names)
+
+
+def candidate_versions(candidates):
+    """Firmware versions of the matched source profiles, or None when there are none.
+
+    None means "target firmware only", the behaviour of every flow that has no source
+    profile (USB flow, resuming from recovery).
+    """
+    return frozenset(profile.version for profile in candidates) or None

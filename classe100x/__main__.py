@@ -37,6 +37,7 @@ def recovery_verification(args, firmware, check_transport):
 def wireless_command(args, firmware):
     from .wireless import Credentials, DEFAULT_HOST, Trust, Wireless, VerificationReader, awake, interruptible
     from .wireless_image import admit
+    from .source_profiles import candidate_versions
     from .recovery import RecoveryVerifier
 
     def password(prompt):
@@ -68,7 +69,8 @@ def wireless_command(args, firmware):
                         endpoint, port, _, _ = transport.endpoints()
                         with ReadOnlyClient(endpoint, port) as client:
                             info = client.inspect()
-                            check_identity(info, 4)
+                            check_identity(info, 4, source_versions=candidate_versions(
+                                getattr(transport, "source_candidates", ())))
                             if not client.idle():
                                 raise UpdateError("Update worker is busy; preflight stopped")
                         verifier.preflight()
@@ -82,7 +84,8 @@ def wireless_command(args, firmware):
                                 transport.verified()
                                 verifier.record["final_ssh"] = "verified"
                             flash(firmware, device, C100X_PROFILE, report=progress, verification=verifier,
-                                  final_verification=final_verification)
+                                  final_verification=final_verification,
+                                  source_versions=candidate_versions(getattr(transport, "source_candidates", ())))
                             transport.remember()
     finally:
         existing.password = destination.password = None

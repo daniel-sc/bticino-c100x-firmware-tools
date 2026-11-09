@@ -12,6 +12,7 @@ import time
 from .firmware import MAIN_FILES, RECOVERY_FILES, Payload, PreparedFirmware
 from .protocol import ACK, NACK, ProtocolError, ReadOnlyClient
 from .vendor import Credentials, VendorProfile
+from .source_profiles import SourceProfile
 from .diagnostics import details, format_failure, remember_secret
 
 
@@ -360,3 +361,32 @@ def _record_stop(verification, stage, report):
         verification.update_result("completed" if stage == "update sequence completed" else "stopped", stage)
     except (OSError, UpdateError) as exc:
         report("Warning: could not save update outcome in the verification report\n" + format_failure(exc))
+
+
+def check_source_identity(info: dict, profile: SourceProfile, expected_status: int) -> None:
+    """Validate a running source MAIN against one explicit profile."""
+    expected = {
+        "device_type": profile.device_type,
+        "firmware": profile.version,
+        "object_model": profile.object_model,
+        "update_status": (expected_status, 0),
+    }
+    for key, value in expected.items():
+        try:
+            actual = tuple(int(part) for part in info[key])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise UpdateError(f"Missing or invalid {key} in source identity") from exc
+        if actual != value:
+            raise UpdateError(
+                f"Source {key} differs from profile {profile.version}: "
+                f"expected {value}, received {actual}"
+            )
+    try:
+        hardware = tuple(int(part) for part in info["hardware"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UpdateError("Missing or invalid hardware in source identity") from exc
+    if len(hardware) != 3 or hardware[:1] != profile.hardware_family:
+        raise UpdateError(
+            f"Source hardware is outside profile family "
+            f"{profile.hardware_family}: {hardware}"
+        )

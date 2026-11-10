@@ -280,10 +280,10 @@ def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: V
 
 
 def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False,
-           final_verification=None, source_versions=None):
+           final_verification=None, source_versions=None, clear_attempted=None):
     if from_recovery and source_versions:
         raise ValueError("Source firmware versions apply only to an update started from the normal MAIN")
-    stage = "preflight"
+    stage = "resume: checking recovery before main transfer" if clear_attempted else "preflight"
     try:
         info = device.connect()
         check_identity(info, 1 if from_recovery else 4, source_versions=source_versions)
@@ -353,20 +353,32 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
             verification.update_result("completed", stage)
         report("Update sequence completed; verify calls, audio/video, door release and any enabled SSH/MQTT features")
         return info
-    except Exception as exc:
-        if verification is not None:
-            _record_stop(verification, stage, report)
-        if not isinstance(exc, (UpdateError, ProtocolError, OSError)):
-            details(exc, update_stage=stage,
-                    device_state="Keep the device powered; no automatic retry or cleanup reboot")
+    except (Exception, KeyboardInterrupt) as exc:
+        error = _update_failure(exc, verification, stage, report, clear_attempted=clear_attempted)
+        if error is exc:
             raise
-        raise UpdateError(f"Stopped at '{stage}': {exc}. Keep the device powered; no automatic retry or cleanup reboot.") from exc
-    except KeyboardInterrupt as exc:
-        if verification is not None:
-            _record_stop(verification, stage, report)
-        raise UpdateError(f"Interrupted at '{stage}'. Keep the device powered; no automatic retry or cleanup reboot.") from exc
+        raise error from exc
     finally:
         device.close()
+
+
+def _update_failure(exc, verification, stage, report, *, clear_attempted=None):
+    """Keep flash and resume failures consistent, including resume's clear-attempt evidence."""
+    if verification is not None:
+        _record_stop(verification, stage, report)
+    state = ""
+    if clear_attempted is not None:
+        state = ("Main-kernel clearing was attempted. " if clear_attempted else
+                 "The main kernel was not cleared; the source MAIN is unchanged. ")
+    guidance = state + "Keep the device powered; no automatic retry or cleanup reboot."
+    if isinstance(exc, KeyboardInterrupt):
+        error = UpdateError(f"Interrupted at '{stage}'. {guidance}")
+    elif isinstance(exc, (UpdateError, ProtocolError, OSError)):
+        error = UpdateError(f"Stopped at '{stage}': {exc}. {guidance}")
+    else:
+        error = details(exc, update_stage=stage, device_state=guidance)
+    # RecoveryVerifier saves these notes in its failure report on context exit.
+    return details(error, main_kernel_clear_attempted=clear_attempted)
 
 
 def _record_stop(verification, stage, report):
@@ -433,17 +445,12 @@ def resume_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: 
         mark("entering recovery: rebooting")
         device.reboot_and_wait(1)
     except (Exception, KeyboardInterrupt) as exc:
-        device.close()
-        _record_stop(verification, stage, report)
-        state = "" if clear_attempted else " The main kernel was not cleared; the source MAIN is unchanged."
-        if isinstance(exc, KeyboardInterrupt):
-            raise UpdateError(f"Interrupted at '{stage}'.{state} Keep the device powered; "
-                              "no automatic retry or cleanup reboot.") from exc
-        if not isinstance(exc, (UpdateError, ProtocolError, OSError)):
-            details(exc, update_stage=stage,
-                    device_state="Keep the device powered; no automatic retry or cleanup reboot")
+        try:
+            error = _update_failure(exc, verification, stage, report, clear_attempted=clear_attempted)
+        finally:
+            device.close()
+        if error is exc:
             raise
-        raise UpdateError(f"Stopped at '{stage}': {exc}.{state} Keep the device powered; "
-                          "no automatic retry or cleanup reboot.") from exc
+        raise error from exc
     return _flash(firmware, device, profile, report, from_recovery=True, verification=verification,
-                  final_verification=final_verification)
+                  final_verification=final_verification, clear_attempted=clear_attempted)

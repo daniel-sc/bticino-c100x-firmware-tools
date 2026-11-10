@@ -175,7 +175,8 @@ an unambiguous target.
   used only when the hostname has no saved identity. Tool-owned trust lives
   under `~/Library/Application Support/C100X/trust/`. Your ordinary `known_hosts`
   is not changed. The expected package key is used in new recovery/main and
-  remembered after final verification. Unexpected key changes stop the run.
+  remembered after final verification. Sources with regenerated keys require
+  the explicit option described below.
 - Recovery readback is mandatory, using the same gate as optional USB verification.
   Allow roughly 2 GiB free for image inspection plus private recovery evidence.
   Source setups need e2fsprogs, Dropbear keygen and OpenSSL; the release tool set
@@ -188,8 +189,8 @@ an unambiguous target.
   in-place configuration changes are required.
 - Final normal reboot, vendor identity/state and authenticated destination SSH
   are required for completion. Perform household checks separately. No automatic
-  retry/resume, transport fallback or cleanup reboot occurs. Recovery-entry
-  commands remain USB-only after investigation.
+  retry/resume, transport fallback or cleanup reboot occurs. For manual
+  continuation, see [below](#resuming-an-interrupted-wireless-update).
 
 ## Updating from an earlier firmware version
 
@@ -218,7 +219,8 @@ c100x flash --transport ssh --host 192.168.1.20 \
 
 ## Resuming an interrupted wireless update
 
-If `flash` stops after the recovery was written, do not run it again. Every transfer is a write that the intercom may or may not have applied, and the protocol is not known to be idempotent. Use the last stage printed by the failed run to find the state of the intercom, and check it with the read-only plan before running the command that writes. Each plan refuses a state that does not match, so a wrong choice stops before any write.
+If `flash` stops after writing recovery, use the commands below to continue.
+Choose the section for the system the intercom is now running.
 
 These commands were written for one intercom and have not yet been through the hardware acceptance recorded in [ACCEPTANCE.md](ACCEPTANCE.md).
 
@@ -241,10 +243,11 @@ If the readback fails, the main kernel has not been cleared and the intercom sti
 
 ### Stopped after the main kernel was cleared
 
-Use this when the last stage was `entering recovery: clearing main kernel` or later, and the intercom runs the recovery installed from this image (update state 1). The main system is not completely written.
+Use this when the intercom is already running recovery (update state 1).
 
-- `plan-recovery --transport ssh` is read-only. It checks that the system that answers presents the SSH host key carried by the firmware image, reports update state 1 and the target firmware, and has an idle update worker.
-- `recover --transport ssh` installs the main system from the running recovery, reboots, verifies the SSH login of the installed system and only then remembers its identity.
+Run `plan-recovery` to check that the expected recovery system is running and
+ready. Then run `recover` to write the main firmware and reboot into it.
+The SSH flow verifies the installed system's SSH access before saving its identity.
 
 Both take a single login, the one the firmware image installs in the recovery: `--ssh-user` with `--ssh-password` or `--ssh-key`. There are no `--destination-*` options. Without `--transport ssh` they keep using USB as before.
 
@@ -255,7 +258,8 @@ c100x recover --transport ssh --host 192.168.1.20 \
   --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa custom.fwz
 ```
 
-Keep the intercom powered while any of these commands runs, and do not retry an uncertain write. [Recovery evidence](RECOVERY.md) documents the limits.
+Keep the intercom powered throughout. These commands stop on errors; they never
+retry automatically. [Recovery evidence](RECOVERY.md) documents the limits.
 
 ## Troubleshooting
 
@@ -271,8 +275,8 @@ Keep the intercom powered while any of these commands runs, and do not retry an 
   session after uploads and polls SSH readiness across planned reboots. A failure
   at the first recovery FTP greeting precedes payload writes; failures at later
   stages need their own assessment.
-- **Flash fails:** preserve power and the stage/error output for investigation.
-  Do not rerun an uncertain write. There is no validated general rescue procedure;
+- **Flash fails:** preserve power and the stage/error output. For an interrupted
+  SSH update, use the continuation steps above. For other rescue situations,
   [recovery evidence](RECOVERY.md) documents the limits.
 
 For implementation details, see [the protocol](PROTOCOL.md). Developers can use
@@ -280,9 +284,8 @@ the separate [source and USB-helper setup](SOURCE.md#usb-helper-setup).
 
 ## Finishing from an already running recovery environment
 
-Use this after assessing a stopped update that reached recovery before starting
-the main installation.
-It is not a retry procedure for an uncertain main-filesystem/kernel write.
+For USB recovery, run `plan-recovery` to check that the expected recovery system
+is running and ready. Then run `recover` to write the main firmware and reboot into it.
 
 `plan-recovery` validates the full image and requires matching C100X 1.5.8 identity,
 status `1*0` and an idle worker without writing to the device. `recover` repeats
@@ -305,7 +308,7 @@ sudo /Applications/C100X/c100x recover ~/C100X-firmware/custom.fwz
 All managed commands support macOS's native recovery ECM interface and
 switch to/from the bundled USB helper when normal boot requires RNDIS. Interface
 names are discovered, not hard-coded. Keep power/USB stable and the Mac awake. On
-an error, stop and preserve the output; do not rerun an uncertain write. After completion, perform the
+an error, preserve power and the output. After completion, perform the
 [functional checks](#3-check-the-result). See [ADR-014](DECISIONS.md#adr-014-explicit-main-installation-from-running-recovery).
 
 Over SSH, see [Resuming an interrupted wireless update](#resuming-an-interrupted-wireless-update).

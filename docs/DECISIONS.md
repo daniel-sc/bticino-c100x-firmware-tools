@@ -443,6 +443,11 @@ authorization covers host-side code, documentation and offline checks, not flash
 **Accepted 2026-11-03**, following a stopped hardware flash and the user's request
 to finish recovery on the Mac.
 
+**Update, 2026-11-10:** manual `recover` may reinstall main after an interrupted
+write. It checks that recovery is running and ready before installing main.
+Automatic write retries remain prohibited. This supersedes the restriction below;
+ADR-019's update adds SSH recovery entry.
+
 **Context:** Alpha.3 completed recovery integrity verification and acknowledged
 main-kernel invalidation, then failed to verify reconnection. Subsequent read-only
 probes established matching identity, recovery state `1*0` and an idle worker.
@@ -628,6 +633,19 @@ research, boundaries and implementation checks are in [OTA.md](OTA.md).
 **Accepted 2026-11-06 as a design constraint change; complete design approved
 2026-11-07.** The amendments below record its evolution. Source implementation and
 offline validation are approved; firmware writes and hardware acceptance remain separate.
+
+**Source profiles and manual continuation, 2026-11-10:** wireless updates may
+start from firmware whose update executables match a recorded source profile.
+Recovery and final main still require the target firmware. A source that regenerates
+its SSH key requires `--accept-regenerated-host-key`; this accepts one unverified
+replacement after the first normal reboot, without saving it as trusted.
+
+`resume-recovery` verifies the installed recovery before clearing main and
+continuing. When recovery is already running, `recover --transport ssh` checks its
+image-derived key and installs main. Both are explicit operator commands; neither
+retries writes automatically. This supersedes the recovery-entry deferral and
+strict source-key continuity below. The 1.5.7 profile comes from one device;
+hardware validation of the generalized paths remains open (see [ACCEPTANCE.md](ACCEPTANCE.md)).
 
 **Context:** The owner prefers source-owned update coordination over vendor-binary
 patching and allows the Mac to remain connected. Stock recovery includes Wi-Fi

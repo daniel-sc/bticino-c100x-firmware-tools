@@ -150,6 +150,9 @@ model is **brand.line.code**, yielding `1.0.99`; configuration is not the line.
 State 4 means normal operation requiring recovery for a main-firmware update.
 State 1 means recovery. An extra-status field other than zero is rejected.
 
+SSH updates also accept a matching [source profile](SOURCE-PROFILES.md) while
+the original main system runs. Recovery and final main must still report 1.5.8.
+
 In ordinary non-NFS normal boot, state 4 also reflects completion of the stock
 daemon's installed recovery **uImage** checksum check. It does not cover recovery
 rootfs or DTBs; see the offline findings below.
@@ -280,7 +283,8 @@ Published v0.2.0-alpha.1 lacks this readiness wait.
 - Query 44 also schedules a reboot in the device handler. It is not a harmless
   read query and is excluded from the preflight allowlist.
 - Write commands are sent once. Missing ACK, malformed reply or disconnect
-  stops the sequence without retry or cleanup reboot. No resume is implemented.
+  stops the sequence without automatic retry or cleanup reboot. Manual
+  continuation uses the commands below.
 - Worker polling uses a 180-second budget, five-second intervals and bounded
   command exchanges. Reconnection polling uses a 240-second budget with
   two-second per-exchange probe timeouts. An in-flight exchange may extend past
@@ -313,6 +317,13 @@ idle query-42 response. `recover` then executes steps 5–6 above using the same
 main-transfer implementation and recovery credentials. It sends no recovery
 transfer or main-kernel-invalidation command. Full archive validation remains
 mandatory; uncertain main writes must be investigated, not automatically retried.
+
+With `--transport ssh`, these commands also require the host key carried by the
+selected image. `recover` writes main and verifies the final SSH login.
+
+If main is still running, `plan-resume-recovery` checks the installed recovery
+by SSH readback. `resume-recovery` repeats that check, then follows steps 4–6 above.
+It does not rewrite recovery. These are explicit operator commands, not automatic retries.
 
 Supporting vendor evidence: `ProtocolHelperEth.UpdateFrwLauncher` calls
 `UpdateFrwFullEth` (lines 303–309); that routine authenticates, transfers the main

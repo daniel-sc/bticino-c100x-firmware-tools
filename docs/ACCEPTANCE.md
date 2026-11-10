@@ -90,6 +90,12 @@ and [USB recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-flash-an
 
 ## Wireless and dual-image hardware coverage
 
+**PR #8 additions:** the generalized 1.5.7 source-profile, regenerated-key and
+SSH resume/recovery paths have not been hardware-validated. The contributor
+reports a successful 1.5.7 → 1.5.8 update using earlier device-specific code;
+the 1.5.7 hashes come from that device, not an official image comparison.
+This does not extend the passed results below.
+
 The complete wireless run closes the full SSH sequence, recovery LAN/SSH startup,
 tunneled transfers, recovery integrity gate and final destination access checks
 for the tested configuration. The default Bonjour hostname was used successfully

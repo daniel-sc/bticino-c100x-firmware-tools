@@ -1,13 +1,18 @@
 import base64
+import json
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from classe100x import source_profiles as sp
 from classe100x import updater, wireless
+from classe100x.diagnostics import failure
+from classe100x.recovery import RecoveryVerifier
 from classe100x.updater import (NetworkDevice, ProtocolError, UpdateError, check_identity, check_resume,
                                 resume_recovery)
 from classe100x.wireless import SSHError, Wireless
@@ -201,10 +206,11 @@ class ResumeRecoveryTests(unittest.TestCase):
     def test_a_recovery_that_does_not_verify_leaves_the_source_main_untouched(self):
         device = Device()
         verification = Verification(device, verify_error=RuntimeError("recovery differs"))
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as caught:
             resume(device, verification)
         self.assertEqual(writes(device), [])
         self.assertEqual(verification.results[-1][0], "stopped")
+        self.assertIn("main kernel clear attempted: False", failure(caught.exception)["notes"])
 
     def test_the_message_says_the_main_kernel_was_not_cleared(self):
         device = Device()
@@ -231,7 +237,52 @@ class ResumeRecoveryTests(unittest.TestCase):
         self.assertNotIn("reboot-1", device.events)
         self.assertNotIn("begin-main", device.events)
         self.assertNotIn("was not cleared", str(caught.exception))
+        self.assertIn("Main-kernel clearing was attempted", str(caught.exception))
+        self.assertIn("main kernel clear attempted: True", failure(caught.exception)["notes"])
         self.assertEqual(verification.results[-1][0], "stopped")
+
+    def test_recovery_connection_failure_preserves_clear_state_in_saved_report(self):
+        for error in (OSError("forward disconnected"), KeyboardInterrupt(), RuntimeError("unexpected")):
+            with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory() as directory:
+                device = Device()
+                original_connect = device.connect
+
+                def connect():
+                    if device.cleared:
+                        raise error
+                    return original_connect()
+
+                reader = MagicMock(host_keys=[], uid=os.getuid(), gid=os.getgid())
+                verification = RecoveryVerifier(SimpleNamespace(sha256="fixture"), reader,
+                                                parent=directory, progress=lambda message: None)
+                expected = RuntimeError if isinstance(error, RuntimeError) else UpdateError
+                with patch.object(device, "connect", side_effect=connect), \
+                     patch.object(verification, "preflight"), patch.object(verification, "verify"):
+                    with self.assertRaises(expected) as caught:
+                        with verification:
+                            verification.record.update(preflight="passed", verification="passed")
+                            resume(device, verification)
+                record = json.loads((verification.directory / "report.json").read_text())
+                self.assertTrue(device.cleared)
+                self.assertEqual(device.events.count("invalidate"), 1)
+                self.assertNotIn("begin-main", device.events)
+                self.assertEqual(record["update_sequence"], "stopped")
+                self.assertEqual(record["update_stage"], "resume: checking recovery before main transfer")
+                self.assertIn("main kernel clear attempted: True", record["failure"]["notes"])
+                self.assertIn("main kernel clear attempted: True", failure(caught.exception)["notes"])
+                self.assertEqual(device.events[-1], "close")
+
+    def test_final_verification_failure_retains_clear_state_without_repeating_writes(self):
+        device = Device()
+        verification = Verification(device)
+        with self.assertRaises(UpdateError) as caught:
+            resume(device, verification, final_verification=Mock(side_effect=OSError("SSH lost")))
+        self.assertIn("final destination SSH verification", str(caught.exception))
+        self.assertIn("Main-kernel clearing was attempted", str(caught.exception))
+        self.assertEqual(device.events.count("invalidate"), 1)
+        self.assertEqual(device.events.count("commit-btweb_only.ext4.gz"), 1)
+        self.assertEqual(device.events.count("commit-uImage.zip"), 1)
+        self.assertEqual(verification.results[-1], ("stopped", "final destination SSH verification"))
 
     def test_a_recovery_boot_that_reports_a_source_version_is_refused(self):
         device = Device(recovery_version=V157)

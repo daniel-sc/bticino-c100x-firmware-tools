@@ -13,7 +13,7 @@ On that setup the firmware was built with the commands below, and an intercom wa
 | `builder-doctor`, `fetch-fw`, `build-fw`, `inspect-fw` | Available. |
 | Wireless update: `plan`, `flash`, `plan-resume-recovery`, `resume-recovery`, and `plan-recovery` / `recover` with `--transport ssh` | Available. |
 | USB networking and USB flashing (`usb`, and any device command without `--transport ssh`) | Not available: the USB helper is macOS-only. |
-| Keeping the host awake during an update | Not done by the tool. See [Notes](#notes). |
+| Keeping the host awake during an update | Tries `systemd-inhibit`; warns if unavailable. See [Notes](#notes). |
 
 In the commands below, `c100x` stands for `python -m classe100x`.
 
@@ -81,6 +81,6 @@ c100x plan --transport ssh --host 192.168.1.20 --ssh-user root2 --ssh-password \
 - **Host names.** Multicast DNS does not normally work inside the default Docker network, so the default `Bticino-Classe100X.local` will not resolve. Pass the IPv4 address of the intercom, or a DNS name, with `--host`.
 - **Files.** The recovery readback copies the recovery partitions into the working directory (`c100x-verification-*`), which needs at least 512 MiB free. The evidence report stays there afterwards.
 - **Trusted identity.** The identity of the intercom is stored under the home of the container user (`~/Library/Application Support/C100X/trust`, a path inherited from macOS). Removing the container forgets it.
-- **Sleep.** The tool keeps a Mac awake with `caffeinate`. On Linux it prints a warning and does nothing, and a host that suspends stops the update between two writes. On a systemd host you can wrap the command, for example `systemd-inhibit --what=sleep:idle --why="C100X update" docker exec -it ...`. This was not exercised.
+- **Sleep.** On Linux the tool tries `systemd-inhibit` for the duration of the update. If it cannot acquire inhibition, it warns and continues. Docker usually cannot inhibit host sleep; keep the host awake yourself or wrap the Docker command on the host with `systemd-inhibit --what=sleep:idle --why="C100X update" docker exec -it ...`.
 - **Keys.** The setup above used `--ssh-password` for both logins. `--ssh-key` takes a path inside the container, and an encrypted key has to be unlocked in an agent that the container cannot see by default. A dedicated, unencrypted key mounted read-only into the container is the simple alternative. This was not exercised.
 - **Clean up.** `docker rm -f c100x` removes the container. The mounted directory keeps everything that was built.

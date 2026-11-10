@@ -181,8 +181,9 @@ an unambiguous target.
   Allow roughly 2 GiB free for image inspection plus private recovery evidence.
   Source setups need e2fsprogs, Dropbear keygen and OpenSSL; the release tool set
   already includes them. Ordinary USB flashing retains its smaller dependencies.
-- The Mac remains connected throughout and temporarily prevents idle sleep. Lid
-  closure, explicit sleep, network interruption and power loss remain separate.
+- Keep the computer connected throughout. The tool prevents idle sleep on macOS
+  and tries `systemd-inhibit` on Linux, warning if unavailable. Lid closure,
+  forced sleep, network interruption and power loss remain separate.
 - Known staged vendor packages, nonempty update metadata or active installers
   stop preflight. These snapshots cannot prevent a subsequent competing installer
   in unprotected firmware. Neither pre-installed prevention nor temporary

@@ -523,7 +523,8 @@ while True: time.sleep(1)
     def test_sleep_assertion_released_on_error(self):
         process = Mock()
         process.poll.return_value = None
-        with patch.object(wireless.subprocess, "Popen", return_value=process), patch.object(wireless.time, "sleep"):
+        with patch.object(wireless.subprocess, "Popen", return_value=process), patch.object(wireless.time, "sleep"), \
+                patch.object(wireless.sys, "platform", "darwin"):
             with self.assertRaises(RuntimeError):
                 with wireless.awake():
                     raise RuntimeError("stop")

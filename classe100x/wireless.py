@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import signal
 import socket
 import subprocess
@@ -570,29 +571,55 @@ class VerificationReader:
 
 @contextmanager
 def awake():
+    linux = sys.platform.startswith("linux")
+    command = (["systemd-inhibit", "--what=idle:sleep", "--mode=block", "--who=C100X",
+                "--why=Firmware update in progress", "--no-ask-password",
+                "/bin/sh", "-c", "echo READY; exec sleep infinity"] if linux else
+               ["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())])
     try:
-        process = subprocess.Popen(["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    except FileNotFoundError:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE if linux else subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, **({"start_new_session": True} if linux else {}))
+    except OSError as exc:
+        if not linux and not isinstance(exc, FileNotFoundError):
+            raise
         process = None
-    if process is None:
-        # caffeinate exists only on macOS. Nothing keeps this host awake, and a host that suspends in
-        # the middle of an update stops it between two writes: say so.
-        print("Warning: no idle-sleep assertion is available on this host (caffeinate is macOS only). "
-              "Keep the computer awake until the update ends.", file=sys.stderr, flush=True)
-        yield
-        return
     try:
-        time.sleep(0.05)
-        if process.poll() is not None:
-            raise SSHError("Unable to establish macOS idle-sleep assertion")
+        available = process is not None
+        if available and linux:
+            # The wrapped command starts only after logind grants the inhibition.
+            readable, _, _ = select.select([process.stdout], [], [], 5)
+            available = bool(readable) and process.stdout.readline() == b"READY\n"
+        elif available:
+            time.sleep(0.05)
+            if process.poll() is not None:
+                raise SSHError("Unable to establish macOS idle-sleep assertion")
+        if not available:
+            print(f"Warning: {command[0]} could not prevent sleep. "
+                  "Keep the computer awake until the update ends.", file=sys.stderr, flush=True)
         yield
     finally:
-        if process.poll() is None:
-            process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        process.stderr.close()
+        if process is not None:
+            if linux:
+                _signal_inhibitor_group(process, signal.SIGTERM)
+            elif process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                if linux:
+                    _signal_inhibitor_group(process, signal.SIGKILL)
+                else:
+                    process.kill()
+                process.wait()
+            process.stderr.close()
+            if linux:
+                process.stdout.close()
+
+
+def _signal_inhibitor_group(process, sig):
+    # Release the lock and stop the wrapped sleep process, including on Ctrl+C.
+    try:
+        os.killpg(process.pid, sig)
+    except ProcessLookupError:
+        pass

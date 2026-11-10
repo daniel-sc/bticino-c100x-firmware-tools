@@ -1,9 +1,7 @@
-name: Linux offline tests
+name: Linux tests and package
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -12,17 +10,53 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: jdx/mise-action@v5.2.4
         with:
           install: false
-      - name: Prepare Linux development dependencies
-        run: mise run setup-linux
+      - name: Prepare Linux build dependencies
+        run: |
+          sudo bash packaging/setup-linux.sh
+          mise install python 7zip
+          mise exec -- python tests/build_mqtt_library.py
       - name: Check builder tools
         run: mise exec -- python -m classe100x builder-doctor
       - name: Offline suite including builder and native MQTT
         env:
           MISE_AUTO_INSTALL: 'false'
         run: mise run test-linux
+      - name: Select version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_TYPE" == tag ]]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]] || exit 1
+            echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.2.0-alpha.ci${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Assemble Linux bundle and dependency sources
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: mise exec -- python packaging/build_linux.py --version "$RELEASE_VERSION"
+      - name: Test the packaged CLI
+        run: |
+          mkdir .local/linux-unpacked
+          tar -xzf .local/release-linux/c100x-*-linux-x86_64.tar.gz -C .local/linux-unpacked
+          mise exec -- python packaging/smoke.py .local/linux-unpacked/C100X
+      - name: Check bundled tools without build dependencies
+        run: |
+          docker run --rm --network none --user 1000:1000 \
+            -v "$PWD/.local/linux-unpacked/C100X:/opt/C100X:ro" \
+            ubuntu:24.04 /opt/C100X/c100x builder-doctor
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: c100x-linux-x86_64
+          path: |
+            .local/release-linux/*.tar.gz
+            .local/release-linux/release-linux-x86_64.json
+          if-no-files-found: error

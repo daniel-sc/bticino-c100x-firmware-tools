@@ -298,6 +298,12 @@ and backups remain private artifacts.
 
 **Accepted 2026-10-28**, following the short release-design interview.
 
+**Linux package, 2026-11-10:** also publish an x86-64 Linux tarball for firmware
+building and SSH updates. Build on Ubuntu 24.04 and require glibc 2.39+; bundle
+Python, builder tools and their non-glibc libraries. OpenSSH and CA certificates
+come from the host. USB flashing remains macOS-only. Both packages must pass CI
+before a tagged release is published; include dependency sources and checksums.
+
 **Validation amendment, accepted 2026-11-05:** Carry forward observed hardware
 acceptance for unchanged device behavior. Documentation and small host-side fixes
 use appropriate offline and release-artifact checks; they do not require a fresh

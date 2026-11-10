@@ -9,7 +9,10 @@ import sys
 import tempfile
 import zipfile
 
-from build import audit
+if sys.platform == "linux":
+    from build_linux import audit
+else:
+    from build import audit
 
 
 def main():
@@ -25,7 +28,7 @@ def main():
         home = root / "home"
         home.mkdir()
         env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(home), "TMPDIR": temporary,
-               "LC_ALL": "C", "OPENSSL_CONF": "/dev/null"}
+               "LC_ALL": "C", "OPENSSL_CONF": "/dev/null", "CLASSE100X_REQUIRE_BUILDER_TOOLS": "1"}
         def run(*command, input=None):
             result = subprocess.run(list(map(str, command)), cwd=root, env=env, input=input,
                                     capture_output=True, timeout=120)
@@ -35,7 +38,8 @@ def main():
             return result.stdout
         cli = bundle / "c100x"
         run(cli, "--version")
-        for command in ("build-fw", "inspect-fw", "plan", "flash", "plan-recovery", "recover", "usb"):
+        for command in ("build-fw", "inspect-fw", "plan", "flash", "plan-recovery", "recover",
+                        "plan-resume-recovery", "resume-recovery", "usb"):
             run(cli, command, "--help")
         doctor = json.loads(run(cli, "builder-doctor"))
         assert doctor["ssh_tools"]["openssl"]["sha512_crypt"]
@@ -43,7 +47,8 @@ def main():
         for path in doctor["paths"].values():
             assert Path(path).is_relative_to(bundle)
         tools = bundle / "support/app/tools"
-        run(tools / "tetherkit-cli", "--help")  # Never enumerate/connect hardware.
+        if sys.platform == "darwin":
+            run(tools / "tetherkit-cli", "--help")  # Never enumerate/connect hardware.
 
         # Bundled MQTT assets must survive packaging/relocation byte-for-byte.
         mqtt = bundle / "support/app/payloads/mqtt"
@@ -73,7 +78,10 @@ def main():
 
         # Exercise USB handover/recovery sequencing with simulated devices using
         # the shipped interpreter and modules, including isolated child workers.
-        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py", "test_cli.py", "test_wireless.py"):
+        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py",
+                        "test_cli.py", "test_wireless.py", "test_awake.py", "test_source_profiles.py",
+                        "test_identity_by_profile.py", "test_ephemeral_host_keys.py",
+                        "test_resume_recovery.py", "test_recover_over_ssh.py", "test_builder.py", "test_recovery.py"):
             run(bundle / "support/python/bin/python3", "-I", "-B", "-c",
                 "import sys, unittest; sys.path.insert(0, sys.argv[1]); "
                 "suite = unittest.defaultTestLoader.discover(sys.argv[2], pattern=sys.argv[3]); "
@@ -83,7 +91,8 @@ def main():
 
         # Fixture creation is a host build-time operation; all tested operations
         # below use only shipped tools. mke2fs is not an end-user dependency.
-        mkfs = Path(subprocess.check_output(["brew", "--prefix", "e2fsprogs"], text=True).strip()) / "sbin/mke2fs"
+        mkfs = (Path(shutil.which("mke2fs") or "/usr/sbin/mke2fs") if sys.platform == "linux" else
+                Path(subprocess.check_output(["brew", "--prefix", "e2fsprogs"], text=True).strip()) / "sbin/mke2fs")
         image = root / "fixture.ext4"
         with image.open("wb") as stream:
             stream.truncate(16 * 1024**2)
@@ -111,7 +120,8 @@ def main():
         with zipfile.ZipFile(root / "fixture.zip") as archive:
             assert archive.read("archive-input", pwd=b"C100X") == (root / "archive-input").read_bytes()
         minimum = audit(bundle)
-        print(f"Packaged smoke tests passed; arm64, minimum macOS {minimum}, no USB access")
+        target = f"x86-64 Linux, glibc {minimum}+" if sys.platform == "linux" else f"arm64, minimum macOS {minimum}"
+        print(f"Packaged smoke tests passed; {target}, no device access")
 
 
 if __name__ == "__main__":

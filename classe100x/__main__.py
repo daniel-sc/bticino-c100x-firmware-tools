@@ -174,7 +174,7 @@ def main() -> int:
             diagnostic(format_failure(exc, debug=True))
             return 1
         return 0
-    parser = argparse.ArgumentParser(description="Classe 100X native macOS firmware CLI")
+    parser = argparse.ArgumentParser(description="Classe 100X firmware CLI: USB on macOS, SSH on macOS/Linux")
     parser.add_argument("--version", action="version", version=f"c100x {version()}")
     parser.add_argument("--debug", action="store_true", help="Include Python stack traces in error output")
     commands = parser.add_subparsers(dest="command", required=True)

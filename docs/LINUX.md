@@ -1,23 +1,46 @@
-# Linux with Docker (experimental)
+# Linux: firmware building and SSH updates
 
-The tool was developed and validated on macOS. This page records a way to run its **SSH-only** part on Linux: building firmware and updating an intercom over the LAN. It was used on one setup (an Arch Linux host, Docker, the `python:3.14-slim` image and one C100X `02*06*0`) and has not been through the acceptance recorded in [ACCEPTANCE.md](ACCEPTANCE.md).
+Linux can build firmware and update an intercom over SSH. USB flashing requires
+macOS. Use the Linux release bundle or run from source; Docker is optional.
+
+## Install the release bundle
+
+Download the `linux-x86_64.tar.gz` asset from [releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
+It includes Python and builder tools and needs x86-64 Linux with glibc 2.39+,
+OpenSSH client and CA certificates. On Ubuntu/Debian, those system dependencies
+are `openssh-client` and `ca-certificates`.
+
+```sh
+tar -xzf c100x-*-linux-x86_64.tar.gz
+./C100X/c100x builder-doctor
+./C100X/c100x plan custom.fwz --transport ssh --ssh-user root2 --ssh-key ~/.ssh/c100x_ecdsa
+```
+
+Use `./C100X/c100x` wherever the guides say `c100x`. Keep the whole folder together.
+To update, extract the newer bundle into a fresh directory; keep firmware and
+private settings outside it.
 
 ## Status
 
-On that setup the firmware was built with the commands below, and an intercom was updated from 1.5.7 to 1.5.8 over SSH. That update ran a first, device-specific form of the source-profile and resume code. The code as documented in this repository, and `plan-recovery` / `recover` over SSH, are covered by unit tests only and have not been run against an intercom.
+Linux hardware validation is limited. A contributor built firmware and updated
+one C100X (`02*06*0`) from 1.5.7 to 1.5.8 using this Docker setup and earlier,
+device-specific code. The generalized source-profile and SSH resume/recovery paths
+have offline test coverage but no hardware validation yet. See [ACCEPTANCE.md](ACCEPTANCE.md).
 
 ## Scope
 
-| | Linux with Docker |
+| | Linux |
 |---|---|
 | `builder-doctor`, `fetch-fw`, `build-fw`, `inspect-fw` | Available. |
-| Wireless update: `plan`, `flash`, `plan-resume-recovery`, `resume-recovery`, and `plan-recovery` / `recover` with `--transport ssh` | Available. |
-| USB networking and USB flashing (`usb`, and any device command without `--transport ssh`) | Not available: the USB helper is macOS-only. |
+| `plan`, `flash`, `plan-recovery`, `recover` with `--transport ssh` | Available. |
+| `plan-resume-recovery`, `resume-recovery` (always SSH) | Available. |
+| USB networking and USB flashing | macOS-only. |
 | Keeping the host awake during an update | Tries `systemd-inhibit`; warns if unavailable. See [Notes](#notes). |
 
-In the commands below, `c100x` stands for `python -m classe100x`.
+## Run from source with Docker
 
-## Set up a container
+The example below uses an Arch Linux host with `python:3.14-slim`.
+Here, `c100x` stands for `python -m classe100x` inside the container.
 
 No image has to be built. One container only has to stay running while you work. Add `sudo` to the `docker` commands if your user is not in the `docker` group.
 

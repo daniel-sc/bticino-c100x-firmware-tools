@@ -1,7 +1,13 @@
-# Linux: firmware building and SSH updates
+# Linux: building, SSH updates and experimental USB
 
-Linux can build firmware and update an intercom over SSH. USB flashing requires
-macOS. Use the Linux release bundle or run from source; Docker is optional.
+Linux can build firmware and update an intercom over SSH. Current source also
+implements experimental USB for native Ubuntu 24.04 and 26.04 Desktop x86-64 with
+default NetworkManager. Read-only access, managed activation, normal/cancelled-session
+cleanup and a complete flash with recovery handover passed on 26.04; the owner
+also confirmed post-flash household functionality. Ubuntu 24.04 hardware coverage
+remains open. Use a bundle built
+from this source for USB; this does not imply older published assets include it.
+Docker is optional for building and SSH, outside the USB reference configuration.
 
 ## Install the release bundle (recommended)
 
@@ -34,8 +40,61 @@ have offline test coverage but no hardware validation yet. See [ACCEPTANCE.md](A
 | `builder-doctor`, `fetch-fw`, `build-fw`, `inspect-fw` | Available. |
 | `plan`, `flash`, `plan-recovery`, `recover` with `--transport ssh` | Available. |
 | `plan-resume-recovery`, `resume-recovery` (always SSH) | Available. |
-| USB networking and USB flashing | macOS-only. |
+| USB networking and USB flashing | Experimental; Ubuntu 24.04 and 26.04 Desktop x86-64 reference targets. |
 | Keeping the host awake during an update | Tries `systemd-inhibit`; warns if unavailable. See [Notes](#notes). |
+
+## Experimental native USB
+
+Download, extract and run; no package installation is expected on the reference
+Ubuntu 24.04/26.04 Desktop setups. The bundle includes `ip`; Ubuntu supplies native USB
+drivers, NetworkManager and its matching `nmcli` client. Stock-device flashing
+requires no SSH. Server/networkd, derivatives, other kernels, containers and WSL
+receive no dedicated compatibility work. Missing drivers or network conflicts
+stop with instructions; the tool installs nothing and edits no persistent settings.
+
+```sh
+sudo ./C100X/c100x plan custom.fwz
+# Only after reviewing preflight and explicitly deciding to flash:
+sudo ./C100X/c100x flash custom.fwz
+```
+
+Keep the computer awake, USB connected and device power stable throughout USB
+flashing. Automatic sleep inhibition currently belongs to the SSH update path.
+
+The command discovers exactly one USB `1da4:0056` device and its network interface.
+It activates an in-memory, non-autoconnecting profile with `192.168.129.2/30`,
+without default routes or DNS. Each transport check requires the route to `.1`
+and source `.2` through that USB interface. Interfaces are rediscovered across
+normal/recovery boots; names are not assumed stable. On exit, the temporary
+profile is deleted and the previous connection is restored only if the original
+interface incarnation remains. Another active C100X session is rejected.
+
+On cleanup failure, inspect NetworkManager connections named `c100x-usb-*`.
+Abrupt process death cannot guarantee cleanup; these profiles are in-memory, not
+saved configuration. Stop the old process before removing its temporary profile.
+Linux storage automount/unmount behavior is still a hardware-check item; the
+existing macOS storage-unmount helper does not run on Linux.
+
+### Prepared hardware session
+
+Before connecting hardware: run offline checks, build/relocate/smoke-test the
+bundle, select and inspect the intended FWZ, and prepare space for private logs.
+Then, on Ubuntu Desktop:
+
+1. Record Ubuntu/kernel version and `nmcli --version`. Connect one powered device.
+2. Run `sudo ./C100X/c100x usb` in a terminal; in another run
+   `./C100X/c100x probe`. This changes host networking but sends no device writes.
+   Record the USB interface/driver (`readlink /sys/class/net/<interface>/device/driver`),
+   `ip -j -4 route get 192.168.129.1`, and any mounted USB storage.
+3. Stop `usb` with Ctrl-C. Check that the temporary profile disappeared and prior
+   networking returned. Run `sudo ./C100X/c100x plan custom.fwz` and check cleanup
+   again. If native binding/preflight fails, investigate before authorizing writes.
+4. With separate owner authorization, perform the full `flash` above. Observe four
+   transfers, three verified reboots, normal/recovery driver handovers and final
+   host cleanup. Never deliberately interrupt a write or reboot as error cleanup.
+5. Verify calls, two-way audio/video, door release and selected SSH/MQTT features.
+   Record observed results in ACCEPTANCE.md, including storage behavior. An
+   unexpected stop or binding issue may require another focused session.
 
 ## Optional: run from source with Docker
 

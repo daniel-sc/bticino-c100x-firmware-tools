@@ -98,6 +98,103 @@ ELF dependency/glibc checks and dependency-source archive hashes passed.
 Bundled tools also passed `builder-doctor` in a minimal Ubuntu 24.04 container.
 These are local package checks; no new hardware run or release publication occurred.
 
+## Experimental Linux USB (2026-11-12)
+
+Ubuntu 24.04 and 26.04 Desktop x86-64 with default NetworkManager are the agreed
+reference targets (ADR-020). A complete USB flash, normal/recovery handover and
+cleanup passed on Ubuntu 26.04.1 below; the owner subsequently confirmed household
+functionality passed. Ubuntu 24.04 hardware coverage remains open; packaging checks
+alone do not establish it.
+Use the [focused session checklist](LINUX.md#prepared-hardware-session) for further
+validation. A checklist or build does not itself authorize a device write.
+
+Offline worktree checks on 2026-11-12 passed all 347 tests in the Ubuntu 24.04
+build container with builder/native-MQTT coverage and no skips. Seven focused
+Linux USB tests cover ancestry/ambiguity, temporary-profile restoration (including
+uncertain activation), re-enumeration, route conflicts, source/ownership checks,
+root admission and cancellation cleanup. Ubuntu NetworkManager 1.46 accepted the
+profile arguments using `nmcli --offline`; no host network or device was changed
+by that check. The initial workstation run lacked `dropbearkey`; its builder
+failure was resolved by running in the existing dependency-complete build container.
+
+The local `0.2.0-alpha.linuxusb` bundle built with dependency sources and passed
+ELF/glibc auditing and relocated packaging smoke with networking disabled. Its
+bundled `ip` JSON route query and builder tools also ran in a minimal Ubuntu 24.04
+container. One smoke attempt hit the existing recovery test's exact mocked-clock
+assertion (`120.001` versus `120`); a rerun passed without a code change. These
+checks establish packaging/offline behavior, not USB hardware operation. No release
+was published.
+
+Independent fresh-context correctness and standards reviews found two cleanup
+issues: ambiguous/disappearing interface discovery could skip owned-profile
+deletion, and cleanup warnings dropped tool diagnostic notes. Both were fixed
+and rechecked by the reviewers. All nine focused Linux USB tests passed after
+the fixes, including profile removal despite discovery failure and retention of
+cleanup diagnostics without masking the primary operation error.
+
+### Linux read-only hardware probe (2026-11-12)
+
+On Ubuntu **26.04.1**, kernel `7.0.0-43-generic`, NetworkManager `1.54.3`,
+USB `1da4:0056` enumerated with native `rndis_host`, `cdc_acm` and `usb-storage`.
+Sysfs discovery identified `enx3e4766b22ca8`; NetworkManager already managed an
+active connection with host `192.168.129.2`. Both automatic and explicit-source
+route queries selected that USB interface for `192.168.129.1`. Source CLI and
+local packaged CLI read-only probes passed: firmware 1.5.8, hardware `02*06*0`,
+model `1.0.99`, normal status `4*0`, and increasing uptime. The USB-associated
+storage device was not mounted.
+
+This validates normal-mode native USB/read-only protocol access on the 26.04
+target, not the Ubuntu 24.04 target. The connection existed before the
+initial test; managed profile activation/restoration was initially blocked by
+unavailable noninteractive sudo.
+
+After the owner enabled sudo, the local packaged interpreter/backend successfully
+activated its temporary profile, passed route/source checks and read-only normal
+identity, deleted that profile and restored the original active connection UUID.
+The complete profile UUID set matched the pre-session set afterward. A second
+idle host session received SIGTERM with no device write active: cancellation was
+handled, the original connection/profile set returned, and subsequent read-only
+identity still passed. Uptime continued increasing (no device reboot).
+
+These establish normal-mode managed activation, ordinary exit and idle-cancellation
+cleanup on Ubuntu 26.04.1. No ring/call/audio/door-release, transfer, reboot or
+firmware-write command was sent during those initial checks. The subsequently
+authorized full flash is recorded below.
+
+### Complete Linux USB flash (2026-11-12)
+
+The owner explicitly authorized flashing the supplied `custom-0.2.0-alpha.1.fwz`
+(106027525 bytes, SHA-256
+`4052c303a348c7f47504d540526dadc5623b6ede5c73d2aec4f9e764b1202197`).
+Local archive inspection and managed read-only preflight passed. Before starting,
+read-only identity showed normal `4*0`, uptime over five days and an idle worker;
+no preceding write had started. `systemd-inhibit` held sleep, idle and lid-close
+blocking throughout the flash. No global flash-kill timeout was used.
+
+The local `0.2.0-alpha.linuxusb` bundle completed all four payload transfers and
+three verified reboots on the Ubuntu 26.04.1 host above: recovery filesystem/kernel,
+normal reboot, main-kernel clear and recovery boot, main filesystem/kernel, final
+normal boot. Native USB interface names changed at every reboot; the managed
+session discovered and configured each new interface. The recovery gzip differs
+from stock (SHA-256 `1fedd776384d92cda1374c8c8dc5a74f3b0ffd4dfabe111e05d9f4b973d539ac`),
+so this run adds customized-recovery USB handover coverage. Recovery's bound host
+driver was not separately captured; the sequence establishes working recovery
+networking, not an observed `cdc_ether` driver identity.
+
+After completion, an independent read-only probe reported firmware 1.5.8,
+hardware `02*06*0`, model `1.0.99`, normal `4*0`, uptime 41 seconds and idle worker.
+Final main used `rndis_host`; no `c100x-usb-*` profiles remained. NetworkManager
+had an ordinary active wired connection for the new interface incarnation.
+Private inspection, preflight, flash and final-state logs are under
+`.local/usb-hardware-20261112/`.
+
+No ring/call/audio/door-release commands were sent by the automated validation.
+The owner subsequently confirmed household functionality passed after this flash.
+This adds owner-reported functional acceptance to the observed full USB
+protocol/transport completion. Individual household test steps were not supplied;
+post-flash SSH/MQTT acceptance and full installed-byte readback are not established
+by that report. No uncertain write was retried.
+
 ## Wireless and dual-image hardware coverage
 
 **PR #8 additions:** the generalized 1.5.7 source-profile, regenerated-key and
@@ -122,9 +219,9 @@ blocked manufacturer installation. Additional coverage:
 - [x] **Household checks under the new policy:** the user confirmed completing
       the household tests after the wireless flash and that everything is working.
       No separate commissioning/reconnection scenario was reported.
-- [ ] **USB with customized recovery:** targeted USB operation/handover coverage
-      with the dual-image policy installed. The established USB sequence passed
-      with stock recovery.
+- [x] **USB with customized recovery:** the 2026-11-12 Ubuntu 26.04.1 flash above
+      completed recovery boot/networking and the full USB sequence using the supplied
+      customized recovery. This does not establish its vendor-blocking runtime behavior.
 
 ## Follow-up hardware coverage (non-blocking for unchanged released behavior)
 
@@ -155,7 +252,7 @@ a firmware write. Record results only after observation.
   for staged packages and active installers do not exclude later competition.
   See [OTA investigation](OTA.md) for the prevention mechanism and evidence.
 - Linux firmware building and SSH updates are available, with limited
-  hardware validation (see [Linux](LINUX.md)). USB flashing requires macOS;
+  hardware validation (see [Linux](LINUX.md)). Linux USB is experimental;
   release bundles target Apple Silicon macOS 15+ and x86-64 Linux with glibc 2.39+.
   WSL and Windows/MyHOME import of generated images remain unvalidated.
 - An uninterrupted full run combining the optional SSH gate with USB handover

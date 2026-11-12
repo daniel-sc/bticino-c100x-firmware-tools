@@ -40,13 +40,22 @@ uses the reported feth interface. Reconnection and FTP setup recheck this route.
 `--external-usb` retains the developer-managed transport mode. `probe` accepts
 host/port overrides and uses an existing connection, including the research tunnel.
 
-All managed commands use one USB session across both environments: native
+On macOS, all managed commands use one USB session across both environments: native
 Ethernet discovered beneath the C100X USB VID/PID, or the existing helper when
 native Ethernet is absent. Native `.2/30` configuration and destination routing
 are checked before device access. During reconnection the parent checks for ECM
 even when the worker has not reported a feth interface, stops/reaps the helper
 before using native ECM, and starts a fresh helper if RNDIS returns. An arbitrary
 LAN `en` interface is never accepted (ADR-015).
+
+On Linux, the experimental Ubuntu backend uses native kernel USB networking in
+both environments. Sysfs ancestry and interface incarnation identify the device;
+a temporary NetworkManager profile supplies `.2/30` without default routes/DNS.
+Destination/source checks gate the same updater. Exit removes the profile and
+restores the prior connection on a surviving interface. A process lock prevents
+competing managed sessions. A complete flash and cleanup passed on Ubuntu 26.04.1;
+24.04 hardware coverage remains open (ADR-020). No TetherKit or firmware-sequence
+fork is used.
 
 ## Module responsibilities
 
@@ -72,6 +81,7 @@ LAN `en` interface is never accepted (ADR-015).
 | `wireless_image.py` | Wireless-only expanded image admission, content-derived host identity/access policy and pipe-only future credential checks |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
 | `usb_session.py` | Native ECM/helper RNDIS selection, parent-owned worker, readiness/route checks, bounded startup and cleanup |
+| `linux_usb.py` | Experimental Ubuntu sysfs discovery, temporary NetworkManager profile ownership, route/source checks and restoration |
 | `usb_storage.py` | Bounded best-effort macOS unmount of USB-associated storage before planned reboot; no device protocol or persistent host settings |
 | `resources.py`, `entrypoint.py` | Relocatable release assets and isolated child interpreter entry points |
 

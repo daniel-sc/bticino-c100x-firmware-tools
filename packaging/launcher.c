@@ -1,5 +1,7 @@
 /* Relocatable CLI entry point; the shipped CPython preserves payload-hook support. */
+#ifdef __APPLE__
 #include <mach-o/dyld.h>
+#endif
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,8 +10,18 @@
 
 int main(int argc, char **argv) {
     char raw[PATH_MAX], executable[PATH_MAX], python[PATH_MAX], entry[PATH_MAX];
+#ifdef __APPLE__
     uint32_t size = sizeof(raw);
     if (_NSGetExecutablePath(raw, &size) || !realpath(raw, executable)) {
+#else
+    ssize_t size = readlink("/proc/self/exe", raw, sizeof(raw) - 1);
+    if (size < 0 || size >= sizeof(raw) - 1) {
+        fputs("Cannot locate c100x\n", stderr);
+        return 1;
+    }
+    raw[size] = '\0';
+    if (!realpath(raw, executable)) {
+#endif
         perror("Cannot locate c100x");
         return 1;
     }

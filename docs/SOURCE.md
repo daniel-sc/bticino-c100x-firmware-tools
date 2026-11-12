@@ -3,6 +3,7 @@
 For the self-contained download, use the [README](../README.md). This page is for
 developers on macOS. Clone or download the repository, then open Terminal in its
 root directory (containing `mise.toml`).
+For firmware building and SSH updates on Linux, see [the Linux guide](LINUX.md).
 
 ## Builder setup
 

@@ -33,7 +33,8 @@ It does not install a kernel extension or a permanent background service.
 `plan` and `flash` use a fixed USB device IP and own a managed USB session by default.
 With `--transport ssh`, they use `Bticino-Classe100X.local` or `--host`, own strict
 phase-specific SSH forwards and require recovery verification. Names are resolved
-again after planned reboots. Wireless recovery entry is not implemented.
+again after planned reboots. `plan-recovery`/`recover` also support SSH entry
+into an already running recovery system.
 The session waits for interface configuration and verifies that the device route
 uses the reported feth interface. Reconnection and FTP setup recheck this route.
 `--external-usb` retains the developer-managed transport mode. `probe` accepts
@@ -67,6 +68,7 @@ LAN `en` interface is never accepted (ADR-015).
 | `recovery.py` | SSH prerequisites and post-recovery-write integrity gate (optional for USB, mandatory for wireless); bounded acquisition, offline checks and private evidence |
 | `ssh.py`, `ssh_askpass.py`, `ssh-askpass` | OpenSSH reads, invoking-user authentication and memory-only password broker; warning-only USB evidence or strict expected wireless identity |
 | `wireless.py` | Direct LAN resolution, owner trust enrollment/records, phase-owned strict SSH forwards, credential reuse, read-only installer checks and scoped idle-sleep prevention |
+| `source_profiles.py` | Source firmware versions, pinned update executables and source SSH host-key policy |
 | `wireless_image.py` | Wireless-only expanded image admission, content-derived host identity/access policy and pipe-only future credential checks |
 | `transport.py` | Privileged helper lifecycle, interface configuration, reconnect and termination cleanup |
 | `usb_session.py` | Native ECM/helper RNDIS selection, parent-owned worker, readiness/route checks, bounded startup and cleanup |
@@ -168,6 +170,11 @@ and kernel, then verifies one normal reboot. `plan-recovery` performs only local
 validation and device reads. Neither command interprets a previous report as a
 resume token; the interrupted state must be assessed first.
 
+`plan-resume-recovery`/`resume-recovery` handle an interruption while main is still
+running. Both read back the installed recovery and compare it with the selected
+image. Only `resume-recovery` then clears main and enters the shared main-transfer
+sequence. Its failure diagnostics retain whether kernel clearing was attempted.
+
 The CLI injects host storage preparation only into write-capable `NetworkDevice`
 instances. Before each planned reboot, query 19 refreshes the command idle timer,
 then a best-effort unmount uses a ten-second total budget. Transport is rechecked
@@ -184,9 +191,12 @@ standard path has no verifier. Authentication and evidence ownership use the
 invoking ordinary user even though USB management runs under sudo. See
 [ADR-012](DECISIONS.md#adr-012-optional-ssh-recovery-integrity-gate).
 
-Wireless always uses that verifier, borrowing administrative reads from the
-transport without closing its owner at the integrity gate. The old-main key and
-credentials apply across the first reboot. Package-derived destination identity
+Wireless updates starting in main use that verifier, borrowing administrative
+reads from the transport without closing its owner at the integrity gate. The source profile
+pins the running update executables before and after the first normal reboot.
+The old-main credentials apply across that reboot; its key must stay the same
+unless the profile declares regeneration and the owner explicitly accepts it.
+That replacement key is never saved as trusted. Package-derived destination identity
 and credentials apply in recovery and final main. Expected keys never become a
 permissive union: a known preceding environment is only not-ready during a planned
 transition, and an unexpected identity is fatal. Read-only polling can recreate
@@ -196,7 +206,7 @@ becomes an SSH readiness error handled by the planned-reboot loop.
 Final normal reboot/state and SSH are required before promoting destination trust.
 Trust records are invoking-user-owned and separate from general SSH settings.
 On the trusted-home network model, existing-main SSH is admitted by working
-administrative access and actual same-key reconnection after its planned reboot,
+administrative access and reconnection after its planned reboot,
 without matching a particular startup script or configuration spelling. A failed
 reconnection stops before main-kernel invalidation. Destination images still require
 checked startup contents and credentials; executable metadata checks accept

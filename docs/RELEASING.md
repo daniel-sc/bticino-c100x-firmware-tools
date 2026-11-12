@@ -118,12 +118,12 @@ Then export the P12 as above. The portal cannot recover an old private key.
 
 ## Build and publish
 
-The `Test and package` workflow runs the offline suite on pull requests. Main
-pushes and manual runs also build the pinned USB helper and a self-contained
-candidate DMG. These ad-hoc-signed candidates are CI artifacts only. Stable and
-alpha tags additionally require all five signing secrets, sign all Mach-O files,
-test the signed bundle, notarize/staple the DMG, and publish a GitHub release with
-sources, provenance and SHA-256 checksums. Only alpha tags use `--prerelease`.
+The `Test and package` workflow runs offline tests on both platforms and builds
+and smoke-tests the Linux bundle on pull requests. Main pushes and manual runs
+also build the Mac bundle and candidate DMG. Stable and alpha tags sign and
+notarize the Mac package, then publish both platform bundles, dependency sources,
+provenance and one combined `SHA256SUMS`. Publication waits for both jobs to pass.
+Only alpha tags use `--prerelease`; Mac signing still requires the five secrets above.
 
 Choose a new stable or alpha tag as described above. Use the same
 `VERSION` below for the local build, tag and download; never reuse a published tag.
@@ -182,6 +182,25 @@ Check the downloaded README and guide links as well. Exercise real local firmwar
 builds separately; firmware stays outside GitHub CI. Record observed results in
 ACCEPTANCE.md before claiming validation, then update the online README's release
 link. Released documentation remains a snapshot; corrections ship in a new release.
+
+## Linux package
+
+On Ubuntu 24.04 x86-64, prepare build dependencies and make the bundle:
+
+```sh
+sudo bash packaging/setup-linux.sh
+mise exec -- python packaging/build_linux.py --version "$VERSION"
+mise exec -- python packaging/smoke.py .local/release-linux/C100X
+```
+
+The build produces a Linux tarball, its dependency-source archive and
+`release-linux-x86_64.json`. ELF checks reject external non-glibc libraries and
+requirements newer than glibc 2.39. Smoke tests relocate the bundle and exercise
+its tools, payload hooks and simulated SSH/update flows without a device.
+`packaging/linux.Dockerfile` supplies the same build environment for other hosts.
+
+Tagged CI attaches these files alongside the Mac DMG. Before reporting a release
+validated, also extract the downloaded Linux tarball and repeat the smoke checks.
 
 ## Homebrew tap follow-up
 

@@ -88,7 +88,23 @@ and [USB recovery gate](VALIDATION-HISTORY.md#2026-11-03-stopped-alpha3-flash-an
       tap commit `867825d`; preview-to-stable installation, `c100x --version`
       and `builder-doctor` passed.
 
+## Linux package checks (2026-11-10)
+
+On Ubuntu 24.04 x86-64 in Docker, all 331 offline tests passed with builder tools
+and native MQTT coverage, without skips. The Linux tarball built successfully;
+the extracted, relocated bundle passed smoke tests with networking disabled,
+including synthetic firmware builds, payload hooks and simulated SSH updates.
+ELF dependency/glibc checks and dependency-source archive hashes passed.
+Bundled tools also passed `builder-doctor` in a minimal Ubuntu 24.04 container.
+These are local package checks; no new hardware run or release publication occurred.
+
 ## Wireless and dual-image hardware coverage
+
+**PR #8 additions:** the generalized 1.5.7 source-profile, regenerated-key and
+SSH resume/recovery paths have not been hardware-validated. The contributor
+reports a successful 1.5.7 → 1.5.8 update using earlier device-specific code;
+the 1.5.7 hashes come from that device, not an official image comparison.
+This does not extend the passed results below.
 
 The complete wireless run closes the full SSH sequence, recovery LAN/SSH startup,
 tunneled transfers, recovery integrity gate and final destination access checks
@@ -138,8 +154,10 @@ a firmware write. Record results only after observation.
   with `--allow-vendor-updates`, and can replace custom features. Preflight checks
   for staged packages and active installers do not exclude later competition.
   See [OTA investigation](OTA.md) for the prevention mechanism and evidence.
-- Linux/WSL parity and Windows/MyHOME import of generated images are unvalidated;
-  the distributed tool targets Apple Silicon macOS 15+.
+- Linux firmware building and SSH updates are available, with limited
+  hardware validation (see [Linux](LINUX.md)). USB flashing requires macOS;
+  release bundles target Apple Silicon macOS 15+ and x86-64 Linux with glibc 2.39+.
+  WSL and Windows/MyHOME import of generated images remain unvalidated.
 - An uninterrupted full run combining the optional SSH gate with USB handover
   has not been recorded. The USB gate and ordinary full USB flash passed separately;
   the completed SSH flash includes the mandatory gate.

@@ -15,11 +15,12 @@ env:
   CLASSE100X_REQUIRE_BUILDER_TOOLS: '1'
 
 jobs:
+  linux:
+    uses: ./.github/workflows/linux.yml
+
   macos:
     runs-on: macos-15
     timeout-minutes: 60
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: jdx/mise-action@v5.2.4
@@ -94,14 +95,29 @@ jobs:
             .local/release/SHA256SUMS
             .local/release/release.json
           if-no-files-found: error
+  release:
+    if: github.ref_type == 'tag'
+    needs: [macos, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: c100x-*
+          merge-multiple: true
+          path: .local/release
+      - name: Checksums for both platforms
+        working-directory: .local/release
+        run: sha256sum ./*.dmg ./*.tar.gz ./release*.json > SHA256SUMS
       - name: Publish release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_VERSION: ${{ github.ref_name }}
         run: |
           release_flags=(--latest)
           if [[ "$RELEASE_VERSION" == *-* ]]; then
             release_flags=(--prerelease --latest=false)
           fi
-          gh release create "$RELEASE_VERSION" --verify-tag "${release_flags[@]}" --title "C100X $RELEASE_VERSION" --notes-file packaging/RELEASE.md .local/release/*.dmg .local/release/*-dependency-sources.tar.gz .local/release/SHA256SUMS .local/release/release.json
+          gh release create "$RELEASE_VERSION" --verify-tag "${release_flags[@]}" --title "C100X $RELEASE_VERSION" --notes-file packaging/RELEASE.md .local/release/*.dmg .local/release/*.tar.gz .local/release/SHA256SUMS .local/release/release*.json

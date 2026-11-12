@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import signal
 import socket
 import subprocess
@@ -21,6 +22,8 @@ from .host import run_tool
 from .diagnostics import tool_error
 from .ssh import SSHConnection, SSHError, HostIdentityError, _invoking_user
 from .wireless_image import facts, pipe_tool, public_identity
+from .source_profiles import (UPDATE_EXECUTABLES, HostKeyPolicy, describe_mismatch, matching_profiles,
+                              target_profile)
 
 
 DEFAULT_HOST = "Bticino-Classe100X.local"
@@ -325,8 +328,10 @@ def interruptible():
 
 class Wireless:
     strict = True
+    in_recovery = False
 
-    def __init__(self, host, existing, destination, image, trust, *, confirm):
+    def __init__(self, host, existing, destination, image, trust, *, confirm,
+                 accept_regenerated_key=False, in_recovery=False):
         self.host, self.existing, self.destination = host, existing, destination
         self.image, self.trust, self.confirm = image, trust, confirm
         self.phase = 0
@@ -338,16 +343,35 @@ class Wireless:
         self.reconnecting = False
         self.final_verified = False
         self.host_keys = []
+        # Source profiles whose executables matched in the source MAIN.
+        self.source_candidates = ()
+        # A regenerated source host key is accepted once, in the first normal reboot only.
+        self.rotation_accepted = False
+        # The owner accepted, up front, that such a regenerated key cannot be verified.
+        self.accept_regenerated_key = accept_regenerated_key
+        # True when the intercom already runs the recovery installed from this image.
+        self.in_recovery = in_recovery
         account = _invoking_user()
         self.uid, self.gid = account.pw_uid, account.pw_gid
 
     def __enter__(self):
         try:
             self.ip = resolve(self.host)
+            if self.in_recovery:
+                self._enter_recovery()
+                return self
             self.old_key = self.trust.enroll(self.ip, self.confirm)
             self._connect()
             self.preflight()
-            self.trust.save(self.old_key)
+            if self.ephemeral_source:
+                if not self.accept_regenerated_key:
+                    raise SSHError(
+                        "The running firmware regenerates its SSH host key at every normal boot, so the "
+                        "key seen after the reboot cannot be verified. Nothing was written. Pass "
+                        "--accept-regenerated-host-key to accept this; prefer --ssh-key over --ssh-password.")
+                # A key that is regenerated at every boot is not a stable identity: never saved.
+            else:
+                self.trust.save(self.old_key)
             return self
         except BaseException as error:
             self.__exit__(type(error), error, error.__traceback__)
@@ -366,7 +390,7 @@ class Wireless:
         if key not in observed:
             if self.reconnecting and self.previous_key in observed:
                 raise SSHError("Previous environment still responds; waiting for the planned reboot")
-            raise HostIdentityError("Unexpected SSH identity during phase transition")
+            key = self._accept_regenerated_key(observed)
         self.tunnel = Tunnel(credentials, self.ip, key)
         try:
             self.tunnel.start()
@@ -377,6 +401,35 @@ class Wireless:
             self.close(error=error)
             raise
         self.host_keys.append({"phase": self.phase, "fingerprint": fingerprint(key), "status": "verified"})
+
+    @property
+    def ephemeral_source(self):
+        """True when every matched source profile regenerates its SSH host key at each normal boot.
+
+        An empty or mixed match is not ephemeral, so strict continuity applies.
+        """
+        return bool(self.source_candidates) and all(
+            profile.host_key_policy is HostKeyPolicy.EPHEMERAL_ON_NORMAL_REBOOT
+            for profile in self.source_candidates)
+
+    def _accept_regenerated_key(self, observed):
+        """Accept the regenerated host key of an ephemeral source MAIN, once, when the owner opted in.
+
+        Nothing stable exists to compare the key with, so the protection is structural: only in the
+        normal reboot that follows the recovery transfer, only after the previous key stopped
+        answering, only once and only with the explicit opt-in. Every other unexpected identity is
+        fatal, as before.
+        """
+        if not (self.phase == 1 and self.reconnecting and self.ephemeral_source
+                and self.accept_regenerated_key and not self.rotation_accepted):
+            raise HostIdentityError("Unexpected SSH identity during phase transition")
+        key = sorted(observed)[0]
+        self.host_keys.append({"phase": self.phase, "fingerprint": fingerprint(key),
+                               "previous_fingerprint": fingerprint(self.old_key),
+                               "status": "regenerated_key_accepted"})
+        self.rotation_accepted = True
+        self.old_key = key
+        return key
 
     def endpoints(self):
         if self.tunnel is None:
@@ -402,14 +455,56 @@ class Wireless:
     def preflight(self):
         if self.run(installer_check()) != b"READY\n":
             raise SSHError("Manufacturer installation check failed")
-        pins = facts("no-ota")["UNCHANGED"]
-        paths = ["/home/bticino/bin/" + name for name in ("bt_device", "bt_daemon", "fw_manager", "dedrifupdater")]
+        paths = list(UPDATE_EXECUTABLES)
         result = self.run("sha256sum " + " ".join(paths)).decode().splitlines()
-        if [line.split()[0] for line in result] != [pins[path][0] for path in paths]:
-            raise SSHError("Installed update executables differ from the researched profile")
+        if len(result) != len(paths) or any(not line.split() for line in result):
+            raise SSHError("Installed update executable check returned an unexpected result")
+        observed = {path: line.split()[0] for path, line in zip(paths, result)}
+        if self.phase < 2:
+            # The running environment is the source MAIN (before and after the first
+            # normal reboot): its executables must equal a supported source profile,
+            # and the same profile must still match after that reboot.
+            candidates = matching_profiles(observed)
+            if self.phase == 1 and self.source_candidates:
+                kept = {profile.version for profile in self.source_candidates}
+                candidates = tuple(profile for profile in candidates if profile.version in kept)
+            if not candidates:
+                raise SSHError("Installed update executables match no supported source "
+                               "firmware profile; " + describe_mismatch(observed))
+            self.source_candidates = candidates
+        elif observed != dict(target_profile().executable_sha256):
+            # Recovery and the final MAIN always carry the target executables.
+            raise SSHError("Installed update executables differ from the target profile; "
+                           + describe_mismatch(observed, (target_profile(),)))
         # Existing-main SSH eligibility is demonstrated by administrative access
         # and reconnecting with the same key after the planned normal reboot.
         # Its init script, configuration formatting and key pathname may differ.
+
+    def _enter_recovery(self):
+        """Connect to a recovery that was installed from this image and is already running.
+
+        Its host key and login are the ones the image carries, so they are verified against the image
+        itself. Nothing is enrolled and nothing is saved until the final verification.
+        """
+        if self.image.host_key not in scan_keys(self.ip):
+            raise HostIdentityError(
+                "The running system does not present the SSH host key of this firmware image, so it is "
+                "not a recovery installed from it. Nothing was written.")
+        self.phase = 2
+        self._connect()
+        self.preflight()
+
+    def resume_after_recovery(self):
+        """Continue an update interrupted after the recovery transfer and before the main kernel clear.
+
+        The source MAIN just entered is the one that follows the recovery transfer, so the next
+        planned reboot is the one into recovery, and no further host key regeneration is accepted.
+        """
+        if (self.phase != 0 or self.reconnecting or self.connection is None
+                or not self.source_candidates):
+            raise SSHError("Resuming needs a freshly entered source MAIN that matched a supported profile")
+        self.phase = 1
+        self.rotation_accepted = True
 
     def rebooting(self, status):
         expected = (4, 1, 4)
@@ -476,19 +571,68 @@ class VerificationReader:
 
 @contextmanager
 def awake():
-    process = subprocess.Popen(["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())],
-                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    linux = sys.platform.startswith("linux")
+    with _sleep_assertion(linux=linux) as available:
+        if linux and available:
+            # Lid handling has separate permissions; denial must not lose the sleep lock.
+            with _sleep_assertion(linux=True, what="handle-lid-switch"):
+                yield
+        else:
+            yield
+
+
+@contextmanager
+def _sleep_assertion(*, linux, what="idle:sleep"):
+    command = (["systemd-inhibit", f"--what={what}", "--mode=block", "--who=C100X",
+                "--why=Firmware update in progress", "--no-ask-password",
+                "/bin/sh", "-c", "echo READY; exec sleep infinity"] if linux else
+               ["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())])
     try:
-        time.sleep(0.05)
-        if process.poll() is not None:
-            raise SSHError("Unable to establish macOS idle-sleep assertion")
-        yield
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE if linux else subprocess.DEVNULL,
+                                   stderr=subprocess.PIPE, **({"start_new_session": True} if linux else {}))
+    except OSError as exc:
+        if not linux and not isinstance(exc, FileNotFoundError):
+            raise
+        process = None
+    try:
+        available = process is not None
+        if available and linux:
+            # The wrapped command starts only after logind grants the inhibition.
+            readable, _, _ = select.select([process.stdout], [], [], 5)
+            available = bool(readable) and process.stdout.readline() == b"READY\n"
+        elif available:
+            time.sleep(0.05)
+            if process.poll() is not None:
+                raise SSHError("Unable to establish macOS idle-sleep assertion")
+        if not available:
+            message = ("systemd-inhibit could not inhibit the lid switch. Keep the lid open until the update ends."
+                       if what == "handle-lid-switch" else
+                       f"{command[0]} could not prevent sleep. Keep the computer awake until the update ends.")
+            print(f"Warning: {message}", file=sys.stderr, flush=True)
+        yield available
     finally:
-        if process.poll() is None:
-            process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        process.stderr.close()
+        if process is not None:
+            if linux:
+                _signal_inhibitor_group(process, signal.SIGTERM)
+            elif process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                if linux:
+                    _signal_inhibitor_group(process, signal.SIGKILL)
+                else:
+                    process.kill()
+                process.wait()
+            process.stderr.close()
+            if linux:
+                process.stdout.close()
+
+
+def _signal_inhibitor_group(process, sig):
+    # Release the lock and stop the wrapped sleep process, including on Ctrl+C.
+    try:
+        os.killpg(process.pid, sig)
+    except ProcessLookupError:
+        pass

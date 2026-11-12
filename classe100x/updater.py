@@ -44,7 +44,12 @@ def uptime_seconds(values: tuple[str, ...]) -> int:
         raise details(UpdateError("Invalid device uptime"), received=values) from exc
 
 
-def check_identity(info: dict, expected_status: int) -> None:
+def check_identity(info: dict, expected_status: int, *, source_versions=None) -> None:
+    """Check the device identity.
+
+    source_versions: firmware versions accepted instead of the target, used only while the
+    still-running source MAIN is checked. Every other field stays strict.
+    """
     expected = {
         "device_type": (200,), "firmware": (1, 5, 8),
         "hardware": (2,), "object_model": (1, 0, 99),
@@ -62,6 +67,10 @@ def check_identity(info: dict, expected_status: int) -> None:
             # Revision coverage is recorded separately in docs/ACCEPTANCE.md.
             matches = actual[:1] == value
             expected_value = "family 02.*.*"
+        elif key == "firmware" and source_versions is not None:
+            matches = actual in source_versions
+            expected_value = "one of " + ", ".join(
+                ".".join(map(str, version)) for version in sorted(source_versions))
         else:
             matches = actual == value
             expected_value = value
@@ -203,7 +212,7 @@ class NetworkDevice:
                 raise UpdateError(f"Update worker is still busy after {self.write_timeout:g} seconds; no reboot was requested")
             time.sleep(5)
 
-    def reboot_and_wait(self, status: int) -> dict:
+    def reboot_and_wait(self, status: int, *, source_versions=None) -> dict:
         self.check_transport()
         if self.before_reboot is not None:
             # Refresh openserver's 30-second idle timer before the bounded
@@ -234,17 +243,17 @@ class NetworkDevice:
                 continue
             elapsed = time.monotonic() - started
             after = uptime_seconds(info["uptime"])
-            # The version remains 1.5.8 throughout. An uptime reset distinguishes
+            # The firmware version is constant within one environment. An uptime reset distinguishes
             # a reboot from a stale reply or a transient network interruption.
             if after > elapsed + 2 or before + elapsed - after < 5:
                 observation = f"uptime before={before}s, after={after}s, elapsed={elapsed:.1f}s; reset not established; status={info.get('update_status')}"
                 last_error = None
                 continue
-            check_identity(info, status)
+            check_identity(info, status, source_versions=source_versions)
             if self.transport is not None:
                 self.transport.arrived(status)
             info = self.connect()
-            check_identity(info, status)
+            check_identity(info, status, source_versions=source_versions)
             return info
         raise details(UpdateError("Reboot/reconnection was not verified; no command was retried"),
                       timeout_seconds=self.reboot_timeout, expected_status=(status, 0),
@@ -256,30 +265,34 @@ class NetworkDevice:
 
 
 def flash(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
-          report=print, *, verification=None, final_verification=None) -> dict:
+          report=print, *, verification=None, final_verification=None,
+          source_versions=None) -> dict:
     """Three verified reboot boundaries; any failure stops subsequent writes."""
     return _flash(firmware, device, profile, report, verification=verification,
-                  final_verification=final_verification)
+                  final_verification=final_verification, source_versions=source_versions)
 
 
 def flash_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
-                   report=print) -> dict:
+                   report=print, *, final_verification=None) -> dict:
     """Explicit main installation from already running recovery; never a write retry."""
-    return _flash(firmware, device, profile, report, from_recovery=True)
+    return _flash(firmware, device, profile, report, from_recovery=True,
+                  final_verification=final_verification)
 
 
 def _flash(firmware, device, profile, report, *, verification=None, from_recovery=False,
-           final_verification=None):
-    stage = "preflight"
+           final_verification=None, source_versions=None, clear_attempted=None):
+    if from_recovery and source_versions:
+        raise ValueError("Source firmware versions apply only to an update started from the normal MAIN")
+    stage = "resume: checking recovery before main transfer" if clear_attempted else "preflight"
     try:
         info = device.connect()
-        check_identity(info, 1 if from_recovery else 4)
-        if verification is not None:
+        check_identity(info, 1 if from_recovery else 4, source_versions=source_versions)
+        if verification is not None and not from_recovery:
             verification.preflight()
             verification.update_result("in_progress", stage)
             # SSH work can outlast openserver's 30-second command idle timer.
             info = device.connect()
-            check_identity(info, 4)
+            check_identity(info, 4, source_versions=source_versions)
         transfers = (
             (True, RECOVERY_FILES, profile.normal),
             (False, MAIN_FILES, profile.recovery),
@@ -313,7 +326,10 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
             device.settle()
             stage = f"{target}: rebooting"
             report(stage)
-            info = device.reboot_and_wait(4)
+            # Only the transfer to recovery is followed by a reboot into the still-running
+            # source MAIN, which may report a source version. Nothing else gets the argument.
+            reboot_options = {"source_versions": source_versions} if recovery and source_versions else {}
+            info = device.reboot_and_wait(4, **reboot_options)
             if recovery:
                 if verification is not None:
                     stage = "recovery: verifying installed contents over SSH"
@@ -321,7 +337,7 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
                     verification.verify()
                     stage = "recovery: reconnecting after SSH verification"
                     info = device.connect()
-                    check_identity(info, 4)
+                    check_identity(info, 4, source_versions=source_versions)
                 stage = "entering recovery: clearing main kernel"
                 report(stage)
                 device.client.invalidate_main_kernel()
@@ -337,20 +353,32 @@ def _flash(firmware, device, profile, report, *, verification=None, from_recover
             verification.update_result("completed", stage)
         report("Update sequence completed; verify calls, audio/video, door release and any enabled SSH/MQTT features")
         return info
-    except Exception as exc:
-        if verification is not None:
-            _record_stop(verification, stage, report)
-        if not isinstance(exc, (UpdateError, ProtocolError, OSError)):
-            details(exc, update_stage=stage,
-                    device_state="Keep the device powered; no automatic retry or cleanup reboot")
+    except (Exception, KeyboardInterrupt) as exc:
+        error = _update_failure(exc, verification, stage, report, clear_attempted=clear_attempted)
+        if error is exc:
             raise
-        raise UpdateError(f"Stopped at '{stage}': {exc}. Keep the device powered; no automatic retry or cleanup reboot.") from exc
-    except KeyboardInterrupt as exc:
-        if verification is not None:
-            _record_stop(verification, stage, report)
-        raise UpdateError(f"Interrupted at '{stage}'. Keep the device powered; no automatic retry or cleanup reboot.") from exc
+        raise error from exc
     finally:
         device.close()
+
+
+def _update_failure(exc, verification, stage, report, *, clear_attempted=None):
+    """Keep flash and resume failures consistent, including resume's clear-attempt evidence."""
+    if verification is not None:
+        _record_stop(verification, stage, report)
+    state = ""
+    if clear_attempted is not None:
+        state = ("Main-kernel clearing was attempted. " if clear_attempted else
+                 "The main kernel was not cleared; the source MAIN is unchanged. ")
+    guidance = state + "Keep the device powered; no automatic retry or cleanup reboot."
+    if isinstance(exc, KeyboardInterrupt):
+        error = UpdateError(f"Interrupted at '{stage}'. {guidance}")
+    elif isinstance(exc, (UpdateError, ProtocolError, OSError)):
+        error = UpdateError(f"Stopped at '{stage}': {exc}. {guidance}")
+    else:
+        error = details(exc, update_stage=stage, device_state=guidance)
+    # RecoveryVerifier saves these notes in its failure report on context exit.
+    return details(error, main_kernel_clear_attempted=clear_attempted)
 
 
 def _record_stop(verification, stage, report):
@@ -360,3 +388,69 @@ def _record_stop(verification, stage, report):
         verification.update_result("completed" if stage == "update sequence completed" else "stopped", stage)
     except (OSError, UpdateError) as exc:
         report("Warning: could not save update outcome in the verification report\n" + format_failure(exc))
+
+
+def _checked_source_main(device, verification, source_versions, mark, *, recording):
+    """Everything that proves a resume is safe. Reads only: no write, no reboot."""
+    mark("resume: checking the running source MAIN")
+    info = device.connect()
+    check_identity(info, 4, source_versions=source_versions)
+    if not device.client.idle():
+        raise UpdateError("Update worker is busy; resume stopped")
+    verification.preflight()
+    if recording:
+        verification.update_result("in_progress", "resume: checking the running source MAIN")
+    mark("resume: verifying the already written recovery over SSH")
+    verification.verify()
+    mark("resume: reconnecting after SSH verification")
+    # The SSH readback can outlast the 30-second command idle timer: use a fresh session.
+    info = device.connect()
+    check_identity(info, 4, source_versions=source_versions)
+    return info
+
+
+def check_resume(device, verification, report=print, *, source_versions) -> dict:
+    """Read-only plan of resume_recovery(): same checks, nothing is cleared, written or rebooted."""
+    if not source_versions:
+        raise ValueError("Resuming needs the source firmware versions matched by the preflight")
+    try:
+        return _checked_source_main(device, verification, source_versions, report, recording=False)
+    finally:
+        device.close()
+
+
+def resume_recovery(firmware: PreparedFirmware, device: NetworkDevice, profile: VendorProfile,
+                    report=print, *, verification, final_verification=None, source_versions) -> dict:
+    """Continue an update whose recovery was written but whose main kernel was not cleared yet.
+
+    The installed recovery is read back and proven identical to the firmware before anything is
+    cleared; it is never written again. Source versions are accepted only until the main kernel is
+    cleared. Afterwards this is the ordinary installation of the main system from recovery.
+    """
+    if not source_versions:
+        raise ValueError("Resuming needs the source firmware versions matched by the preflight")
+    stage = "resume: checking the running source MAIN"
+    clear_attempted = False
+
+    def mark(text):
+        nonlocal stage
+        stage = text
+        report(text)
+
+    try:
+        _checked_source_main(device, verification, source_versions, mark, recording=True)
+        mark("entering recovery: clearing main kernel")
+        clear_attempted = True
+        device.client.invalidate_main_kernel()
+        mark("entering recovery: rebooting")
+        device.reboot_and_wait(1)
+    except (Exception, KeyboardInterrupt) as exc:
+        try:
+            error = _update_failure(exc, verification, stage, report, clear_attempted=clear_attempted)
+        finally:
+            device.close()
+        if error is exc:
+            raise
+        raise error from exc
+    return _flash(firmware, device, profile, report, from_recovery=True, verification=verification,
+                  final_verification=final_verification, clear_attempted=clear_attempted)

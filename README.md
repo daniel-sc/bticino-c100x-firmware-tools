@@ -1,7 +1,7 @@
 # BTicino Classe 100X firmware tools
 
 A command-line tool for building custom firmware images and flashing a
-**BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS.
+**BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS or Linux (SSH only).
 
 **v0.2.0 adds owner-controlled OTA flashing over SSH and blocks vendor updates
 by default in built firmware.** Full USB and SSH flash sequences and post-flash
@@ -23,8 +23,10 @@ for hardware evidence and functional coverage.
   recovery integrity verification and final SSH verification.
   The stock-device USB workflow does not require SSH.
 
-The tested host is an **Apple Silicon Mac**. Other firmware families and 2.x
-firmware are unsupported. Linux/WSL support is planned but not yet validated.
+USB flashing requires macOS. Firmware building and SSH updates also run on
+[Linux](docs/LINUX.md), with limited hardware validation. Release bundles target
+**Apple Silicon Macs** and **x86-64 Linux**. Other firmware families and
+2.x firmware are unsupported.
 There is no GUI or Home Assistant configuration/discovery integration.
 
 The tool accepts hardware family **`02.*.*`**,
@@ -41,6 +43,8 @@ See [builder policy](docs/BUILDER.md#ota-prevention) and
 
 ## Installation
 
+### macOS
+
 With [Homebrew](https://brew.sh), install the signed Apple Silicon stable release:
 
 ```sh
@@ -53,7 +57,7 @@ For prereleases, use `brew install --cask daniel-sc/tap/c100x@preview` instead.
 This installs the complete bundle into `/Applications/C100X` and puts `c100x` on
 PATH. Requires **macOS 15.0 or later**.
 
-### Direct download (no Homebrew required)
+#### Direct download (no Homebrew required)
 
 Download the Apple Silicon DMG from [v0.2.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.2.0).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
@@ -73,6 +77,21 @@ Open Terminal and check the installed version:
 
 For a per-user installation, use `~/Applications/C100X/c100x` instead. Keep your
 firmware and private settings outside the installation folder.
+
+### Linux
+
+Download the `c100x-<version>-linux-x86_64.tar.gz` bundle from
+[releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases), then:
+
+```sh
+tar -xzf c100x-*-linux-x86_64.tar.gz
+./C100X/c100x --version
+```
+
+Requires x86-64 Linux with glibc 2.39+ (for example Ubuntu 24.04), OpenSSH client
+and CA certificates. Python and builder tools are included. Keep `c100x` and
+`support` together. Use `--transport ssh` for flashing; USB flashing is macOS-only.
+See [Linux usage](docs/LINUX.md).
 
 ## Build and install firmware
 

@@ -15,7 +15,11 @@ from classe100x.diagnostics import tool_error
 class LinuxUSBTests(unittest.TestCase):
     def test_discovery_uses_usb_ancestry_and_rejects_multiple_devices(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            # Exercise aliased paths on every host, as with macOS /var -> /private/var.
+            real = Path(directory) / 'real-sysfs'
+            real.mkdir()
+            root = Path(directory) / 'sysfs'
+            root.symlink_to(real, target_is_directory=True)
             usb = root / 'bus/usb/devices/1-2'
             usb.mkdir(parents=True)
             (usb / 'idVendor').write_text('1da4\n')
@@ -28,7 +32,7 @@ class LinuxUSBTests(unittest.TestCase):
             interfaces.mkdir(parents=True)
             (interfaces / 'enxfixture').symlink_to(net)
             (interfaces / 'eth0').mkdir()
-            self.assertEqual(discover(root), Interface('enxfixture', net, 42, '3'))
+            self.assertEqual(discover(root), Interface('enxfixture', net.resolve(), 42, '3'))
             (usb / 'devnum').write_text('4')
             self.assertEqual(discover(root).device_number, '4')
             other = usb.with_name('1-3')

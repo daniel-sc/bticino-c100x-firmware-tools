@@ -572,7 +572,18 @@ class VerificationReader:
 @contextmanager
 def awake():
     linux = sys.platform.startswith("linux")
-    command = (["systemd-inhibit", "--what=idle:sleep", "--mode=block", "--who=C100X",
+    with _sleep_assertion(linux=linux) as available:
+        if linux and available:
+            # Lid handling has separate permissions; denial must not lose the sleep lock.
+            with _sleep_assertion(linux=True, what="handle-lid-switch"):
+                yield
+        else:
+            yield
+
+
+@contextmanager
+def _sleep_assertion(*, linux, what="idle:sleep"):
+    command = (["systemd-inhibit", f"--what={what}", "--mode=block", "--who=C100X",
                 "--why=Firmware update in progress", "--no-ask-password",
                 "/bin/sh", "-c", "echo READY; exec sleep infinity"] if linux else
                ["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())])
@@ -595,9 +606,11 @@ def awake():
             if process.poll() is not None:
                 raise SSHError("Unable to establish macOS idle-sleep assertion")
         if not available:
-            print(f"Warning: {command[0]} could not prevent sleep. "
-                  "Keep the computer awake until the update ends.", file=sys.stderr, flush=True)
-        yield
+            message = ("systemd-inhibit could not inhibit the lid switch. Keep the lid open until the update ends."
+                       if what == "handle-lid-switch" else
+                       f"{command[0]} could not prevent sleep. Keep the computer awake until the update ends.")
+            print(f"Warning: {message}", file=sys.stderr, flush=True)
+        yield available
     finally:
         if process is not None:
             if linux:

@@ -304,6 +304,11 @@ Python, builder tools and their non-glibc libraries. OpenSSH and CA certificates
 come from the host. USB flashing remains macOS-only. Both packages must pass CI
 before a tagged release is published; include dependency sources and checksums.
 
+**Linux sleep prevention, 2026-11-12:** hold sleep/idle inhibition during updates
+and attempt lid-switch inhibition separately, best-effort. A denied lid lock must
+not release the sleep/idle lock. The optional Docker shortcut acquires sleep/idle
+inhibition on the host while the container command runs.
+
 **Validation amendment, accepted 2026-11-05:** Carry forward observed hardware
 acceptance for unchanged device behavior. Documentation and small host-side fixes
 use appropriate offline and release-artifact checks; they do not require a fresh

@@ -3,7 +3,7 @@
 Linux can build firmware and update an intercom over SSH. USB flashing requires
 macOS. Use the Linux release bundle or run from source; Docker is optional.
 
-## Install the release bundle
+## Install the release bundle (recommended)
 
 Download the `linux-x86_64.tar.gz` asset from [releases](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases).
 It includes Python and builder tools and needs x86-64 Linux with glibc 2.39+,
@@ -37,7 +37,11 @@ have offline test coverage but no hardware validation yet. See [ACCEPTANCE.md](A
 | USB networking and USB flashing | macOS-only. |
 | Keeping the host awake during an update | Tries `systemd-inhibit`; warns if unavailable. See [Notes](#notes). |
 
-## Run from source with Docker
+## Optional: run from source with Docker
+
+Use Docker to test unreleased code, keep builder dependencies off the host, or
+provide a compatible userspace when the release bundle cannot run on your host.
+Otherwise, use the release bundle above.
 
 The example below uses an Arch Linux host with `python:3.14-slim`.
 Here, `c100x` stands for `python -m classe100x` inside the container.
@@ -74,11 +78,17 @@ The commands fail if the UID or GID is already taken in the container.
 ### 4. Define a shortcut
 
 ```bash
-c100x() { docker exec -it c100x sudo -u "$(id -un)" python -m classe100x "$@"; }
+c100x() {
+  systemd-inhibit --what=sleep:idle --why="C100X update" \
+    docker exec -it c100x sudo -u "$(id -un)" python -m classe100x "$@"
+}
 c100x builder-doctor
 ```
 
 `-it` is required: the SSH passwords are read from a terminal. `builder-doctor` should end with `Core builder tools found and versions checked.`
+
+Define this function in your host shell. The host's `systemd-inhibit` holds the
+sleep/idle lock while `docker exec` runs; the container needs no systemd access.
 
 ## Build and update
 
@@ -104,6 +114,6 @@ c100x plan --transport ssh --host 192.168.1.20 --ssh-user root2 --ssh-password \
 - **Host names.** Multicast DNS does not normally work inside the default Docker network, so the default `Bticino-Classe100X.local` will not resolve. Pass the IPv4 address of the intercom, or a DNS name, with `--host`.
 - **Files.** The recovery readback copies the recovery partitions into the working directory (`c100x-verification-*`), which needs at least 512 MiB free. The evidence report stays there afterwards.
 - **Trusted identity.** The identity of the intercom is stored under the home of the container user (`~/Library/Application Support/C100X/trust`, a path inherited from macOS). Removing the container forgets it.
-- **Sleep.** On Linux the tool tries `systemd-inhibit` for the duration of the update. If it cannot acquire inhibition, it warns and continues. Docker usually cannot inhibit host sleep; keep the host awake yourself or wrap the Docker command on the host with `systemd-inhibit --what=sleep:idle --why="C100X update" docker exec -it ...`.
+- **Sleep.** On native Linux the tool tries `systemd-inhibit` for the duration of the update. If it cannot acquire inhibition, it warns and continues. With Docker, the host-side shortcut above provides sleep prevention; the tool inside the container may still warn that inhibition is unavailable.
 - **Keys.** The setup above used `--ssh-password` for both logins. `--ssh-key` takes a path inside the container, and an encrypted key has to be unlocked in an agent that the container cannot see by default. A dedicated, unencrypted key mounted read-only into the container is the simple alternative. This was not exercised.
 - **Clean up.** `docker rm -f c100x` removes the container. The mounted directory keeps everything that was built.

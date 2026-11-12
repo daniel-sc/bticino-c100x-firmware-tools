@@ -124,8 +124,8 @@ class AwakeTests(unittest.TestCase):
                 self.assertEqual(err, "")
 
     def test_linux_holds_inhibition_for_the_update_and_releases_the_process_group(self):
-        process, ran = running_process(), []
-        popen = Mock(return_value=process)
+        process, lid, ran = running_process(), running_process(), []
+        popen = Mock(side_effect=[process, lid])
 
         def update():
             self.killpg.assert_not_called()
@@ -134,16 +134,19 @@ class AwakeTests(unittest.TestCase):
         out, err = self.run_linux(popen, update)
         self.assertIsNone(self.error)
         self.assertEqual(ran, [True])
-        command = popen.call_args.args[0]
+        command = popen.call_args_list[0].args[0]
         self.assertEqual(command[0], "systemd-inhibit")
         self.assertIn("--what=idle:sleep", command)
         self.assertIn("--mode=block", command)
         self.assertIn("--no-ask-password", command)
+        self.assertIn("--what=handle-lid-switch", popen.call_args_list[1].args[0])
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
-        self.killpg.assert_called_once_with(process.pid, signal.SIGTERM)
-        process.wait.assert_called_once_with(timeout=5)
-        process.stdout.close.assert_called_once()
-        process.stderr.close.assert_called_once()
+        self.assertEqual([call.args for call in self.killpg.call_args_list],
+                         [(lid.pid, signal.SIGTERM), (process.pid, signal.SIGTERM)])
+        for child in (process, lid):
+            child.wait.assert_called_once_with(timeout=5)
+            child.stdout.close.assert_called_once()
+            child.stderr.close.assert_called_once()
         self.assertEqual((out, err), ("", ""))
 
     def test_linux_missing_or_unusable_command_warns_and_continues(self):
@@ -175,12 +178,57 @@ class AwakeTests(unittest.TestCase):
     def test_linux_update_errors_and_cancellation_release_inhibition(self):
         for error in (RuntimeError("update failed"), FileNotFoundError("firmware.fwz"), KeyboardInterrupt()):
             with self.subTest(error=type(error).__name__):
-                process = running_process()
-                out, err = self.run_linux(Mock(return_value=process), Mock(side_effect=error))
+                process, lid = running_process(), running_process()
+                out, err = self.run_linux(Mock(side_effect=[process, lid]), Mock(side_effect=error))
                 self.assertIs(self.error, error)
                 self.assertEqual((out, err), ("", ""))
-                self.killpg.assert_called_once_with(process.pid, signal.SIGTERM)
+                self.assertEqual([call.args for call in self.killpg.call_args_list],
+                                 [(lid.pid, signal.SIGTERM), (process.pid, signal.SIGTERM)])
+                for child in (process, lid):
+                    child.wait.assert_called_once_with(timeout=5)
+
+    def test_linux_lid_failure_preserves_sleep_inhibition_during_update(self):
+        for failure in ("launch", "denied", "timeout"):
+            with self.subTest(failure=failure):
+                process, lid, ran = running_process(), running_process(), []
+                lid.stdout.readline.return_value = b""
+                popen = Mock(side_effect=[process, PermissionError("lid inhibition") if failure == "launch" else lid])
+
+                def update():
+                    process.wait.assert_not_called()
+                    self.assertNotIn(process.pid, [call.args[0] for call in self.killpg.call_args_list])
+                    ran.append(True)
+
+                def select(streams, *args):
+                    return ([] if failure == "timeout" and streams == [lid.stdout] else streams, [], [])
+
+                with patch.object(wireless.select, "select", side_effect=select), \
+                        patch.object(wireless.os, "killpg") as self.killpg:
+                    out, err = self.run_awake(popen, update, platform="linux")
+                self.assertIsNone(self.error)
+                self.assertEqual(ran, [True])
+                self.assertEqual(out, "")
+                self.assertEqual(err.count("Warning:"), 1)
+                self.assertIn("lid switch", err)
+                self.assertNotIn("could not prevent sleep", err)
                 process.wait.assert_called_once_with(timeout=5)
+                self.assertEqual(self.killpg.call_args.args, (process.pid, signal.SIGTERM))
+                if failure != "launch":
+                    lid.wait.assert_called_once_with(timeout=5)
+                    lid.stdout.close.assert_called_once()
+                    lid.stderr.close.assert_called_once()
+
+    def test_linux_cancellation_while_acquiring_lid_lock_releases_both_assertions(self):
+        process, lid, ran = running_process(), running_process(), []
+        with patch.object(wireless.select, "select", side_effect=[([process.stdout], [], []), KeyboardInterrupt()]), \
+                patch.object(wireless.os, "killpg") as killpg:
+            self.run_awake(Mock(side_effect=[process, lid]), lambda: ran.append(True), platform="linux")
+        self.assertIsInstance(self.error, KeyboardInterrupt)
+        self.assertEqual(ran, [])
+        self.assertEqual([call.args for call in killpg.call_args_list],
+                         [(lid.pid, signal.SIGTERM), (process.pid, signal.SIGTERM)])
+        for child in (process, lid):
+            child.wait.assert_called_once_with(timeout=5)
 
     def test_linux_warning_does_not_swallow_an_update_error(self):
         error = FileNotFoundError("firmware.fwz")
@@ -189,13 +237,14 @@ class AwakeTests(unittest.TestCase):
         self.assertIsNone(error.__context__)
 
     def test_linux_stalled_cleanup_kills_the_whole_process_group(self):
-        process = running_process()
-        process.wait.side_effect = [subprocess.TimeoutExpired("systemd-inhibit", 5), None]
-        self.run_linux(Mock(return_value=process))
+        process, lid = running_process(), running_process()
+        lid.wait.side_effect = [subprocess.TimeoutExpired("systemd-inhibit", 5), None]
+        self.run_linux(Mock(side_effect=[process, lid]))
         self.assertIsNone(self.error)
         self.assertEqual([call.args for call in self.killpg.call_args_list],
-                         [(process.pid, signal.SIGTERM), (process.pid, signal.SIGKILL)])
-        self.assertEqual(process.wait.call_count, 2)
+                         [(lid.pid, signal.SIGTERM), (lid.pid, signal.SIGKILL), (process.pid, signal.SIGTERM)])
+        self.assertEqual(lid.wait.call_count, 2)
+        process.wait.assert_called_once_with(timeout=5)
 
 
 if __name__ == "__main__":

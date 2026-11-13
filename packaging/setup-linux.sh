@@ -13,4 +13,4 @@ apt-get install -y --no-install-recommends \
     build-essential pkg-config patchelf python3 ca-certificates openssh-client git \
     libssl-dev libbz2-dev libffi-dev liblzma-dev libsqlite3-dev libreadline-dev \
     libncurses-dev zlib1g-dev libzstd-dev uuid-dev \
-    e2fsprogs dropbear-bin 7zip openssl
+    e2fsprogs dropbear-bin 7zip openssl iproute2

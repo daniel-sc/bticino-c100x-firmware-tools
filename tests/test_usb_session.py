@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from classe100x.usb_session import Session, USBError, usb_session, native_usb_interface, check_native_usb
+from classe100x.usb_session import (Session, USBError, macos_usb_session as usb_session,
+                                   native_usb_interface, check_native_usb)
 from classe100x.updater import NetworkDevice
 from test_updater import identity
 

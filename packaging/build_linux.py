@@ -1,4 +1,4 @@
-"""Build the Linux SSH/builder bundle on Ubuntu 24.04, including dependency sources."""
+"""Build the Linux bundle on Ubuntu 24.04, including dependency sources."""
 
 import argparse
 import json
@@ -189,6 +189,7 @@ def main():
         "debugfs": "/usr/sbin/debugfs", "e2fsck": "/usr/sbin/e2fsck",
         "7zz": "/usr/lib/7zip/7z", "7z.so": "/usr/lib/7zip/7z.so",
         "dropbearkey": "/usr/bin/dropbearkey", "openssl": "/usr/bin/openssl",
+        "ip": "/usr/sbin/ip",
     }.items():
         source = Path(filename).resolve(strict=True)
         shutil.copy2(source, tools / name)
@@ -200,7 +201,8 @@ def main():
     metadata.extend(collect_sources(bundle, origins, sources, licenses))
     minimum = audit(bundle)
     manifest = {"version": args.version, "platform": "linux", "architecture": "x86_64",
-                "minimum_glibc": minimum, "transports": ["ssh"],
+                "minimum_glibc": minimum, "transports": ["ssh", "usb"],
+                "experimental_transports": ["usb"],
                 "commit": text("git", "-C", ROOT, "rev-parse", "HEAD"),
                 "compiler": text("gcc", "--version").splitlines()[0], "sources": metadata,
                 "hardware_acceptance": "not performed"}

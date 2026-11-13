@@ -1,8 +1,11 @@
 **C100X — Linux packages and SSH recovery.**
 
 - **Linux download:** an x86-64 bundle includes Python and firmware-building tools.
-  Build firmware and update over SSH on Linux with glibc 2.39+; USB flashing remains
-  macOS-only. Linux updates try to prevent sleep with `systemd-inhibit`.
+   Build firmware and update over SSH on Linux with glibc 2.39+.
+   Experimental USB targets native Ubuntu 24.04/26.04 Desktop with NetworkManager;
+   A complete USB flash and owner-reported household checks passed on Ubuntu
+   26.04.1; 24.04 hardware validation remains open. SSH updates try to prevent sleep
+   with `systemd-inhibit`.
 - **Earlier source firmware:** SSH updates can start from a matching source profile,
   including the recorded 1.5.7 profile. Sources that regenerate their SSH host key
   require an explicit opt-in.

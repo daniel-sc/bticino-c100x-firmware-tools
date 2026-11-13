@@ -49,6 +49,9 @@ def main():
         tools = bundle / "support/app/tools"
         if sys.platform == "darwin":
             run(tools / "tetherkit-cli", "--help")  # Never enumerate/connect hardware.
+        else:
+            run(tools / "ip", "-Version")
+            json.loads(run(tools / "ip", "-j", "-4", "route", "show", "table", "all"))
 
         # Bundled MQTT assets must survive packaging/relocation byte-for-byte.
         mqtt = bundle / "support/app/payloads/mqtt"
@@ -78,7 +81,7 @@ def main():
 
         # Exercise USB handover/recovery sequencing with simulated devices using
         # the shipped interpreter and modules, including isolated child workers.
-        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_usb_storage.py", "test_updater.py",
+        for pattern in ("test_diagnostics.py", "test_usb_session.py", "test_linux_usb.py", "test_usb_storage.py", "test_updater.py",
                         "test_cli.py", "test_wireless.py", "test_awake.py", "test_source_profiles.py",
                         "test_identity_by_profile.py", "test_ephemeral_host_keys.py",
                         "test_resume_recovery.py", "test_recover_over_ssh.py", "test_builder.py", "test_recovery.py"):

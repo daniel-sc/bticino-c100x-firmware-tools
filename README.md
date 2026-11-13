@@ -1,7 +1,7 @@
 # BTicino Classe 100X firmware tools
 
 A command-line tool for building custom firmware images and flashing a
-**BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS or Linux (SSH only).
+**BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS or Linux.
 
 **v0.2.0 adds owner-controlled OTA flashing over SSH and blocks vendor updates
 by default in built firmware.** Full USB and SSH flash sequences and post-flash
@@ -23,7 +23,8 @@ for hardware evidence and functional coverage.
   recovery integrity verification and final SSH verification.
   The stock-device USB workflow does not require SSH.
 
-USB flashing requires macOS. Firmware building and SSH updates also run on
+USB flashing is hardware-validated on macOS; current source adds **experimental
+Ubuntu 24.04/26.04 Desktop USB**. Firmware building and SSH updates also run on
 [Linux](docs/LINUX.md), with limited hardware validation. Release bundles target
 **Apple Silicon Macs** and **x86-64 Linux**. Other firmware families and
 2.x firmware are unsupported.
@@ -90,7 +91,9 @@ tar -xzf c100x-*-linux-x86_64.tar.gz
 
 Requires x86-64 Linux with glibc 2.39+ (for example Ubuntu 24.04), OpenSSH client
 and CA certificates. Python and builder tools are included. Keep `c100x` and
-`support` together. Use `--transport ssh` for flashing; USB flashing is macOS-only.
+`support` together. Use `--transport ssh` for wireless flashing. Current source
+also offers experimental native USB on Ubuntu 24.04/26.04 Desktop with NetworkManager;
+check the bundle's release notes before using that path.
 See [Linux usage](docs/LINUX.md).
 
 ## Build and install firmware

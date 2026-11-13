@@ -78,6 +78,20 @@ def check_native_usb(interface):
 
 @contextmanager
 def usb_session(binary: Path):
+    """Select host networking without changing the shared flashing sequence."""
+    if sys.platform == "linux":
+        from .linux_usb import linux_usb_session
+        with linux_usb_session() as check:
+            yield check
+    elif sys.platform == "darwin":
+        with macos_usb_session(binary) as check:
+            yield check
+    else:
+        raise USBError("Managed USB requires macOS or Ubuntu Desktop Linux")
+
+
+@contextmanager
+def macos_usb_session(binary: Path):
     """Own USB networking across normal RNDIS and recovery native ECM boots."""
     if os.geteuid() != 0:
         raise PermissionError("USB networking needs root; run the device command with sudo")

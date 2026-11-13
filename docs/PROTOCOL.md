@@ -57,6 +57,12 @@ VID:PID `1da4:0056`, device `192.168.129.1/30` and host `.2`. The installer prof
 advertises a `/29`; the implementation uses the device scripts' `/30`.
 `/home/bticino/cfg/openserver` has `OwnPort=20000`, `ForceHMAC=0` and trusts `.2`.
 
+The experimental Ubuntu USB backend uses these same addresses and vendor frames
+through native kernel networking, with sysfs USB ancestry and route/source checks.
+Mac RNDIS/ECM observations do not establish Linux driver binding. A complete
+Ubuntu 26.04.1 USB flash and NetworkManager cleanup passed on 2026-11-12;
+see [acceptance](ACCEPTANCE.md#complete-linux-usb-flash-2026-11-12) for exact scope.
+
 OpenWebNet connection sequence: receive ACK, send `*99*0##`, receive ACK.
 ACK is `*#*1##`; NACK is `*#*0##`. Authentication challenges are rejected without
 logging their content. TCP frames may be fragmented or coalesced; each exchange

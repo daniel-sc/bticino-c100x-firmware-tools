@@ -132,6 +132,17 @@ and rechecked by the reviewers. All nine focused Linux USB tests passed after
 the fixes, including profile removal despite discovery failure and retention of
 cleanup diagnostics without masking the primary operation error.
 
+Review fixes on **2026-11-13** passed all eleven focused Linux USB tests. Two new
+reproductions failed before the fixes and passed afterward: a real process-group
+SIGINT during simulated profile deletion, and simulated NetworkManager hotplug
+lag followed by readiness (plus a persistent-unmanaged timeout). A live read-only
+NetworkManager check confirmed the device-list query handles existing and absent
+interfaces. These checks changed no host profiles and performed no device access.
+An additional real SIGTERM check confirmed ordinary cancellation still kills the
+isolated command child. The full worktree suite completed in the network-disabled
+Ubuntu 24.04 build container: 348 passed, with three native MQTT tests skipped
+because their library was not configured. The host-only run lacked `dropbearkey`.
+
 ### Linux read-only hardware probe (2026-11-12)
 
 On Ubuntu **26.04.1**, kernel `7.0.0-43-generic`, NetworkManager `1.54.3`,

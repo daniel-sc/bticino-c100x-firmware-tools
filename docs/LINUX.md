@@ -69,6 +69,10 @@ normal/recovery boots; names are not assumed stable. On exit, the temporary
 profile is deleted and the previous connection is restored only if the original
 interface incarnation remains. Another active C100X session is rejected.
 
+The readiness wait also allows NetworkManager to recognize and manage a newly
+enumerated interface. An interface that remains unmanaged fails at the deadline;
+configuration and route errors still stop immediately.
+
 On cleanup failure, inspect NetworkManager connections named `c100x-usb-*`.
 Abrupt process death cannot guarantee cleanup; these profiles are in-memory, not
 saved configuration. Stop the old process before removing its temporary profile.

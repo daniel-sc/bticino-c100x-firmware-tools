@@ -4,9 +4,13 @@ from contextlib import redirect_stderr
 from pathlib import Path
 import tempfile
 import signal
+import subprocess
+import sys
+import textwrap
 import unittest
 from unittest.mock import patch
 
+import classe100x
 from classe100x.linux_usb import Interface, Network, discover, linux_usb_session
 from classe100x.usb_session import USBError, usb_session
 from classe100x.diagnostics import tool_error
@@ -50,7 +54,8 @@ class LinuxUSBTests(unittest.TestCase):
         interface = Interface('enxfixture', Path('/fixture/usb/net/enxfixture'), 42, '3')
         current = self.enterContext(patch('classe100x.linux_usb.discover', return_value=interface))
         state = {'active': 'old-profile', 'profiles': {'old-profile'}, 'routes': [],
-                 'destination': {'dev': interface.name, 'prefsrc': '192.168.129.2'}, 'fail_up': False}
+                 'destination': {'dev': interface.name, 'prefsrc': '192.168.129.2'}, 'fail_up': False,
+                 'nm_state': 'disconnected'}
         calls = []
 
         def run(*args):
@@ -60,8 +65,8 @@ class LinuxUSBTests(unittest.TestCase):
                     return '[{"ifname":"enxfixture"}]'
                 return json.dumps([state['destination']] if 'get' in args else state['routes'])
             command = args[3:]
-            if command[:2] == ('-g', 'GENERAL.NM-MANAGED'):
-                return 'yes'
+            if command[-2:] == ('device', 'status'):
+                return '' if state['nm_state'] == 'missing' else interface.name + ':' + state['nm_state']
             if command[:2] == ('-g', 'GENERAL.CON-UUID'):
                 return state['active'] or '--'
             if command[:2] == ('-g', 'UUID'):
@@ -191,3 +196,56 @@ class LinuxUSBTests(unittest.TestCase):
         self.assertEqual(state['active'], 'old-profile')
         self.assertEqual(state['profiles'], {'old-profile'})
         self.assertIs(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_terminal_interrupt_during_profile_deletion_finishes_cleanup(self):
+        # Isolate the terminal process group; only the disposable child runs for real.
+        script = textwrap.dedent('''
+            import os, signal, sys, tempfile
+            from unittest.mock import patch
+            sys.path[:0] = sys.argv[1:]
+            from classe100x import linux_usb
+            from test_linux_usb import LinuxUSBTests
+
+            real_run = linux_usb.run
+            case = LinuxUSBTests()
+            network, interface, current, state, calls = case.fixture()
+            fake_run = linux_usb.run
+
+            def command(*args):
+                if args[3:5] == ('connection', 'delete'):
+                    real_run(sys.executable, '-c',
+                             'import os, signal, sys; os.killpg(int(sys.argv[1]), signal.SIGINT)',
+                             str(os.getpgrp()))
+                return fake_run(*args)
+
+            with tempfile.TemporaryFile() as lock, \\
+                    patch.object(linux_usb.os, 'geteuid', return_value=0), \\
+                    patch.object(linux_usb.os, 'open', return_value=os.dup(lock.fileno())), \\
+                    patch.object(linux_usb, 'Network', return_value=network), \\
+                    patch.object(linux_usb, 'run', side_effect=command):
+                with case.assertRaises(KeyboardInterrupt):
+                    with linux_usb.linux_usb_session():
+                        pass
+            case.assertEqual(state['profiles'], {'old-profile'})
+            case.assertEqual(state['active'], 'old-profile')
+        ''')
+        result = subprocess.run([sys.executable, '-I', '-B', '-c', script,
+                                 str(Path(__file__).resolve().parent),
+                                 str(Path(classe100x.__file__).resolve().parent.parent)],
+                                capture_output=True, text=True, start_new_session=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_hotplug_waits_for_networkmanager_but_unmanaged_times_out(self):
+        network, interface, current, state, calls = self.fixture()
+        state['nm_state'] = 'missing'
+        states = iter(('unmanaged', 'disconnected'))
+        with patch('classe100x.linux_usb.time.sleep',
+                   side_effect=lambda _: state.update(nm_state=next(states))):
+            network.check(timeout=45)
+        self.assertEqual(state['active'], network.profile)
+        self.assertEqual(sum('add' in call for call in calls), 1)
+        network.close()
+        state['nm_state'] = 'unmanaged'
+        with self.assertRaisesRegex(USBError, 'NetworkManager'):
+            network.check(timeout=0)
+        self.assertEqual(state['profiles'], {'old-profile'})

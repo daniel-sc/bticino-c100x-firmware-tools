@@ -60,8 +60,10 @@ def discover(sysfs=Path('/sys')):
 
 def run(*command):
     try:
+        # Terminal signals belong to the session owner, which defers them during
+        # cleanup. Ordinary cancellation still kills this child via subprocess.run.
         result = subprocess.run(list(map(str, command)), capture_output=True, text=True,
-                                timeout=15, env={**os.environ, 'LC_ALL': 'C'})
+                                timeout=15, start_new_session=True, env={**os.environ, 'LC_ALL': 'C'})
     except FileNotFoundError as exc:
         raise USBError(f'Missing {command[0]}; use the release bundle on Ubuntu 24.04/26.04 Desktop '
                        'with its default NetworkManager installation') from exc
@@ -91,6 +93,13 @@ class Network:
         value = self.nm('-g', 'GENERAL.CON-UUID', 'device', 'show', interface.name)
         return None if value in ('', '--') else value
 
+    def managed(self, interface):
+        # Sysfs can lead NetworkManager during hotplug. Query the list so an
+        # interface not yet known to NM is a readiness observation, not a tool error.
+        rows = self.nm('-t', '--escape', 'no', '-f', 'DEVICE,STATE', 'device', 'status')
+        states = dict(row.split(':', 1) for row in rows.splitlines())
+        return states.get(interface.name) not in (None, 'unmanaged')
+
     def conflicts(self, interface):
         subnet = ipaddress.ip_network('192.168.129.0/30')
         for route in json.loads(run(self.ip, '-j', '-4', 'route', 'show', 'table', 'all')):
@@ -103,9 +112,6 @@ class Network:
 
     def configure(self, interface):
         self.conflicts(interface)
-        if self.nm('-g', 'GENERAL.NM-MANAGED', 'device', 'show', interface.name) != 'yes':
-            raise USBError('C100X USB interface is not managed by NetworkManager; '
-                           'use the default Ubuntu Desktop network setup')
         link = json.loads(run(self.ip, '-j', 'link', 'show', 'dev', interface.name))
         if len(link) != 1 or link[0].get('master'):
             raise USBError('C100X USB interface belongs to a bridge/bond or is unavailable')
@@ -144,7 +150,7 @@ class Network:
         deadline = time.monotonic() + timeout
         while True:
             interface = discover()
-            if interface is not None:
+            if interface is not None and (interface == self.interface or self.managed(interface)):
                 if interface != self.interface:
                     self.close()
                     self.configure(interface)
@@ -152,6 +158,9 @@ class Network:
                 self.verify(interface)
                 return
             if time.monotonic() >= deadline:
+                if interface is not None:
+                    raise USBError('C100X USB interface is not ready in NetworkManager; '
+                                   'use the default Ubuntu Desktop managed network setup')
                 raise USBError('C100X USB networking is not ready; check cable/power and Ubuntu '
                                'native rndis_host/cdc_ether driver binding (no custom driver fallback)')
             time.sleep(0.2)

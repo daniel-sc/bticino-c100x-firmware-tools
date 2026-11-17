@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 from .firmware import PROFILE, FirmwareError, prepare_firmware, regular_file
 from .protocol import ProtocolError, ReadOnlyClient
@@ -174,7 +175,7 @@ def main() -> int:
             diagnostic(format_failure(exc, debug=True))
             return 1
         return 0
-    parser = argparse.ArgumentParser(description="Classe 100X firmware CLI: USB on macOS, SSH on macOS/Linux")
+    parser = argparse.ArgumentParser(description="Classe 100X firmware CLI: macOS/Linux; Ubuntu USB is experimental")
     parser.add_argument("--version", action="version", version=f"c100x {version()}")
     parser.add_argument("--debug", action="store_true", help="Include Python stack traces in error output")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -183,7 +184,7 @@ def main() -> int:
     probe.add_argument("--port", type=int, default=20000)
     probe.add_argument("--timeout", type=float, default=5.0)
     usb = commands.add_parser("usb", help="Maintain native USB networking across device reboots (root)")
-    usb.add_argument("--tetherkit", type=Path, default=tetherkit())
+    usb.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the macOS USB helper executable")
     fetch = commands.add_parser("fetch-fw", help="Download/cache the hash-pinned original stock image")
     fetch.add_argument("--stock", choices=[PROFILE], default=PROFILE)
     fetch.add_argument("--cache", type=Path, default=Path(".local/firmware-cache"))
@@ -214,7 +215,7 @@ def main() -> int:
         command = commands.add_parser(name, help=help_text)
         command.add_argument("firmware", type=Path)
         if name != "inspect-fw":
-            command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the USB helper executable")
+            command.add_argument("--tetherkit", type=Path, default=tetherkit(), help="Override the macOS USB helper executable")
         if name in ("plan", "flash"):
             command.add_argument("--transport", choices=("usb", "ssh"), default="usb")
             command.add_argument("--host", help="Wireless hostname or IPv4 address (default: Bticino-Classe100X.local)")
@@ -366,7 +367,13 @@ def main() -> int:
                 print(json.dumps(client.inspect(), indent=2))
             print("Device information read successfully.", file=sys.stderr)
         elif args.command == "usb":
-            run_usb(args.tetherkit)
+            if sys.platform == "linux":
+                with usb_session(args.tetherkit) as check:
+                    while True:
+                        time.sleep(2)
+                        check(timeout=240)
+            else:
+                run_usb(args.tetherkit)
         else:
             print("Validating the complete firmware archive…", file=sys.stderr)
             with prepare_firmware(args.firmware) as firmware:

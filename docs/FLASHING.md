@@ -23,6 +23,10 @@ behavior; other family-02 revisions have no recorded hardware flash acceptance y
 
 ## 1. Inspect and run preflight
 
+These USB examples use macOS. For the experimental Ubuntu Desktop backend and
+its prepared hardware-validation procedure, see [Linux USB](LINUX.md#experimental-native-usb).
+Use your extracted `C100X/c100x` path in place of `/Applications/C100X/c100x`.
+
 Open Terminal in the folder containing your image. These examples use the
 builder guide's working folder and filename; adjust them if needed:
 
@@ -38,7 +42,7 @@ the device. Connect the powered intercom with a USB data cable, then run preflig
 sudo /Applications/C100X/c100x plan custom.fwz
 ```
 
-`sudo` asks for your Mac password. The tool manages USB networking automatically
+`sudo` asks for your computer's password. The tool manages USB networking automatically
 and checks device identity/status without writing firmware. Success is confirmed
 by a **Preflight passed** message; the JSON includes `"device_writes": false`
 and the proposed sequence. If you want the
@@ -47,7 +51,7 @@ its options to both preflight and flashing.
 
 ## 2. Flash
 
-Keep the Mac awake, USB connected and device power stable throughout the update.
+Keep the computer awake, USB connected and device power stable throughout the update.
 This command explicitly writes firmware and reboots the intercom:
 
 ```sh
@@ -59,7 +63,7 @@ transitions. On error, keep the device powered and record the stage and message.
 There is no automatic retry, resume, rollback or cleanup reboot.
 
 The intercom may also expose a `C100X` storage volume. Do not copy firmware onto
-it; flashing uses USB networking. Before planned reboots, the flasher attempts an
+it; flashing uses USB networking. On macOS before planned reboots, the flasher attempts an
 ordinary unmount; failure warns and permits flashing to continue. macOS may still
 show “disk not ejected properly”; the latest discovery fix awaits hardware
 validation. Eject any mounted C100X volume before disconnecting after completion.

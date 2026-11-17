@@ -780,3 +780,38 @@ establish future networking or SSH startup; hardware acceptance remains separate
 The daemon must retain root execution identity: non-root setuid metadata is not
 an equivalent ownership variation and is rejected. Ordinary executable ownership
 and permission variants remain accepted.
+
+## ADR-020: Ubuntu Desktop native USB with a bounded support scope
+
+**Accepted 2026-11-12.** Target native Ubuntu 24.04 Desktop x86-64 with its default
+NetworkManager setup. Other distributions, Server/networkd, WSL, containers and
+custom networking are best-effort, without dedicated compatibility backends.
+This supersedes ADR-011's macOS-only USB scope, not its Linux packaging baseline.
+
+**Scope extension, 2026-11-12:** the owner also selected Ubuntu **26.04 Desktop
+x86-64** with default NetworkManager as a reference target after successful
+normal-mode read-only USB probes on 26.04.1. Maintain coverage for both 24.04 and
+26.04; keep the bundle built on 24.04 (glibc 2.39 baseline). This is a support
+target extension, not completed managed-session or full-flash acceptance on either
+version. Record hardware results separately by Ubuntu/kernel/NetworkManager version.
+
+Preserve download/extract/run with ordinary terminal `sudo`. Bundle userspace
+tools where needed; use the host's native USB drivers and NetworkManager service
+and client. No normal prerequisite-installation step, custom kernel driver,
+TetherKit port, persistent network edit or privileged background service. If
+native driver binding fails, revisit scope before adding a fallback.
+
+Keep one firmware-update sequence and small platform-specific USB backends.
+Linux identifies USB ancestry in sysfs, activates an in-memory NetworkManager
+profile on that interface only, and checks destination route and source address.
+Delete the temporary profile on exit and restore the prior connection only on
+the same interface incarnation. Missing capabilities and conflicts produce
+actionable errors rather than automatic installation or global network changes.
+No plugin framework or duplicated flashing logic is warranted.
+
+Prepare implementation, focused offline lifecycle/error checks, packaging and a
+hardware checklist before asking the owner to connect the device. Aim for one
+focused session: read-only discovery/preflight, then a separately authorized full
+flash covering all reboot transitions and cleanup. Hardware surprises may require
+a follow-up. Linux USB remains experimental until that validation passes; successful
+packaging, worker ACKs and functional acceptance are separate evidence.

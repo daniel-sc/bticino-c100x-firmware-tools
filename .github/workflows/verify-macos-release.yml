@@ -1,0 +1,64 @@
+name: Verify published macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      check:
+        type: choice
+        description: Run on the release tag; verify the tap after its manual update
+        options: [download, tap]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref_type == 'tag'
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Download published assets and verify signed distribution
+        if: inputs.check == 'download'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/download"
+          mount="$RUNNER_TEMP/mount"
+          mkdir "$dir" "$mount"
+          gh release download "$VERSION" --dir "$dir"
+          (cd "$dir" && shasum -a 256 -c SHA256SUMS)
+          dmg="$dir/c100x-$VERSION-macos-arm64.dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          xcrun stapler validate "$dmg"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$dmg"
+          trap 'hdiutil detach "$mount"' EXIT
+          ditto "$mount/C100X" "$dir/C100X"
+          cmp packaging/README.txt "$mount/README.txt"
+          cmp README.md "$dir/C100X/README.md"
+          diff -qr docs "$dir/C100X/docs"
+          BUNDLE="$dir/C100X" PYTHONPATH=packaging python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from build import macho, run
+          paths = [p for p in Path(os.environ["BUNDLE"]).rglob("*") if macho(p)]
+          assert paths
+          for path in paths:
+              run("codesign", "--verify", "--strict", path)
+          print(f"Verified {len(paths)} native signatures")
+          PY
+          brew install e2fsprogs
+          python3 packaging/smoke.py "$dir/C100X"
+      - name: Install published Homebrew cask and verify CLI
+        if: inputs.check == 'tap'
+        run: |
+          set -euo pipefail
+          cask=c100x
+          if [[ "$VERSION" == *-* ]]; then cask=c100x@preview; fi
+          brew install --cask "daniel-sc/tap/$cask"
+          c100x --version | grep -F -- "$VERSION"
+          c100x builder-doctor

@@ -222,3 +222,8 @@ mutual `conflicts_with` declarations: both install the same bundle and executabl
 Use the published DMG checksum, not a local candidate's. Verify Brew installation
 or upgrade and `c100x --version` before reporting the tap updated. Updates are
 manual; there is no cross-repository release automation.
+
+On a host without macOS, the `Verify published macOS release` manual workflow
+can run the downloaded DMG checks on an Apple Silicon runner: select the published
+tag as the workflow ref and choose `download`. After updating the tap manually,
+run it on the same tag with `tap` to verify a fresh Homebrew installation.

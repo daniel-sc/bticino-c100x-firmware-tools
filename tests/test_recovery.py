@@ -140,6 +140,9 @@ class RecoveryIntegrationTests(unittest.TestCase):
         root_files = cls.source / "root-files"
         root_files.mkdir()
         (root_files / "payload").write_bytes(b"synthetic recovery data\n" * 100)
+        # mke2fs copies this mode; the metadata test must change it even when
+        # the signing environment creates private files with umask 077.
+        (root_files / "payload").chmod(0o644)
         for name, contents in (("kernel.ext4", kernel_files), ("root.ext4", root_files)):
             image = cls.source / name
             with image.open("wb") as stream:

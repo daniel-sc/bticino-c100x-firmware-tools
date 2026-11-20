@@ -3,7 +3,7 @@
 A command-line tool for building custom firmware images and flashing a
 **BTicino Classe 100X (Door Entry), firmware 1.5.8**, from macOS or Linux.
 
-**New in v0.3.0: build firmware and flash a stock C100X over USB from Ubuntu
+**New in v0.3.1: build firmware and flash a stock C100X over USB from Ubuntu
 Desktop, without SSH or a Mac.** The first x86-64 Linux bundle also supports
 wireless updates over SSH. A full USB flash and post-flash household checks
 passed on Ubuntu 26.04.1; see [validation and known limits](docs/ACCEPTANCE.md).
@@ -23,7 +23,7 @@ passed on Ubuntu 26.04.1; see [validation and known limits](docs/ACCEPTANCE.md).
   recovery integrity verification and final SSH verification.
   The stock-device USB workflow does not require SSH.
 
-USB flashing is hardware-validated on macOS; v0.3.0 adds **experimental
+USB flashing is hardware-validated on macOS; v0.3.1 adds **experimental
 Ubuntu 24.04/26.04 Desktop USB**. Firmware building and SSH updates also run on
 [Linux](docs/LINUX.md), with limited hardware validation. Release bundles target
 **Apple Silicon Macs** and **x86-64 Linux**. Other firmware families and
@@ -60,13 +60,13 @@ PATH. Requires **macOS 15.0 or later**.
 
 #### Direct download (no Homebrew required)
 
-Download the Apple Silicon DMG from [v0.3.0](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.3.0).
+Download the Apple Silicon DMG from [v0.3.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.3.1).
 Copy the entire `C100X` folder to `/Applications` (or `~/Applications` for a
 per-user installation). The DMG includes an Applications shortcut for
 drag-and-drop installation. Eject the DMG after copying. Keep `c100x` and `support`
 together. The release includes Python and all required tools;
 **no Homebrew, mise, Xcode or MyHOME installation is needed**.
-These instructions describe **v0.3.0**. Hardware coverage is described in
+These instructions describe **v0.3.1**. Hardware coverage is described in
 [validation and known limits](docs/ACCEPTANCE.md).
 Each release's `release.json` records its minimum macOS version.
 

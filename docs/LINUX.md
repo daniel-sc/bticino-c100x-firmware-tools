@@ -1,6 +1,6 @@
 # Linux: building, SSH updates and experimental USB
 
-The v0.3.0 Linux bundle can build firmware and update an intercom over SSH.
+The v0.3.1 Linux bundle can build firmware and update an intercom over SSH.
 It also includes experimental USB for native Ubuntu 24.04 and 26.04 Desktop x86-64 with
 default NetworkManager. Read-only access, managed activation, normal/cancelled-session
 cleanup and a complete flash with recovery handover passed on 26.04; the owner

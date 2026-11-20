@@ -21,10 +21,12 @@ completed. The destination package was admitted as `vendor_updates: blocked`;
 the user subsequently confirmed household tests and a fully working installation.
 See the [dated evidence](VALIDATION-HISTORY.md#2026-11-07-complete-wireless-ssh-flash).
 
-**v0.2.0 is published:** the stable release includes SSH OTA flashing, dual-image
-SSH and default vendor-update blocking. Release CI, downloaded signed-artifact
-checks, a real SSH+MQTT build and stable Homebrew installation passed. See the
-[publication record](VALIDATION-HISTORY.md#2026-11-07-v020-publication-and-validation).
+**Latest stable release, 2026-11-20: v0.3.1.** The first Linux x86-64 download
+includes native Ubuntu Desktop USB flashing. The downloaded Linux and macOS
+bundles, a Linux SSH+MQTT firmware build, and a fresh stable Homebrew installation
+passed their checks. See the [publication record](VALIDATION-HISTORY.md#2026-11-20-v031-publication-and-validation).
+The complete Ubuntu 26.04.1 hardware flash and household checks predate publication;
+Ubuntu 24.04 hardware coverage remains open.
 
 ## Supported hardware versus tested hardware
 
@@ -45,7 +47,7 @@ have no recorded hardware flash acceptance here.
 
 | Area | Observed result |
 | --- | --- |
-| Distribution | Stable v0.2.0 signed/notarized download, checksums, all 84 native signatures, relocated smoke, real SSH+MQTT firmware build, dual-image authentication admission and Homebrew installation checked. |
+| Distribution | Stable v0.3.1: both downloads verified; Mac notarization, all 84 native signatures, relocated smoke on both platforms, a Linux SSH+MQTT firmware build and fresh stable Homebrew installation passed. |
 | Builder | Pinned-stock no-op, SSH and MQTT+SSH builds passed filesystem, payload and final archive checks. |
 | Dual-image policy/access (offline) | Prevention-only, stock-preserving override, SSH-key/prevention, SSH-password/vendor-allowed and SSH+MQTT/both-auth/prevention builds passed. Both filesystem checks and applicable destination authentication admission passed; MQTT remains main-only. |
 | USB flashing | Completed all four transfers and three verified reboots, including RNDIS → ECM → RNDIS handover, without SSH verification. |
@@ -55,7 +57,7 @@ have no recorded hardware flash acceptance here.
 | Main-system SSH | Fresh RSA-key logins over USB/Wi-Fi, password-only login, service restart and vendor start/stop isolation passed. Reboot with vendor `abil_ssh` absent preserved access and host identity. |
 | Household functions | Ringing/notification, answering, video, two-way audio, door release, MQTT events and existing MQTT door control passed after the earlier SSH+MQTT installation. After the new wireless flash, the user confirmed completing the household tests and that the installation is fully working with vendor-update blocking enabled. |
 | Optional USB recovery verification | Fresh-write SSH readback, stock-content comparison and filesystem checks passed before a later transport stop. Explicit recovery installation subsequently completed. |
-| Offline checks | Latest published candidate CI passed all 228 Python tests on macOS/Linux with native MQTT enabled; macOS also passed all 23 USB-helper tests and packaged smoke. Tagged release CI passed; provenance is in the history. |
+| Offline checks | v0.3.1 release-commit CI ran 344 Python tests on each platform and passed; macOS also passed all 23 USB-helper tests. Both packaged smoke jobs and tagged release CI passed. |
 
 The maintainer's flashes were **modified-to-modified on `02*06*0`**; the community
 report adds **stock-to-modified on `02*07*0`**. Household acceptance is user-reported.

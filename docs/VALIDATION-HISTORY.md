@@ -1,4 +1,4 @@
-# Validation history through 2026-11-07
+# Validation history through 2026-11-20
 
 Historical evidence and test plans. For current passed/open items, use
 [ACCEPTANCE.md](ACCEPTANCE.md). Pending statements, commands and checklists below
@@ -17,6 +17,27 @@ installation; stock-device acceptance and broader resilience checks remain separ
 The entries below are dated evidence and maintainer test plans, not current setup
 instructions. Older commands describe earlier workflows; use [FLASHING.md](FLASHING.md)
 for the current one.
+
+## 2026-11-20: v0.3.1 publication and validation
+
+- Published [v0.3.1](https://github.com/daniel-sc/bticino-c100x-firmware-tools/releases/tag/v0.3.1)
+  from `ebf79da` at 17:24:35 UTC as GitHub's latest stable release. Both
+  platforms passed [main CI](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/44769713134)
+  and the [tagged workflow](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/44770981007).
+  The earlier v0.3.0 tag did not publish. The release fix set the initial mode of
+  a synthetic recovery fixture explicitly so the signing umask could not invalidate the test.
+- Verified all six published asset checksums and both version/commit manifests.
+  The [downloaded Mac DMG](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/44783100787)
+  passed Gatekeeper, stapled ticket validation, 84 native signature checks,
+  packaged documentation comparison and relocated smoke on Apple Silicon.
+- The downloaded Linux tarball passed relocated smoke in a network-disabled
+  Ubuntu 24.04 container. Its CLI also built a real pinned-stock SSH+MQTT image
+  with disposable settings and default vendor-update blocking. These release
+  checks did not flash a device.
+- Stable [tap commit `e945e0e`](https://github.com/daniel-sc/homebrew-tap/commit/e945e0e)
+  uses the published DMG SHA-256 `26f0215f1d8e0c717df58cfb0c3e6f76a84f93fa5fb357d054d9eeb5831d2ae8`.
+  A [fresh Homebrew install](https://github.com/daniel-sc/bticino-c100x-firmware-tools/actions/runs/44785208845)
+  reported `c100x v0.3.1` and passed `builder-doctor`.
 
 ## 2026-11-07: v0.2.0 publication and validation
 

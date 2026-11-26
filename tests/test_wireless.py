@@ -268,6 +268,32 @@ class WirelessTests(unittest.TestCase):
                 scan.return_value = {UNKNOWN}
                 self.assertEqual(trust.enroll("192.0.2.1", confirm), UNKNOWN)
 
+    def test_unsupported_known_hosts_key_type_is_a_changed_identity(self):
+        # A reassigned address (or name) may carry another host's ed25519 entry. It is an
+        # established identity that stock Dropbear can never present, not a key-format error.
+        known = self.root / ".ssh/known_hosts"
+        known.parent.mkdir()
+        known.touch()
+        ed25519 = "ssh-ed25519 " + base64.b64encode(
+            struct.pack(">I", 11) + b"ssh-ed25519" + struct.pack(">I", 32) + b"\x07" * 32).decode()
+        with wireless.Trust("intercom.local", parent=self.root / "trust") as trust:
+            trust.account = SimpleNamespace(pw_dir=str(self.root))
+            entries = {"192.0.2.1": ed25519}
+            def lookup(args, **kwargs):
+                host = args[2]
+                return 0, (f"{host} {entries[host]}\n".encode() if host in entries else b""), b""
+            confirm = Mock()
+            with patch.object(wireless, "run_tool", side_effect=lookup), \
+                    patch.object(wireless, "scan_keys", return_value={OLD}):
+                with self.assertRaises(HostIdentityError):
+                    trust.enroll("192.0.2.1", confirm)
+                # The name's established identity still wins over an address entry.
+                entries = {"intercom.local": ed25519, "192.0.2.1": OLD}
+                with self.assertRaises(HostIdentityError):
+                    trust.enroll("192.0.2.1", confirm)
+            confirm.assert_not_called()
+            self.assertFalse(trust.path.exists())
+
     def test_identity_failure_is_not_swallowed_by_reboot_poll(self):
         transport = Mock()
         transport.endpoints.side_effect = HostIdentityError("changed")

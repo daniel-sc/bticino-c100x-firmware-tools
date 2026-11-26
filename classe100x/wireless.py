@@ -283,11 +283,20 @@ class Tunnel(SSHConnection):
                 os.killpg(self.process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+        stuck = False
         if self.thread is not None:
             self.thread.join(5)
-            if self.thread.is_alive():
-                raise SSHError("SSH forward did not terminate")
-        super().close()
+            stuck = self.thread.is_alive()
+        # Discard the password, its broker socket and the private workspace even when
+        # the forward thread is stuck: a live broker would keep answering askpass.
+        try:
+            super().close()
+        except SSHError as exc:
+            if stuck:
+                raise SSHError("SSH forward did not terminate") from exc
+            raise
+        if stuck:
+            raise SSHError("SSH forward did not terminate")
 
 
 def installer_check():

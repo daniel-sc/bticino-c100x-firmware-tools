@@ -7,10 +7,12 @@ source /etc/os-release
     exit 1
 }
 # Exact Debian source packages accompany the binaries we redistribute.
+# Request libelf explicitly: a preinstalled version can satisfy iproute2's
+# dependencies even after its matching elfutils source leaves the archive.
 sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
 apt-get update
 apt-get install -y --no-install-recommends \
     build-essential pkg-config patchelf python3 ca-certificates openssh-client git \
     libssl-dev libbz2-dev libffi-dev liblzma-dev libsqlite3-dev libreadline-dev \
     libncurses-dev zlib1g-dev libzstd-dev uuid-dev \
-    e2fsprogs dropbear-bin 7zip openssl iproute2
+    e2fsprogs dropbear-bin 7zip openssl iproute2 libelf1t64

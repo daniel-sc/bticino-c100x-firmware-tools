@@ -73,14 +73,6 @@ validation. Eject any mounted C100X volume before disconnecting after completion
 Protocol completion is not functional acceptance. Check calls, two-way audio,
 video and door release, plus whichever features you selected:
 
-- **Door Entry:** If the station is paired, test live video and door release
-  from the app after the station syncs with the cloud. A normal flash leaves
-  the configuration partition in place, but recovery software can still change
-  its contents. In offline tests with stock 1.5.8, a `conf.xml` stored as
-  `root:root` with mode `0600` was unreadable to the recovery cloud client.
-  It treated the station as uncommissioned and generated new module IDs,
-  which can leave the app using obsolete IDs. When repacking a configuration
-  ZIP, preserve the permissions of the `conf.xml` entry inside the archive.
 - **SSH:** find the intercom's LAN address in your router and connect from the
   same network with `ssh root2@INTERCOM_IP` (replace `INTERCOM_IP`). For the dedicated
   key in the builder guide, insert `-i ~/.ssh/c100x_ecdsa` before `root2@INTERCOM_IP`.

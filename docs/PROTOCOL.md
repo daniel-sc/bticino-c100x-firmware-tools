@@ -121,6 +121,14 @@ handles child exit 10 at `:2733–2752`. Acknowledgement alone does not prove sa
 configuration or activation. The repair separately verified a new export,
 runtime `abil_ssh=1`, SSH listeners and authenticated access on both interfaces.
 
+**Archive permissions (2026-11-27):** Normal firmware flashing does not upload
+`conf.zip`. The separate configuration apply described above preserves the Unix
+mode of the `conf.xml` ZIP entry when the station extracts and saves it. In an
+offline replay with stock 1.5.8, recovery extracted a `root:root 0600` entry
+that its unprivileged cloud client could not read. The client treated the
+station as uncommissioned and regenerated module IDs; with the same XML
+readable, it retained the IDs.
+
 ## Local event-monitor interface (2026-10-31)
 
 Separate from the command-session handshake, stock `openserver` recognizes

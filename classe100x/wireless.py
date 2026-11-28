@@ -170,7 +170,14 @@ class Trust:
                     if line.startswith(b"@"):
                         raise HostIdentityError("Marked SSH trust entries require explicit investigation")
                     if len(fields) >= 3 and not line.startswith(b"#"):
-                        result.add(public_identity(b" ".join(fields[1:3])))
+                        entry = b" ".join(fields[1:3])
+                        try:
+                            result.add(public_identity(entry))
+                        except FirmwareError:
+                            # Another host's ed25519 (or malformed) entry is still an
+                            # established identity, one that stock Dropbear never presents:
+                            # keep it so enrollment reports a changed identity, not a key format.
+                            result.add(entry.decode("ascii", "replace"))
                 if result:
                     return result
         return result

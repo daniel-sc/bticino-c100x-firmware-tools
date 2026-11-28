@@ -176,7 +176,10 @@ an unambiguous target.
 - Strict host-key checks apply. Existing trusted entries can seed enrollment;
   otherwise confirm the first fingerprint interactively. A trusted hostname
   identity takes precedence over entries for its resolved IP; address trust is
-  used only when the hostname has no saved identity. Tool-owned trust lives
+  used only when the hostname has no saved identity. An entry of a key type stock
+  Dropbear cannot present (for example `ssh-ed25519` left by another host on a
+  reassigned address) counts as a changed identity: investigate it and remove the
+  stale entry yourself; enrollment stops before any write. Tool-owned trust lives
   under `~/Library/Application Support/C100X/trust/`. Your ordinary `known_hosts`
   is not changed. The expected package key is used in new recovery/main and
   remembered after final verification. Sources with regenerated keys require

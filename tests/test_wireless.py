@@ -391,6 +391,33 @@ while True: time.sleep(1)
         self.assertTrue(all(p.poll() is not None for p in children))
         self.assertFalse(directory.exists())
 
+    def test_stuck_forward_thread_still_removes_workspace_and_password_broker(self):
+        t = wireless.Tunnel(wireless.Credentials("root2", password="private-password"), "192.0.2.1", OLD)
+        t.open()
+        directory = t._directory
+        self.assertTrue((directory / "p").exists())
+        t.thread = Mock()
+        t.thread.is_alive.return_value = True
+        with self.assertRaisesRegex(SSHError, "did not terminate"):
+            t.close()
+        t.thread.join.assert_called_once_with(5)
+        self.assertFalse(directory.exists())
+        self.assertIsNone(t._broker)
+        self.assertIsNone(t._password)
+
+        # A workspace removal failure is reported with the stuck forward, not instead of it.
+        t = wireless.Tunnel(wireless.Credentials("root2"), "192.0.2.1", OLD)
+        t.open()
+        directory = t._directory
+        self.addCleanup(lambda: directory.exists() and directory.rmdir())
+        t.thread = Mock()
+        t.thread.is_alive.return_value = True
+        with patch("classe100x.ssh.shutil.rmtree", side_effect=OSError("busy")), \
+                self.assertRaisesRegex(SSHError, "did not terminate") as caught:
+            t.close()
+        self.assertIsInstance(caught.exception.__cause__, SSHError)
+        self.assertIn("workspace", str(caught.exception.__cause__))
+
     def test_tunnel_readiness_tolerates_a_transient_control_timeout(self):
         tunnel = wireless.Tunnel(wireless.Credentials("root2"), "192.0.2.1", OLD)
         tunnel._directory = self.root
